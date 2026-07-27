@@ -37,6 +37,7 @@ export default function EventFormModal({
     description: "",
     related_character_ids: [],
     related_location_ids: [],
+    participant_states: {},
     custom_fields: {},
   });
   const [saving, setSaving] = useState(false);
@@ -53,6 +54,7 @@ export default function EventFormModal({
         description: event.description || "",
         related_character_ids: event.related_character_ids || [],
         related_location_ids: event.related_location_ids || [],
+        participant_states: event.participant_states || {},
         custom_fields: event.custom_fields || {},
       });
     } else {
@@ -62,6 +64,7 @@ export default function EventFormModal({
         description: "",
         related_character_ids: [],
         related_location_ids: [],
+        participant_states: {},
         custom_fields: {},
       });
     }
@@ -79,6 +82,7 @@ export default function EventFormModal({
     const payload = {
       ...form,
       timeline_order: form.timeline_order === "" ? 0 : Number(form.timeline_order),
+      participant_states: form.participant_states || {},
       custom_fields: form.custom_fields || {},
       story_id: isEdit ? event.story_id || currentStoryId : currentStoryId,
     };
@@ -156,6 +160,33 @@ export default function EventFormModal({
               placeholder="Tìm nhân vật..."
             />
           </div>
+
+          {(form.related_character_ids || []).length > 0 && (
+            <div className="space-y-1.5 pl-1">
+              <p className="text-xs text-muted-foreground">Trạng thái nhân vật tại mốc này</p>
+              <div className="space-y-2">
+                {(form.related_character_ids || []).map((cid) => {
+                  const ch = characters.find((c) => c.id === cid);
+                  return (
+                    <div key={cid} className="flex items-center gap-2">
+                      <span className="text-xs w-24 truncate shrink-0">{ch?.name || "—"}</span>
+                      <Input
+                        value={form.participant_states?.[cid] || ""}
+                        onChange={(e) =>
+                          set("participant_states")({
+                            ...(form.participant_states || {}),
+                            [cid]: e.target.value,
+                          })
+                        }
+                        placeholder="VD: bị thương, thăng cấp, mất tích..."
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <EditableLabel label={label("related_location_ids", "Địa danh liên quan")} onRename={renameField("related_location_ids")} />

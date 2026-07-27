@@ -32,6 +32,12 @@
       "title": "\u0110\u1ecba danh li\u00ean quan (ids)",
       "default": []
     },
+    "participant_states": {
+      "type": "object",
+      "title": "Tr\u1ea1ng th\u00e1i nh\u00e2n v\u1eadt t\u1ea1i m\u1ed1c",
+      "description": "B\u1ea3n \u0111\u1ed3 { character_id: tr\u1ea1ng th\u00e1i } t\u1ea1i s\u1ef1 ki\u1ec7n (b\u1ecb th\u01b0\u01a1ng, th\u0103ng c\u1ea5p, m\u1ea5t t\u00edch...).",
+      "default": {}
+    },
     "custom_fields": {
       "type": "object",
       "title": "Tr\u01b0\u1eddng t\u00f9y ch\u1ec9nh",

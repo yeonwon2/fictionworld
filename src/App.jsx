@@ -15,6 +15,7 @@ import Relationships from '@/pages/Relationships';
 import Locations from '@/pages/Locations';
 import Timeline from '@/pages/Timeline';
 import Workspace from '@/pages/Workspace';
+import StoryMatrix from '@/pages/StoryMatrix';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -60,6 +61,7 @@ const AuthenticatedApp = () => {
           <Route path="/dia-danh" element={<Locations />} />
           <Route path="/nien-bieu" element={<Timeline />} />
           <Route path="/soan-thao" element={<Workspace />} />
+          <Route path="/cot-truyen" element={<StoryMatrix />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
