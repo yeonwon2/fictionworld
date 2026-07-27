@@ -21,23 +21,25 @@ import { Loader2, Save, Trash2 } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import FileUrlInput from "@/components/FileUrlInput";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import EditableLabel from "@/components/EditableLabel";
+import CustomFieldsEditor from "@/components/CustomFieldsEditor";
+import { useFieldSchema } from "@/lib/useFieldSchema";
 import { createCharacter, updateCharacter, deleteCharacter } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
 
-// Lựa chọn vai trò nhân vật
 const ROLE_OPTIONS = ["Nam chính", "Nữ chính", "Sư phụ", "Đồng minh", "Phản diện", "Phụ", "Qua đường", "Khác"];
 
-// Form modal Thêm/Sửa nhân vật. `character` = null → tạo mới; có đối tượng → chỉnh sửa.
+// Form modal Thêm/Sửa nhân vật. Hỗ trợ đổi tên trường + trường tùy chỉnh theo bộ truyện.
 export default function CharacterFormModal({ open, character, onClose, onSaved, onDeleted }) {
   const isEdit = !!character;
   const { currentStoryId } = useStory();
+  const { label, renameField } = useFieldSchema("character");
   const [form, setForm] = useState({});
   const [tagsText, setTagsText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Khởi tạo form khi mở
   useEffect(() => {
     if (!open) return;
     setError("");
@@ -54,12 +56,14 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
         skills: character.skills || "",
         items: character.items || "",
         first_appeared_chapter: character.first_appeared_chapter ?? "",
+        custom_fields: character.custom_fields || {},
       });
       setTagsText((character.tags || []).join(", "));
     } else {
       setForm({
         name: "", aliases: "", avatar_url: "", role: "Phụ", power_level: "",
-        description: "", appearance: "", personality: "", skills: "", items: "", first_appeared_chapter: "",
+        description: "", appearance: "", personality: "", skills: "", items: "",
+        first_appeared_chapter: "", custom_fields: {},
       });
       setTagsText("");
     }
@@ -79,6 +83,7 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
       ...form,
       first_appeared_chapter: form.first_appeared_chapter === "" ? undefined : Number(form.first_appeared_chapter),
       tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
+      custom_fields: form.custom_fields || {},
       story_id: isEdit ? (character.story_id || currentStoryId) : currentStoryId,
     };
     try {
@@ -115,28 +120,25 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Ảnh đại diện */}
           <div className="space-y-1.5">
-            <Label>Ảnh đại diện</Label>
+            <EditableLabel label={label("avatar_url", "Ảnh đại diện")} onRename={renameField("avatar_url")} />
             <FileUrlInput value={form.avatar_url} onChange={set("avatar_url")} preview />
           </div>
 
-          {/* Tên + Biệt danh */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Tên nhân vật *</Label>
+              <EditableLabel label={label("name", "Tên nhân vật *")} onRename={renameField("name")} />
               <Input value={form.name} onChange={set.fromEvent("name")} placeholder="VD: Lâm Tiêu" />
             </div>
             <div className="space-y-1.5">
-              <Label>Biệt danh / Hán Việt</Label>
+              <EditableLabel label={label("aliases", "Biệt danh / Hán Việt")} onRename={renameField("aliases")} />
               <Input value={form.aliases} onChange={set.fromEvent("aliases")} placeholder="VD: Lâm thiếu hiệp" />
             </div>
           </div>
 
-          {/* Vai trò + Cấp độ */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Vai trò</Label>
+              <EditableLabel label={label("role", "Vai trò")} onRename={renameField("role")} />
               <Select value={form.role} onValueChange={set("role")}>
                 <SelectTrigger><SelectValue placeholder="Chọn vai trò" /></SelectTrigger>
                 <SelectContent>
@@ -147,45 +149,41 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Cấp độ / Năng lực</Label>
+              <EditableLabel label={label("power_level", "Cấp độ / Năng lực")} onRename={renameField("power_level")} />
               <Input value={form.power_level} onChange={set.fromEvent("power_level")} placeholder="VD: Luyện khí tầng 9" />
             </div>
           </div>
 
-          {/* Mô tả (Rich Text) */}
           <div className="space-y-1.5">
-            <Label>Mô tả chi tiết / Tiểu sử</Label>
+            <EditableLabel label={label("description", "Mô tả chi tiết / Tiểu sử")} onRename={renameField("description")} />
             <RichTextEditor value={form.description} onChange={set("description")} placeholder="Giới thiệu nhân vật..." />
           </div>
 
-          {/* Ngoại hình + Tính cách */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Ngoại hình</Label>
+              <EditableLabel label={label("appearance", "Ngoại hình")} onRename={renameField("appearance")} />
               <Textarea value={form.appearance} onChange={set.fromEvent("appearance")} rows={3} placeholder="Miêu tả ngoại hình..." />
             </div>
             <div className="space-y-1.5">
-              <Label>Tính cách</Label>
+              <EditableLabel label={label("personality", "Tính cách")} onRename={renameField("personality")} />
               <Textarea value={form.personality} onChange={set.fromEvent("personality")} rows={3} placeholder="Miêu tả tính cách..." />
             </div>
           </div>
 
-          {/* Kỹ năng + Vật phẩm */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Kỹ năng</Label>
+              <EditableLabel label={label("skills", "Kỹ năng")} onRename={renameField("skills")} />
               <Textarea value={form.skills} onChange={set.fromEvent("skills")} rows={2} placeholder="VD: Thanh Phong kiếm pháp..." />
             </div>
             <div className="space-y-1.5">
-              <Label>Vật phẩm / Pháp bảo</Label>
+              <EditableLabel label={label("items", "Vật phẩm / Pháp bảo")} onRename={renameField("items")} />
               <Textarea value={form.items} onChange={set.fromEvent("items")} rows={2} placeholder="VD: Trảm Linh kiếm..." />
             </div>
           </div>
 
-          {/* Chương xuất hiện + Thẻ */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Xuất hiện từ chương</Label>
+              <EditableLabel label={label("first_appeared_chapter", "Xuất hiện từ chương")} onRename={renameField("first_appeared_chapter")} />
               <Input
                 type="number"
                 value={form.first_appeared_chapter}
@@ -194,10 +192,16 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Thẻ (cách nhau bởi dấu phẩy)</Label>
+              <EditableLabel label={label("tags", "Thẻ (cách nhau bởi dấu phẩy)")} onRename={renameField("tags")} />
               <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="nam chính, kiếm tu" />
             </div>
           </div>
+
+          <CustomFieldsEditor
+            formType="character"
+            values={form.custom_fields}
+            onChange={(v) => set("custom_fields")(v)}
+          />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

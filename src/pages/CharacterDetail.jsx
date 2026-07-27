@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
 import { ArrowLeft, User, Heart, Sword, Sparkles, Package, BookOpen, Users as UsersIcon, Pencil } from "lucide-react";
 import CharacterFormModal from "@/components/CharacterFormModal";
+import { useFieldSchema } from "@/lib/useFieldSchema";
 import ReactMarkdown from "react-markdown";
 
 // Trang chi tiết nhân vật
@@ -42,6 +43,7 @@ export default function CharacterDetail() {
   );
 
   const charById = useMemo(() => Object.fromEntries(allChars.map((c) => [c.id, c])), [allChars]);
+  const { label: lbl, customFields: charCFs } = useFieldSchema("character");
 
   if (loading) {
     return (
@@ -119,13 +121,13 @@ export default function CharacterDetail() {
 
           <div className="grid sm:grid-cols-2 gap-3 mt-5">
             {c.first_appeared_chapter != null && (
-              <InfoRow icon={BookOpen} label="Xuất hiện từ chương" value={`Chương ${c.first_appeared_chapter}`} />
+              <InfoRow icon={BookOpen} label={lbl("first_appeared_chapter", "Xuất hiện từ chương")} value={`Chương ${c.first_appeared_chapter}`} />
             )}
-            {c.power_level && <InfoRow icon={Sparkles} label="Cấp độ năng lực" value={c.power_level} />}
+            {c.power_level && <InfoRow icon={Sparkles} label={lbl("power_level", "Cấp độ năng lực")} value={c.power_level} />}
           </div>
 
           {c.description && (
-            <Section title="Giới thiệu">
+            <Section title={lbl("description", "Giới thiệu")}>
               <div className="text-sm leading-relaxed text-foreground/90 [&_a]:text-primary [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:font-display [&_h2]:text-base [&_h2]:mt-3 [&_h2]:mb-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
                 <ReactMarkdown>{c.description}</ReactMarkdown>
               </div>
@@ -133,11 +135,23 @@ export default function CharacterDetail() {
           )}
 
           <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-6">
-            {c.appearance && <Section title="Ngoại hình" icon={User}><p className="text-sm leading-relaxed text-muted-foreground">{c.appearance}</p></Section>}
-            {c.personality && <Section title="Tính cách" icon={Heart}><p className="text-sm leading-relaxed text-muted-foreground">{c.personality}</p></Section>}
-            {c.skills && <Section title="Kỹ năng" icon={Sword}><p className="text-sm leading-relaxed text-muted-foreground">{c.skills}</p></Section>}
-            {c.items && <Section title="Vật phẩm / Pháp bảo" icon={Package}><p className="text-sm leading-relaxed text-muted-foreground">{c.items}</p></Section>}
+            {c.appearance && <Section title={lbl("appearance", "Ngoại hình")} icon={User}><p className="text-sm leading-relaxed text-muted-foreground">{c.appearance}</p></Section>}
+            {c.personality && <Section title={lbl("personality", "Tính cách")} icon={Heart}><p className="text-sm leading-relaxed text-muted-foreground">{c.personality}</p></Section>}
+            {c.skills && <Section title={lbl("skills", "Kỹ năng")} icon={Sword}><p className="text-sm leading-relaxed text-muted-foreground">{c.skills}</p></Section>}
+            {c.items && <Section title={lbl("items", "Vật phẩm / Pháp bảo")} icon={Package}><p className="text-sm leading-relaxed text-muted-foreground">{c.items}</p></Section>}
           </div>
+
+          {c.custom_fields && charCFs.some((cf) => c.custom_fields[cf.id]) && (
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-6">
+              {charCFs.map((cf) =>
+                c.custom_fields?.[cf.id] ? (
+                  <Section key={cf.id} title={cf.label}>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{c.custom_fields[cf.id]}</p>
+                  </Section>
+                ) : null
+              )}
+            </div>
+          )}
 
           {/* Mối quan hệ */}
           <Section title={`Mối quan hệ (${relatedRels.length})`} icon={UsersIcon}>

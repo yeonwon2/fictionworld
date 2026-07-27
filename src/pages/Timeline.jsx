@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Clock, Users, Plus, Pencil, Trash2, MapPin } from "lucide-react";
 import EventFormModal from "@/components/EventFormModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import CustomFieldsList from "@/components/CustomFieldsList";
 import { listEvents, listCharacters, listLocations, deleteEvent } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
 
@@ -125,6 +126,7 @@ export default function Timeline() {
                   {ev.description && (
                     <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{ev.description}</p>
                   )}
+                  <CustomFieldsList formType="event" data={ev} />
 
                   {ev.related_character_ids?.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap mt-3">

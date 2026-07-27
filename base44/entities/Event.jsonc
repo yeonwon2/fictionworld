@@ -32,6 +32,11 @@
       "title": "\u0110\u1ecba danh li\u00ean quan (ids)",
       "default": []
     },
+    "custom_fields": {
+      "type": "object",
+      "title": "Tr\u01b0\u1eddng t\u00f9y ch\u1ec9nh",
+      "default": {}
+    },
     "story_id": {
       "type": "string",
       "title": "B\u1ed9 truy\u1ec7n (id)"

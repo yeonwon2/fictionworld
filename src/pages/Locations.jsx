@@ -5,6 +5,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { MapPin, ChevronRight, Plus, Pencil, Trash2 } from "lucide-react";
 import { listLocations, deleteLocation } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
+import CustomFieldsList from "@/components/CustomFieldsList";
 
 // Trang địa danh — hiển thị theo cấu trúc phân cấp + CRUD
 const TYPE_STYLES = {
@@ -177,6 +178,7 @@ function LocationNode({ location, depth, onEdit, onDelete }) {
             {location.description && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{location.description}</p>
             )}
+            <CustomFieldsList formType="location" data={location} />
             {location.map_url && (
               <div className="mt-3 w-full h-32 rounded-xl overflow-hidden bg-muted">
                 <Image src={location.map_url} alt={location.name} className="w-full h-full object-cover" />

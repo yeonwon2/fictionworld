@@ -17,6 +17,12 @@
       "type": "string",
       "title": "\u1ea2nh b\u00eca",
       "format": "uri"
+    },
+    "form_schema": {
+      "type": "object",
+      "title": "C\u1ea5u h\u00ecnh tr\u01b0\u1eddng theo b\u1ed9 truy\u1ec7n",
+      "description": "L\u01b0u nh\u00e3n \u0111\u00e3 \u0111\u1ed5i + danh s\u00e1ch tr\u01b0\u1eddng t\u00f9y ch\u1ec9nh cho t\u1eebng lo\u1ea1i form (character, location, event, relationship).",
+      "default": {}
     }
   },
   "required": [

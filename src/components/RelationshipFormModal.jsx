@@ -8,17 +8,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Loader2, Save, Trash2, ArrowRight } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import EditableLabel from "@/components/EditableLabel";
+import CustomFieldsEditor from "@/components/CustomFieldsEditor";
+import { useFieldSchema } from "@/lib/useFieldSchema";
 import { addRelationship, updateRelationship, deleteRelationship } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
 
-// Gợi ý loại quan hệ
 const RELATION_TYPES = ["Sư đồ", "Đồng minh", "Kẻ thù", "Huynh đệ", "Huynh muội", "Tình nhân", "Chủ tớ", "Cha con", "Sư đồ nghịch"];
 
-// Form modal Thêm/Sửa mối quan hệ. `relationship` = null → tạo mới.
+// Form modal Thêm/Sửa mối quan hệ — đổi tên trường + trường tùy chỉnh theo bộ truyện.
 export default function RelationshipFormModal({
   open,
   relationship,
@@ -29,6 +31,7 @@ export default function RelationshipFormModal({
 }) {
   const isEdit = !!relationship;
   const { currentStoryId } = useStory();
+  const { label, renameField } = useFieldSchema("relationship");
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -43,9 +46,10 @@ export default function RelationshipFormModal({
         target_character_id: relationship.target_character_id || "",
         relation_type: relationship.relation_type || "",
         description: relationship.description || "",
+        custom_fields: relationship.custom_fields || {},
       });
     } else {
-      setForm({ source_character_id: "", target_character_id: "", relation_type: "", description: "" });
+      setForm({ source_character_id: "", target_character_id: "", relation_type: "", description: "", custom_fields: {} });
     }
   }, [open, relationship]);
 
@@ -67,7 +71,9 @@ export default function RelationshipFormModal({
     setSaving(true);
     setError("");
     try {
-      const payload = isEdit ? form : { ...form, story_id: currentStoryId };
+      const payload = isEdit
+        ? { ...form, custom_fields: form.custom_fields || {} }
+        : { ...form, custom_fields: form.custom_fields || {}, story_id: currentStoryId };
       const result = isEdit
         ? await updateRelationship(relationship.id, payload)
         : await addRelationship(payload);
@@ -93,7 +99,7 @@ export default function RelationshipFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose?.()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
             {isEdit ? "Chỉnh sửa mối quan hệ" : "Thêm mối quan hệ"}
@@ -101,22 +107,20 @@ export default function RelationshipFormModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Chọn hai nhân vật — hiển thị dạng danh sách chọn */}
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
             <div className="space-y-1.5">
-              <Label>Nhân vật A</Label>
+              <EditableLabel label={label("source_character_id", "Nhân vật A")} onRename={renameField("source_character_id")} />
               <CharSelect value={form.source_character_id} onChange={set("source_character_id")} characters={characters} placeholder="Chọn A" />
             </div>
             <ArrowRight className="w-5 h-5 text-muted-foreground mb-2.5" />
             <div className="space-y-1.5">
-              <Label>Nhân vật B</Label>
+              <EditableLabel label={label("target_character_id", "Nhân vật B")} onRename={renameField("target_character_id")} />
               <CharSelect value={form.target_character_id} onChange={set("target_character_id")} characters={characters} placeholder="Chọn B" />
             </div>
           </div>
 
-          {/* Loại quan hệ (gợi ý bằng datalist) */}
           <div className="space-y-1.5">
-            <Label>Loại quan hệ</Label>
+            <EditableLabel label={label("relation_type", "Loại quan hệ")} onRename={renameField("relation_type")} />
             <Input
               list="relation-types"
               value={form.relation_type}
@@ -130,9 +134,8 @@ export default function RelationshipFormModal({
             </datalist>
           </div>
 
-          {/* Mô tả */}
           <div className="space-y-1.5">
-            <Label>Mô tả</Label>
+            <EditableLabel label={label("description", "Mô tả")} onRename={renameField("description")} />
             <Textarea
               value={form.description}
               onChange={(e) => set("description")(e.target.value)}
@@ -140,6 +143,12 @@ export default function RelationshipFormModal({
               placeholder="Mô tả ngắn về mối quan hệ..."
             />
           </div>
+
+          <CustomFieldsEditor
+            formType="relationship"
+            values={form.custom_fields}
+            onChange={(v) => set("custom_fields")(v)}
+          />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
@@ -169,7 +178,6 @@ export default function RelationshipFormModal({
   );
 }
 
-// Ô chọn nhân vật hiển thị tên + ảnh nhỏ
 function CharSelect({ value, onChange, characters, placeholder }) {
   return (
     <select

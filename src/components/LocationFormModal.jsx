@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -20,15 +19,19 @@ import {
 import { Loader2, Save, Trash2 } from "lucide-react";
 import FileUrlInput from "@/components/FileUrlInput";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import EditableLabel from "@/components/EditableLabel";
+import CustomFieldsEditor from "@/components/CustomFieldsEditor";
+import { useFieldSchema } from "@/lib/useFieldSchema";
 import { createLocation, updateLocation, deleteLocation } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
 
 const VALID_TYPES = ["Quốc gia", "Vùng đất", "Môn phái", "Thành trì", "Khác"];
 
-// Form modal Thêm/Sửa địa danh. `location` = null → tạo mới.
+// Form modal Thêm/Sửa địa danh — đổi tên trường + trường tùy chỉnh theo bộ truyện.
 export default function LocationFormModal({ open, location, locations = [], onClose, onSaved, onDeleted }) {
   const isEdit = !!location;
   const { currentStoryId } = useStory();
+  const { label, renameField } = useFieldSchema("location");
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -44,15 +47,15 @@ export default function LocationFormModal({ open, location, locations = [], onCl
         map_url: location.map_url || "",
         description: location.description || "",
         parent_location_id: location.parent_location_id || "",
+        custom_fields: location.custom_fields || {},
       });
     } else {
-      setForm({ name: "", type: "Vùng đất", map_url: "", description: "", parent_location_id: "" });
+      setForm({ name: "", type: "Vùng đất", map_url: "", description: "", parent_location_id: "", custom_fields: {} });
     }
   }, [open, location]);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Các địa danh có thể làm "cha" — loại trừ chính nó và các con cháu để tránh vòng lặp
   const availableParents = locations.filter((l) => {
     if (!isEdit) return true;
     if (l.id === location.id) return false;
@@ -78,7 +81,7 @@ export default function LocationFormModal({ open, location, locations = [], onCl
     setSaving(true);
     setError("");
     try {
-      const payload = { ...form };
+      const payload = { ...form, custom_fields: form.custom_fields || {} };
       if (!isEdit) payload.story_id = currentStoryId;
       const result = isEdit
         ? await updateLocation(location.id, payload)
@@ -113,14 +116,13 @@ export default function LocationFormModal({ open, location, locations = [], onCl
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Tên + Loại */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Tên địa danh *</Label>
+              <EditableLabel label={label("name", "Tên địa danh *")} onRename={renameField("name")} />
               <Input value={form.name} onChange={(e) => set("name")(e.target.value)} placeholder="VD: Huyền Thiên Tông" />
             </div>
             <div className="space-y-1.5">
-              <Label>Loại</Label>
+              <EditableLabel label={label("type", "Loại")} onRename={renameField("type")} />
               <Select value={form.type} onValueChange={set("type")}>
                 <SelectTrigger><SelectValue placeholder="Chọn loại" /></SelectTrigger>
                 <SelectContent>
@@ -132,9 +134,8 @@ export default function LocationFormModal({ open, location, locations = [], onCl
             </div>
           </div>
 
-          {/* Địa danh cấp cha */}
           <div className="space-y-1.5">
-            <Label>Địa danh cấp trên (Parent)</Label>
+            <EditableLabel label={label("parent_location_id", "Địa danh cấp trên (Parent)")} onRename={renameField("parent_location_id")} />
             <select
               value={form.parent_location_id || ""}
               onChange={(e) => set("parent_location_id")(e.target.value)}
@@ -147,17 +148,21 @@ export default function LocationFormModal({ open, location, locations = [], onCl
             </select>
           </div>
 
-          {/* Ảnh bản đồ */}
           <div className="space-y-1.5">
-            <Label>Ảnh bản đồ</Label>
+            <EditableLabel label={label("map_url", "Ảnh bản đồ")} onRename={renameField("map_url")} />
             <FileUrlInput value={form.map_url} onChange={set("map_url")} preview />
           </div>
 
-          {/* Mô tả */}
           <div className="space-y-1.5">
-            <Label>Mô tả</Label>
+            <EditableLabel label={label("description", "Mô tả")} onRename={renameField("description")} />
             <Textarea value={form.description} onChange={(e) => set("description")(e.target.value)} rows={3} placeholder="Mô tả địa danh..." />
           </div>
+
+          <CustomFieldsEditor
+            formType="location"
+            values={form.custom_fields}
+            onChange={(v) => set("custom_fields")(v)}
+          />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

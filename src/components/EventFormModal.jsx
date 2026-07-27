@@ -8,15 +8,17 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Loader2, Save, Trash2 } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import MultiSelectChips from "@/components/MultiSelectChips";
+import EditableLabel from "@/components/EditableLabel";
+import CustomFieldsEditor from "@/components/CustomFieldsEditor";
+import { useFieldSchema } from "@/lib/useFieldSchema";
 import { createEvent, updateEvent, deleteEvent } from "@/lib/worldcrud";
 import { useStory } from "@/lib/StoryContext";
 
-// Form modal Thêm/Sửa sự kiện. `event` = null → tạo mới.
+// Form modal Thêm/Sửa sự kiện — đổi tên trường + trường tùy chỉnh theo bộ truyện.
 export default function EventFormModal({
   open,
   event,
@@ -28,12 +30,14 @@ export default function EventFormModal({
 }) {
   const isEdit = !!event;
   const { currentStoryId } = useStory();
+  const { label, renameField } = useFieldSchema("event");
   const [form, setForm] = useState({
     title: "",
     timeline_order: 0,
     description: "",
     related_character_ids: [],
     related_location_ids: [],
+    custom_fields: {},
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,6 +53,7 @@ export default function EventFormModal({
         description: event.description || "",
         related_character_ids: event.related_character_ids || [],
         related_location_ids: event.related_location_ids || [],
+        custom_fields: event.custom_fields || {},
       });
     } else {
       setForm({
@@ -57,6 +62,7 @@ export default function EventFormModal({
         description: "",
         related_character_ids: [],
         related_location_ids: [],
+        custom_fields: {},
       });
     }
   }, [open, event]);
@@ -73,6 +79,7 @@ export default function EventFormModal({
     const payload = {
       ...form,
       timeline_order: form.timeline_order === "" ? 0 : Number(form.timeline_order),
+      custom_fields: form.custom_fields || {},
       story_id: isEdit ? event.story_id || currentStoryId : currentStoryId,
     };
     try {
@@ -114,7 +121,7 @@ export default function EventFormModal({
         <div className="space-y-4 py-2">
           <div className="grid sm:grid-cols-[1fr_120px] gap-4">
             <div className="space-y-1.5">
-              <Label>Tên sự kiện *</Label>
+              <EditableLabel label={label("title", "Tên sự kiện *")} onRename={renameField("title")} />
               <Input
                 value={form.title}
                 onChange={(e) => set("title")(e.target.value)}
@@ -122,7 +129,7 @@ export default function EventFormModal({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Thứ tự</Label>
+              <EditableLabel label={label("timeline_order", "Thứ tự")} onRename={renameField("timeline_order")} />
               <Input
                 type="number"
                 value={form.timeline_order}
@@ -132,7 +139,7 @@ export default function EventFormModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Mô tả</Label>
+            <EditableLabel label={label("description", "Mô tả")} onRename={renameField("description")} />
             <RichTextEditor
               value={form.description}
               onChange={set("description")}
@@ -141,7 +148,7 @@ export default function EventFormModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Nhân vật liên quan</Label>
+            <EditableLabel label={label("related_character_ids", "Nhân vật liên quan")} onRename={renameField("related_character_ids")} />
             <MultiSelectChips
               options={charOpts}
               selected={form.related_character_ids || []}
@@ -151,7 +158,7 @@ export default function EventFormModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Địa danh liên quan</Label>
+            <EditableLabel label={label("related_location_ids", "Địa danh liên quan")} onRename={renameField("related_location_ids")} />
             <MultiSelectChips
               options={locOpts}
               selected={form.related_location_ids || []}
@@ -159,6 +166,12 @@ export default function EventFormModal({
               placeholder="Tìm địa danh..."
             />
           </div>
+
+          <CustomFieldsEditor
+            formType="event"
+            values={form.custom_fields}
+            onChange={(v) => set("custom_fields")(v)}
+          />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

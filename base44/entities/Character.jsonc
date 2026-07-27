@@ -59,6 +59,12 @@
       "title": "Th\u1ebb (tags)",
       "default": []
     },
+    "custom_fields": {
+      "type": "object",
+      "title": "Tr\u01b0\u1eddng t\u00f9y ch\u1ec9nh",
+      "description": "Gi\u00e1 tr\u1ecb c\u00e1c tr\u01b0\u1eddng t\u1ef1 th\u00eam (theo schema c\u1ee7a b\u1ed9 truy\u1ec7n).",
+      "default": {}
+    },
     "story_id": {
       "type": "string",
       "title": "B\u1ed9 truy\u1ec7n (id)"

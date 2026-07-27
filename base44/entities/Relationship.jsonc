@@ -20,6 +20,11 @@
       "type": "string",
       "title": "M\u00f4 t\u1ea3"
     },
+    "custom_fields": {
+      "type": "object",
+      "title": "Tr\u01b0\u1eddng t\u00f9y ch\u1ec9nh",
+      "default": {}
+    },
     "story_id": {
       "type": "string",
       "title": "B\u1ed9 truy\u1ec7n (id)"
