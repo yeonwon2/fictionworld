@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
 import CharacterCard from "@/components/CharacterCard";
+import CharacterFormModal from "@/components/CharacterFormModal";
 import { Input } from "@/components/ui/input";
-import { Search, Users } from "lucide-react";
+import { Search, Users, Plus } from "lucide-react";
+import { listCharacters } from "@/lib/worldcrud";
 
 // Trang danh sách nhân vật — lưới thẻ + lọc/tìm kiếm
 export default function Characters() {
@@ -10,13 +11,29 @@ export default function Characters() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
 
+  function load() {
+    listCharacters().then(setCharacters).finally(() => setLoading(false));
+  }
   useEffect(() => {
-    base44.entities.Character
-      .list("-updated_date", 200)
-      .then((data) => setCharacters(data || []))
-      .finally(() => setLoading(false));
+    load();
   }, []);
+
+  function openCreate() {
+    setEditing(null);
+    setModalOpen(true);
+  }
+  function openEdit(c) {
+    setEditing(c);
+    setModalOpen(true);
+  }
+  function handleSaved() {
+    setModalOpen(false);
+    setEditing(null);
+    load();
+  }
 
   // Danh sách vai trò duy nhất để lọc
   const roles = useMemo(
@@ -40,11 +57,19 @@ export default function Characters() {
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto">
-      <header className="mb-6">
-        <h1 className="font-display text-2xl md:text-3xl font-semibold flex items-center gap-2">
-          <Users className="w-6 h-6 text-primary" /> Nhân vật
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">Danh sách toàn bộ nhân vật trong thế giới của bạn.</p>
+      <header className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl md:text-3xl font-semibold flex items-center gap-2">
+            <Users className="w-6 h-6 text-primary" /> Nhân vật
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">Danh sách toàn bộ nhân vật trong thế giới của bạn.</p>
+        </div>
+        <button
+          onClick={openCreate}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Thêm nhân vật
+        </button>
       </header>
 
       {/* Thanh tìm kiếm & lọc */}
@@ -82,7 +107,7 @@ export default function Characters() {
       ) : filtered.length ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filtered.map((c) => (
-            <CharacterCard key={c.id} character={c} />
+            <CharacterCard key={c.id} character={c} onEdit={() => openEdit(c)} />
           ))}
         </div>
       ) : (
@@ -91,6 +116,14 @@ export default function Characters() {
           <p className="text-sm">Không tìm thấy nhân vật phù hợp.</p>
         </div>
       )}
+
+      <CharacterFormModal
+        open={modalOpen}
+        character={editing}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSaved={handleSaved}
+        onDeleted={handleSaved}
+      />
     </div>
   );
 }

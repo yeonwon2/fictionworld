@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
-import { ArrowLeft, User, Heart, Sword, Sparkles, Package, BookOpen, Users as UsersIcon } from "lucide-react";
+import { ArrowLeft, User, Heart, Sword, Sparkles, Package, BookOpen, Users as UsersIcon, Pencil } from "lucide-react";
+import CharacterFormModal from "@/components/CharacterFormModal";
+import ReactMarkdown from "react-markdown";
 
 // Trang chi tiết nhân vật
 export default function CharacterDetail() {
@@ -11,6 +13,8 @@ export default function CharacterDetail() {
   const [relationships, setRelationships] = useState([]);
   const [allChars, setAllChars] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!id) return;
@@ -65,9 +69,17 @@ export default function CharacterDetail() {
 
   return (
     <div className="p-6 md:p-10 max-w-5xl mx-auto">
-      <Link to="/nhan-vat" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> Danh sách nhân vật
-      </Link>
+      <div className="flex items-center justify-between mb-6">
+        <Link to="/nhan-vat" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition">
+          <ArrowLeft className="w-4 h-4" /> Danh sách nhân vật
+        </Link>
+        <button
+          onClick={() => setEditOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-medium hover:bg-muted transition"
+        >
+          <Pencil className="w-3.5 h-3.5" /> Chỉnh sửa
+        </button>
+      </div>
 
       <div className="flex flex-col md:flex-row gap-6 md:gap-8">
         {/* Ảnh + thông tin cơ bản */}
@@ -111,7 +123,9 @@ export default function CharacterDetail() {
 
           {c.description && (
             <Section title="Giới thiệu">
-              <p className="text-sm leading-relaxed text-foreground/90">{c.description}</p>
+              <div className="text-sm leading-relaxed text-foreground/90 [&_a]:text-primary [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:font-display [&_h2]:text-base [&_h2]:mt-3 [&_h2]:mb-1 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+                <ReactMarkdown>{c.description}</ReactMarkdown>
+              </div>
             </Section>
           )}
 
@@ -155,6 +169,20 @@ export default function CharacterDetail() {
           </Section>
         </div>
       </div>
+
+      {/* Modal chỉnh sửa nhân vật */}
+      <CharacterFormModal
+        open={editOpen}
+        character={character}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => {
+          setEditOpen(false);
+          base44.entities.Character.get(id).then(setCharacter);
+          // Cập nhật lại liên quan nếu cần (tên/avatar có thể thay đổi)
+          base44.entities.Relationship.list("-updated_date", 200).then(setRelationships);
+        }}
+        onDeleted={() => navigate("/nhan-vat")}
+      />
     </div>
   );
 }

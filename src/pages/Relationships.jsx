@@ -1,38 +1,64 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
 import RelationshipGraph from "@/components/RelationshipGraph";
+import RelationshipFormModal from "@/components/RelationshipFormModal";
 import { Image } from "@/components/ui/image";
-import { Network, X, ArrowRight } from "lucide-react";
+import { Network, X, ArrowRight, Plus } from "lucide-react";
+import { listCharacters, listRelationships } from "@/lib/worldcrud";
 
-// Trang sơ đồ mối quan hệ + bảng thông tin nhanh bên phải
+// Trang sơ đồ mối quan hệ + quản lý CRUD mối quan hệ ngay trên sơ đồ
 export default function Relationships() {
   const [characters, setCharacters] = useState([]);
   const [relationships, setRelationships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [relModalOpen, setRelModalOpen] = useState(false);
+  const [editingRel, setEditingRel] = useState(null);
 
-  useEffect(() => {
-    Promise.all([
-      base44.entities.Character.list("-updated_date", 200),
-      base44.entities.Relationship.list("-updated_date", 300),
-    ])
+  function load() {
+    Promise.all([listCharacters(), listRelationships()])
       .then(([c, r]) => {
-        setCharacters(c || []);
-        setRelationships(r || []);
+        setCharacters(c);
+        setRelationships(r);
       })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
   }, []);
+
+  function openCreateRel() {
+    setEditingRel(null);
+    setRelModalOpen(true);
+  }
+  function openEditRel(rel) {
+    setEditingRel(rel);
+    setRelModalOpen(true);
+  }
+  function handleRelChange() {
+    setRelModalOpen(false);
+    setEditingRel(null);
+    load();
+  }
 
   return (
     <div className="p-6 md:p-10">
-      <header className="mb-6">
-        <h1 className="font-display text-2xl md:text-3xl font-semibold flex items-center gap-2">
-          <Network className="w-6 h-6 text-primary" /> Sơ đồ mối quan hệ
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Kéo thả các nút để sắp xếp. Nhấp vào nhân vật để xem thông tin nhanh.
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl md:text-3xl font-semibold flex items-center gap-2">
+            <Network className="w-6 h-6 text-primary" /> Sơ đồ mối quan hệ
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Kéo thả các nút để sắp xếp. Nhấp vào nhân vật để xem thông tin nhanh — nhấp vào đường nối để chỉnh sửa / xóa.
+          </p>
+        </div>
+        <button
+          onClick={openCreateRel}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Thêm quan hệ
+        </button>
       </header>
 
       {loading ? (
@@ -40,7 +66,12 @@ export default function Relationships() {
       ) : (
         <div className="grid lg:grid-cols-[1fr_320px] gap-6">
           <div className="min-w-0">
-            <RelationshipGraph characters={characters} relationships={relationships} onSelect={setSelected} />
+            <RelationshipGraph
+              characters={characters}
+              relationships={relationships}
+              onSelect={setSelected}
+              onEdgeSelect={openEditRel}
+            />
           </div>
 
           {/* Bảng thông tin nhanh bên phải */}
@@ -65,7 +96,12 @@ export default function Relationships() {
                     )}
                   </div>
                 </div>
-                {selected.description && <p className="text-xs leading-relaxed text-muted-foreground line-clamp-4">{selected.description}</p>}
+                {selected.description && (
+                  <div
+                    className="text-xs leading-relaxed text-muted-foreground line-clamp-4"
+                    dangerouslySetInnerHTML={{ __html: selected.description }}
+                  />
+                )}
                 {selected.power_level && (
                   <div className="mt-3 text-xs">
                     <span className="text-muted-foreground">Năng lực: </span>
@@ -82,12 +118,24 @@ export default function Relationships() {
             ) : (
               <div className="rounded-2xl border border-dashed border-border bg-card/40 p-8 text-center">
                 <Network className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">Chọn một nhân vật trên sơ đồ để xem thông tin.</p>
+                <p className="text-sm text-muted-foreground">Chọn một nhân vật hoặc đường nối trên sơ đồ để xem / chỉnh sửa.</p>
+                <button onClick={openCreateRel} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                  <Plus className="w-4 h-4" /> Thêm mối quan hệ mới
+                </button>
               </div>
             )}
           </aside>
         </div>
       )}
+
+      <RelationshipFormModal
+        open={relModalOpen}
+        relationship={editingRel}
+        characters={characters}
+        onClose={() => { setRelModalOpen(false); setEditingRel(null); }}
+        onSaved={handleRelChange}
+        onDeleted={handleRelChange}
+      />
     </div>
   );
 }

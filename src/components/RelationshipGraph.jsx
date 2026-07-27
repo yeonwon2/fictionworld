@@ -12,7 +12,7 @@ const NODE_RADIUS = 38;
 const CANVAS_W = 900;
 const CANVAS_H = 620;
 
-export default function RelationshipGraph({ characters = [], relationships = [], onSelect }) {
+export default function RelationshipGraph({ characters = [], relationships = [], onSelect, onEdgeSelect }) {
   const containerRef = useRef(null);
 
   // Vị trí ban đầu: xếp vòng tròn
@@ -103,16 +103,23 @@ export default function RelationshipGraph({ characters = [], relationships = [],
           const mx = (p1.x + p2.x) / 2;
           const my = (p1.y + p2.y) / 2;
           return (
-            <g key={rel.id} className="pointer-events-none">
-              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="hsl(var(--primary) / 0.4)" strokeWidth={1.8} />
+            <g key={rel.id}>
+              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="hsl(var(--primary) / 0.4)" strokeWidth={1.8} style={{ pointerEvents: "none" }} />
               {rel.relation_type && (
-                <g transform={`translate(${mx}, ${my})`}>
+                <g transform={`translate(${mx}, ${my})`} style={{ pointerEvents: "none" }}>
                   <rect x={-36} y={-9} width={72} height={18} rx={9} fill="hsl(var(--card))" stroke="hsl(var(--border))" />
                   <text x={0} y={4} textAnchor="middle" className="fill-foreground" style={{ fontSize: 10, fontWeight: 500 }}>
                     {rel.relation_type}
                   </text>
                 </g>
               )}
+              {/* Vùng nhận click dọc đường nối để chỉnh sửa / xóa */}
+              <line
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke="transparent" strokeWidth={14}
+                style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                onClick={() => onEdgeSelect?.(rel)}
+              />
             </g>
           );
         })}
