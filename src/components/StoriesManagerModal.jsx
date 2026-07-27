@@ -7,16 +7,64 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Image } from "@/components/ui/image";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Download } from "lucide-react";
 import { useStory } from "@/lib/StoryContext";
-import { deleteStory } from "@/lib/worldcrud";
+import { deleteStory, listCharacters, listLocations, listRelationships, listEvents } from "@/lib/worldcrud";
 import ConfirmDialog from "@/components/ConfirmDialog";
+
+function slugify(s = "story") {
+  return s.replace(/[^a-zA-Z0-9-_ ]/g, "").replace(/\s+/g, "_").toLowerCase() || "story";
+}
 
 // Modal quản lý bộ truyện: đổi story, sửa, xóa, tạo mới.
 // onEditStory(null|story) → mở form tạo/sửa bên ngoài.
 export default function StoriesManagerModal({ open, onOpenChange, onEditStory, onChanged }) {
   const { stories, currentStoryId, setCurrentStoryId, refresh } = useStory();
+  const currentStory = stories.find((s) => s.id === currentStoryId) || null;
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    if (!currentStoryId) return;
+    setExporting(true);
+    try {
+      const [characters, locations, relationships, events] = await Promise.all([
+        listCharacters(currentStoryId),
+        listLocations(currentStoryId),
+        listRelationships(currentStoryId),
+        listEvents(currentStoryId),
+      ]);
+      const data = {
+        story: {
+          name: currentStory?.name || "",
+          genre: currentStory?.genre || "",
+          cover_url: currentStory?.cover_url || "",
+        },
+        exported_at: new Date().toISOString(),
+        counts: {
+          characters: characters.length,
+          locations: locations.length,
+          relationships: relationships.length,
+          events: events.length,
+        },
+        characters,
+        locations,
+        relationships,
+        events,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slugify(currentStory?.name || "story")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -81,9 +129,15 @@ export default function StoriesManagerModal({ open, onOpenChange, onEditStory, o
             ))}
           </div>
 
-          <Button onClick={() => onEditStory?.(null)} variant="outline" className="w-full" type="button">
-            <Plus className="w-4 h-4" /> Tạo bộ truyện mới
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => onEditStory?.(null)} variant="outline" className="flex-1" type="button">
+              <Plus className="w-4 h-4" /> Tạo bộ truyện mới
+            </Button>
+            <Button onClick={handleExport} variant="secondary" className="flex-1" type="button" disabled={exporting}>
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Xuất dữ liệu
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles } from "lucide-react";
+import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, PenTool } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
 import { StoryProvider } from "@/lib/StoryContext";
 import StorySwitcher from "@/components/StorySwitcher";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 // Các mục điều hướng thanh bên
 const NAV_ITEMS = [
   { label: "Tổng quan", path: "/", icon: BookOpen },
+  { label: "Soạn thảo", path: "/soan-thao", icon: PenTool },
   { label: "Nhân vật", path: "/nhan-vat", icon: Users },
   { label: "Sơ đồ quan hệ", path: "/so-do", icon: Network },
   { label: "Địa danh", path: "/dia-danh", icon: MapPin },

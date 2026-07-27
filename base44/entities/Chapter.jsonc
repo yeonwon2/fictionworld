@@ -1,0 +1,27 @@
+{
+  "name": "Chapter",
+  "type": "object",
+  "title": "Ch\u01b0\u01a1ng truy\u1ec7n",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "T\u00ean ch\u01b0\u01a1ng"
+    },
+    "content": {
+      "type": "string",
+      "title": "N\u1ed9i dung"
+    },
+    "chapter_number": {
+      "type": "number",
+      "title": "S\u1ed1 ch\u01b0\u01a1ng"
+    },
+    "story_id": {
+      "type": "string",
+      "title": "B\u1ed9 truy\u1ec7n (id)"
+    }
+  },
+  "required": [
+    "title",
+    "story_id"
+  ]
+}

@@ -81,6 +81,20 @@ export async function deleteEvent(id) {
   return await base44.entities.Event.delete(id);
 }
 
+// ---------- Chương truyện (Chapter) ----------
+export async function listChapters(storyId) {
+  return (await listByStory("Chapter", storyId, "chapter_number", 200)) || [];
+}
+export async function createChapter(data) {
+  return await base44.entities.Chapter.create(cleanPayload(data));
+}
+export async function updateChapter(id, data) {
+  return await base44.entities.Chapter.update(id, cleanPayload(data));
+}
+export async function deleteChapter(id) {
+  return await base44.entities.Chapter.delete(id);
+}
+
 // ---------- Tiện ích: tải tệp lên bộ nhớ ----------
 export async function uploadFile(file) {
   const { file_url } = await base44.integrations.Core.UploadFile({ file });
