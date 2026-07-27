@@ -1,0 +1,66 @@
+{
+  "name": "Character",
+  "type": "object",
+  "title": "Nh\u00e2n v\u1eadt",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "T\u00ean nh\u00e2n v\u1eadt",
+      "description": "T\u00ean ch\u00ednh c\u1ee7a nh\u00e2n v\u1eadt"
+    },
+    "aliases": {
+      "type": "string",
+      "title": "Bi\u1ec7t danh",
+      "description": "T\u00ean g\u1ecdi kh\u00e1c, b\u00fat danh, H\u00e1n Vi\u1ec7t"
+    },
+    "avatar_url": {
+      "type": "string",
+      "title": "\u1ea2nh \u0111\u1ea1i di\u1ec7n",
+      "format": "uri"
+    },
+    "role": {
+      "type": "string",
+      "title": "Vai tr\u00f2",
+      "description": "VD: Nam ch\u00ednh, N\u1eef ch\u00ednh, Ph\u1ea3n di\u1ec7n, Ph\u1ee5..."
+    },
+    "description": {
+      "type": "string",
+      "title": "M\u00f4 t\u1ea3 ng\u1eafn"
+    },
+    "appearance": {
+      "type": "string",
+      "title": "Ngo\u1ea1i h\u00ecnh"
+    },
+    "personality": {
+      "type": "string",
+      "title": "T\u00ednh c\u00e1ch"
+    },
+    "power_level": {
+      "type": "string",
+      "title": "C\u1ea5p \u0111\u1ed9 / N\u0103ng l\u1ef1c"
+    },
+    "skills": {
+      "type": "string",
+      "title": "K\u1ef9 n\u0103ng"
+    },
+    "items": {
+      "type": "string",
+      "title": "V\u1eadt ph\u1ea9m / Ph\u00e1p b\u1ea3o"
+    },
+    "first_appeared_chapter": {
+      "type": "number",
+      "title": "Xu\u1ea5t hi\u1ec7n t\u1eeb ch\u01b0\u01a1ng"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Th\u1ebb (tags)",
+      "default": []
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

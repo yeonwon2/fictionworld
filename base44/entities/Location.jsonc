@@ -1,0 +1,43 @@
+{
+  "name": "Location",
+  "type": "object",
+  "title": "\u0110\u1ecba danh",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "T\u00ean \u0111\u1ecba danh"
+    },
+    "type": {
+      "type": "string",
+      "title": "Lo\u1ea1i",
+      "enum": [
+        "M\u00f4n ph\u00e1i",
+        "V\u00f9ng \u0111\u1ea5t",
+        "Qu\u1ed1c gia",
+        "Th\u00e0nh tr\u00ec",
+        "Kh\u00e1c"
+      ],
+      "default": "Kh\u00e1c"
+    },
+    "map_url": {
+      "type": "string",
+      "title": "\u1ea2nh b\u1ea3n \u0111\u1ed3",
+      "format": "uri"
+    },
+    "description": {
+      "type": "string",
+      "title": "M\u00f4 t\u1ea3"
+    },
+    "parent_location_id": {
+      "type": "string",
+      "title": "\u0110\u1ecba danh c\u1ea5p tr\u00ean (id)"
+    },
+    "hierarchy_path": {
+      "type": "string",
+      "title": "\u0110\u01b0\u1eddng d\u1eabn ph\u00e2n c\u1ea5p"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

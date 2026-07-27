@@ -1,0 +1,29 @@
+{
+  "name": "Relationship",
+  "type": "object",
+  "title": "M\u1ed1i quan h\u1ec7",
+  "properties": {
+    "source_character_id": {
+      "type": "string",
+      "title": "Nh\u00e2n v\u1eadt ngu\u1ed3n (id)"
+    },
+    "target_character_id": {
+      "type": "string",
+      "title": "Nh\u00e2n v\u1eadt \u0111\u00edch (id)"
+    },
+    "relation_type": {
+      "type": "string",
+      "title": "Lo\u1ea1i quan h\u1ec7",
+      "description": "VD: S\u01b0 \u0111\u1ed3, K\u1ebb th\u00f9, \u0110\u1ed3ng minh, Huynh \u0111\u1ec7, T\u00ecnh nh\u00e2n"
+    },
+    "description": {
+      "type": "string",
+      "title": "M\u00f4 t\u1ea3"
+    }
+  },
+  "required": [
+    "source_character_id",
+    "target_character_id",
+    "relation_type"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "Event",
+  "type": "object",
+  "title": "S\u1ef1 ki\u1ec7n / M\u1ed1c th\u1eddi gian",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "T\u00ean s\u1ef1 ki\u1ec7n"
+    },
+    "timeline_order": {
+      "type": "number",
+      "title": "Th\u1ee9 t\u1ef1 th\u1eddi gian",
+      "default": 0
+    },
+    "description": {
+      "type": "string",
+      "title": "M\u00f4 t\u1ea3"
+    },
+    "related_character_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Nh\u00e2n v\u1eadt li\u00ean quan (ids)",
+      "default": []
+    }
+  },
+  "required": [
+    "title"
+  ]
+}
