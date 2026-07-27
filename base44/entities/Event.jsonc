@@ -23,6 +23,10 @@
       },
       "title": "Nh\u00e2n v\u1eadt li\u00ean quan (ids)",
       "default": []
+    },
+    "story_id": {
+      "type": "string",
+      "title": "B\u1ed9 truy\u1ec7n (id)"
     }
   },
   "required": [

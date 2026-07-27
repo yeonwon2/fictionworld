@@ -19,17 +19,20 @@ export default function CharacterDetail() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    Promise.all([
-      base44.entities.Character.get(id),
-      base44.entities.Relationship.list("-updated_date", 200),
-      base44.entities.Character.list("-updated_date", 200),
-    ])
-      .then(([c, rels, chars]) => {
-        setCharacter(c);
-        setRelationships(rels || []);
-        setAllChars(chars || []);
-      })
-      .finally(() => setLoading(false));
+    base44.entities.Character.get(id).then(async (c) => {
+      setCharacter(c);
+      const sid = c?.story_id || null;
+      const [rels, chars] = await Promise.all([
+        sid
+          ? base44.entities.Relationship.filter({ story_id: sid }, "-updated_date", 300)
+          : base44.entities.Relationship.list("-updated_date", 300),
+        sid
+          ? base44.entities.Character.filter({ story_id: sid }, "-updated_date", 200)
+          : base44.entities.Character.list("-updated_date", 200),
+      ]);
+      setRelationships(rels || []);
+      setAllChars(chars || []);
+    }).finally(() => setLoading(false));
   }, [id]);
 
   // Lọc các mối quan hệ liên quan đến nhân vật này

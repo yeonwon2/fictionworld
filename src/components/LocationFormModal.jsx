@@ -21,12 +21,14 @@ import { Loader2, Save, Trash2 } from "lucide-react";
 import FileUrlInput from "@/components/FileUrlInput";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { createLocation, updateLocation, deleteLocation } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 const VALID_TYPES = ["Quốc gia", "Vùng đất", "Môn phái", "Thành trì", "Khác"];
 
 // Form modal Thêm/Sửa địa danh. `location` = null → tạo mới.
 export default function LocationFormModal({ open, location, locations = [], onClose, onSaved, onDeleted }) {
   const isEdit = !!location;
+  const { currentStoryId } = useStory();
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -76,9 +78,11 @@ export default function LocationFormModal({ open, location, locations = [], onCl
     setSaving(true);
     setError("");
     try {
+      const payload = { ...form };
+      if (!isEdit) payload.story_id = currentStoryId;
       const result = isEdit
-        ? await updateLocation(location.id, form)
-        : await createLocation(form);
+        ? await updateLocation(location.id, payload)
+        : await createLocation(payload);
       onSaved?.(result, isEdit ? "update" : "create");
       onClose?.();
     } catch (e) {

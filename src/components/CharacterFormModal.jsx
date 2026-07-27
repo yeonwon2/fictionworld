@@ -22,6 +22,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 import FileUrlInput from "@/components/FileUrlInput";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { createCharacter, updateCharacter, deleteCharacter } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 // Lựa chọn vai trò nhân vật
 const ROLE_OPTIONS = ["Nam chính", "Nữ chính", "Sư phụ", "Đồng minh", "Phản diện", "Phụ", "Qua đường", "Khác"];
@@ -29,6 +30,7 @@ const ROLE_OPTIONS = ["Nam chính", "Nữ chính", "Sư phụ", "Đồng minh", 
 // Form modal Thêm/Sửa nhân vật. `character` = null → tạo mới; có đối tượng → chỉnh sửa.
 export default function CharacterFormModal({ open, character, onClose, onSaved, onDeleted }) {
   const isEdit = !!character;
+  const { currentStoryId } = useStory();
   const [form, setForm] = useState({});
   const [tagsText, setTagsText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -77,6 +79,7 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
       ...form,
       first_appeared_chapter: form.first_appeared_chapter === "" ? undefined : Number(form.first_appeared_chapter),
       tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
+      story_id: isEdit ? (character.story_id || currentStoryId) : currentStoryId,
     };
     try {
       let result;

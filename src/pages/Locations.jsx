@@ -4,6 +4,7 @@ import LocationFormModal from "@/components/LocationFormModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { MapPin, ChevronRight, Plus, Pencil, Trash2 } from "lucide-react";
 import { listLocations, deleteLocation } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 // Trang địa danh — hiển thị theo cấu trúc phân cấp + CRUD
 const TYPE_STYLES = {
@@ -21,12 +22,15 @@ export default function Locations() {
   const [editingLoc, setEditingLoc] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  const { currentStoryId, ready } = useStory();
   function load() {
-    listLocations().then(setLocations).finally(() => setLoading(false));
+    setLoading(true);
+    listLocations(currentStoryId).then(setLocations).finally(() => setLoading(false));
   }
   useEffect(() => {
+    if (!ready) return;
     load();
-  }, []);
+  }, [ready, currentStoryId]);
 
   function openCreate() {
     setEditingLoc(null);

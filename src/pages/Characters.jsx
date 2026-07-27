@@ -4,6 +4,7 @@ import CharacterFormModal from "@/components/CharacterFormModal";
 import { Input } from "@/components/ui/input";
 import { Search, Users, Plus } from "lucide-react";
 import { listCharacters } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 // Trang danh sách nhân vật — lưới thẻ + lọc/tìm kiếm
 export default function Characters() {
@@ -14,12 +15,15 @@ export default function Characters() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  const { currentStoryId, ready } = useStory();
   function load() {
-    listCharacters().then(setCharacters).finally(() => setLoading(false));
+    setLoading(true);
+    listCharacters(currentStoryId).then(setCharacters).finally(() => setLoading(false));
   }
   useEffect(() => {
+    if (!ready) return;
     load();
-  }, []);
+  }, [ready, currentStoryId]);
 
   function openCreate() {
     setEditing(null);

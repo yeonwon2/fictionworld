@@ -58,6 +58,10 @@
       },
       "title": "Th\u1ebb (tags)",
       "default": []
+    },
+    "story_id": {
+      "type": "string",
+      "title": "B\u1ed9 truy\u1ec7n (id)"
     }
   },
   "required": [

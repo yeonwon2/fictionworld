@@ -1,25 +1,29 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { listEvents, listCharacters } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 import { Clock, Users } from "lucide-react";
 
 // Trang dòng thời gian — niên biểu sự kiện theo thứ tự
 export default function Timeline() {
+  const { currentStoryId, ready } = useStory();
   const [events, setEvents] = useState([]);
   const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!ready) return;
+    setLoading(true);
     Promise.all([
-      base44.entities.Event.list("-updated_date", 200),
-      base44.entities.Character.list("-updated_date", 200),
+      listEvents(currentStoryId),
+      listCharacters(currentStoryId),
     ])
       .then(([e, c]) => {
         setEvents(e || []);
         setCharacters(c || []);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [ready, currentStoryId]);
 
   // Sắp xếp theo timeline_order tăng dần
   const sorted = useMemo(

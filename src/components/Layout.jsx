@@ -2,6 +2,8 @@ import React, { useState, useCallback } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
+import { StoryProvider } from "@/lib/StoryContext";
+import StorySwitcher from "@/components/StorySwitcher";
 import { cn } from "@/lib/utils";
 
 // Các mục điều hướng thanh bên
@@ -20,6 +22,7 @@ export default function Layout() {
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
 
   return (
+    <StoryProvider>
     <div className="min-h-screen flex bg-background parchment-texture">
       {/* Thanh bên điều hướng */}
       <aside className="hidden md:flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background sticky top-0 h-screen">
@@ -105,6 +108,11 @@ export default function Layout() {
         </nav>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          {/* Thanh tiêu đề — chuyển đổi / quản lý bộ truyện */}
+          <div className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur px-4 py-2 flex items-center justify-end gap-3">
+            <span className="text-xs text-muted-foreground hidden sm:inline">Bộ truyện hiện tại</span>
+            <StorySwitcher />
+          </div>
           <Outlet context={{ openDrawer }} />
         </main>
       </div>
@@ -112,5 +120,6 @@ export default function Layout() {
       {/* Bảng tra cứu nhanh toàn cục */}
       <QuickReferenceDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </div>
+    </StoryProvider>
   );
 }

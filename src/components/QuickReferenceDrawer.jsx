@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Image } from "@/components/ui/image";
 import { Search, Users, MapPin, X } from "lucide-react";
+import { useStory } from "@/lib/StoryContext";
 
 // Bảng tra cứu nhanh dạng slide-over bên phải — bật/tắt từ mọi trang
 export default function QuickReferenceDrawer({ open, onOpenChange }) {
@@ -13,20 +14,21 @@ export default function QuickReferenceDrawer({ open, onOpenChange }) {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("characters");
 
-  // Tải dữ liệu khi drawer mở lần đầu
+  const { currentStoryId, ready } = useStory();
+  // Tải dữ liệu theo bộ truyện hiện tại
   useEffect(() => {
-    if (!open || characters.length || locations.length) return;
+    if (!open || !ready) return;
     setLoading(true);
     Promise.all([
-      base44.entities.Character.list("-updated_date", 100),
-      base44.entities.Location.list("-updated_date", 100),
+      base44.entities.Character.filter({ story_id: currentStoryId }, "-updated_date", 100),
+      base44.entities.Location.filter({ story_id: currentStoryId }, "-updated_date", 100),
     ])
       .then(([c, l]) => {
         setCharacters(c || []);
         setLocations(l || []);
       })
       .finally(() => setLoading(false));
-  }, [open]); // eslint-disable-line
+  }, [open, ready, currentStoryId]);
 
   const q = query.trim().toLowerCase();
 

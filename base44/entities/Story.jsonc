@@ -1,0 +1,25 @@
+{
+  "name": "Story",
+  "type": "object",
+  "title": "B\u1ed9 truy\u1ec7n",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "T\u00ean b\u1ed9 truy\u1ec7n",
+      "description": "T\u00ean t\u00e1c ph\u1ea9m / b\u1ed9 truy\u1ec7n"
+    },
+    "genre": {
+      "type": "string",
+      "title": "Th\u1ec3 lo\u1ea1i",
+      "description": "VD: Ti\u00ean hi\u1ec7p, Huy\u1ec1n huy\u1ec5n, Ki\u1ebfm hi\u1ec7p, \u0110\u00f4 th\u1ecb..."
+    },
+    "cover_url": {
+      "type": "string",
+      "title": "\u1ea2nh b\u00eca",
+      "format": "uri"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

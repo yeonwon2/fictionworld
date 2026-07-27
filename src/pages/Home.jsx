@@ -1,26 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { listCharacters, listLocations, listRelationships, listEvents } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 import { Users, Network, MapPin, Clock, ArrowRight, Search, Sparkles } from "lucide-react";
 
 // Trang tổng quan — bảng điều khiển với thống kê nhanh
 export default function Home() {
   const { openDrawer } = useOutletContext() || {};
+  const { currentStory, currentStoryId, ready } = useStory();
   const [stats, setStats] = useState({ characters: 0, locations: 0, relationships: 0, events: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!ready) return;
+    setLoading(true);
     Promise.all([
-      base44.entities.Character.list("-updated_date", 1),
-      base44.entities.Location.list("-updated_date", 1),
-      base44.entities.Relationship.list("-updated_date", 1),
-      base44.entities.Event.list("-updated_date", 1),
+      listCharacters(currentStoryId),
+      listLocations(currentStoryId),
+      listRelationships(currentStoryId),
+      listEvents(currentStoryId),
     ])
       .then(([c, l, r, e]) => {
         setStats({ characters: c.length, locations: l.length, relationships: r.length, events: e.length });
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [ready, currentStoryId]);
 
   const cards = [
     { label: "Nhân vật", value: stats.characters, path: "/nhan-vat", icon: Users, color: "from-violet-500/20 to-violet-500/5", iconColor: "text-violet-500" },
@@ -37,6 +41,12 @@ export default function Home() {
           <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full bg-primary/10 text-primary mb-4">
             <Sparkles className="w-3.5 h-3.5" /> Sổ tay thế giới Fiction
           </div>
+          {currentStory && (
+            <div className="text-xs text-muted-foreground mb-4">
+              Đang xem: <span className="font-medium text-foreground">{currentStory.name}</span>
+              {currentStory.genre && <span> · {currentStory.genre}</span>}
+            </div>
+          )}
           <h1 className="font-display text-3xl md:text-5xl font-semibold leading-tight">
             Quản lý thế giới,
             <br />

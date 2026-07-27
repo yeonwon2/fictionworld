@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Save, Trash2, ArrowRight } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { addRelationship, updateRelationship, deleteRelationship } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 // Gợi ý loại quan hệ
 const RELATION_TYPES = ["Sư đồ", "Đồng minh", "Kẻ thù", "Huynh đệ", "Huynh muội", "Tình nhân", "Chủ tớ", "Cha con", "Sư đồ nghịch"];
@@ -27,6 +28,7 @@ export default function RelationshipFormModal({
   onDeleted,
 }) {
   const isEdit = !!relationship;
+  const { currentStoryId } = useStory();
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -65,9 +67,10 @@ export default function RelationshipFormModal({
     setSaving(true);
     setError("");
     try {
+      const payload = isEdit ? form : { ...form, story_id: currentStoryId };
       const result = isEdit
-        ? await updateRelationship(relationship.id, form)
-        : await addRelationship(form);
+        ? await updateRelationship(relationship.id, payload)
+        : await addRelationship(payload);
       onSaved?.(result, isEdit ? "update" : "create");
       onClose?.();
     } catch (e) {

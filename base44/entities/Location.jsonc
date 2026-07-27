@@ -35,6 +35,10 @@
     "hierarchy_path": {
       "type": "string",
       "title": "\u0110\u01b0\u1eddng d\u1eabn ph\u00e2n c\u1ea5p"
+    },
+    "story_id": {
+      "type": "string",
+      "title": "B\u1ed9 truy\u1ec7n (id)"
     }
   },
   "required": [

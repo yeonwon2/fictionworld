@@ -5,6 +5,7 @@ import RelationshipFormModal from "@/components/RelationshipFormModal";
 import { Image } from "@/components/ui/image";
 import { Network, X, ArrowRight, Plus } from "lucide-react";
 import { listCharacters, listRelationships } from "@/lib/worldcrud";
+import { useStory } from "@/lib/StoryContext";
 
 // Trang sơ đồ mối quan hệ + quản lý CRUD mối quan hệ ngay trên sơ đồ
 export default function Relationships() {
@@ -15,8 +16,10 @@ export default function Relationships() {
   const [relModalOpen, setRelModalOpen] = useState(false);
   const [editingRel, setEditingRel] = useState(null);
 
+  const { currentStoryId, ready } = useStory();
   function load() {
-    Promise.all([listCharacters(), listRelationships()])
+    setLoading(true);
+    Promise.all([listCharacters(currentStoryId), listRelationships(currentStoryId)])
       .then(([c, r]) => {
         setCharacters(c);
         setRelationships(r);
@@ -25,8 +28,9 @@ export default function Relationships() {
   }
 
   useEffect(() => {
+    if (!ready) return;
     load();
-  }, []);
+  }, [ready, currentStoryId]);
 
   function openCreateRel() {
     setEditingRel(null);
