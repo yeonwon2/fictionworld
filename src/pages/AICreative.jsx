@@ -98,10 +98,17 @@ export default function AICreative() {
     () => chapters.find((c) => c.id === selectedChapterId) || null,
     [chapters, selectedChapterId]
   );
-  const prevText = useMemo(() => {
-    if (mode === "paste") return getLastWords(pastedText, 700);
-    return selectedChapter?.content ? getLastWords(selectedChapter.content, 600) : "";
-  }, [mode, pastedText, selectedChapter]);
+  const chapterOutline = useMemo(
+    () => (mode === "pick" ? selectedChapter?.content || "" : outline || ""),
+    [mode, selectedChapter, outline]
+  );
+  // Phase: "open" khi chương đang chọn chưa có bản thảo (mở đầu chương mới), "continue" khi đã có bản thảo / dán văn bản.
+  const phase = useMemo(() => (mode === "pick" && !content.trim() ? "open" : "continue"), [mode, content]);
+  // Văn bản cấp bối cảnh cho AI: dàn ý chương (nếu mở đầu) hoặc đoạn kết (nếu viết tiếp)
+  const ctxText = useMemo(() => {
+    if (phase === "open") return chapterOutline || "";
+    return mode === "paste" ? getLastWords(pastedText, 700) : getLastWords(content, 800);
+  }, [phase, chapterOutline, mode, pastedText, content]);
 
   const currentStateBlock = useMemo(() => {
     if (!events.length) return "(Chưa có sự kiện để suy trạng thái hiện tại.)";
@@ -147,7 +154,7 @@ export default function AICreative() {
     setBrainstorming(true);
     setSuggestions([]);
     try {
-      const prompt = buildBrainstormPrompt(prevText, currentStateBlock, profilesBlock, relationsBlock, mode);
+      const prompt = buildBrainstormPrompt(ctxText, currentStateBlock, profilesBlock, relationsBlock, phase);
       const res = await callLLM(prompt, BRAINSTORM_SCHEMA);
       setSuggestions(res?.options || []);
       if (!res?.options?.length) setError("AI không trả về gợi ý nào.");
@@ -169,7 +176,7 @@ export default function AICreative() {
     }
     setGenerating(true);
     try {
-      const prompt = buildScenePrompt(profilesBlock, relationsBlock, outline, prevText, currentStateBlock, mode);
+      const prompt = buildScenePrompt(profilesBlock, relationsBlock, outline, ctxText, currentStateBlock, phase);
       const res = await callLLM(prompt);
       setContent((prev) => (prev.trim() ? `${prev}\n\n---\n\n${res}` : String(res)));
     } catch (e) {
@@ -245,6 +252,8 @@ export default function AICreative() {
             brainstorming={brainstorming}
             suggestions={suggestions}
             onSelectSuggestion={handleSelectSuggestion}
+            phase={phase}
+            chapterOutline={chapterOutline}
           />
 
           <div className="grid lg:grid-cols-[340px_1fr] gap-4 mt-4">
@@ -272,11 +281,11 @@ export default function AICreative() {
                 busyAction={busyAction}
               />
               <p className="text-[11px] text-muted-foreground mt-2">
-                {prevText
-                  ? `Đã nạp ${prevText.split(/\s+/).filter(Boolean).length} từ chương trước (chế độ ${
+                {phase === "open"
+                  ? `Đang mở đầu chương mới theo dàn ý (${ctxText.split(/\s+/).filter(Boolean).length} từ).`
+                  : `Đã nạp ${ctxText.split(/\s+/).filter(Boolean).length} từ đoạn kết để viết tiếp (chế độ ${
                       mode === "pick" ? "A" : "B"
-                    }).`
-                  : "Chưa cấp bối cảnh chương trước — AI sẽ viết phân cảnh mở mới."}{" "}
+                    }).`}{" "}
                 {selectedIds.length > 0 && `Trích hồ sơ + quan hệ của ${selectedIds.length} nhân vật.`}
               </p>
             </div>
@@ -326,13 +335,34 @@ const BRAINSTORM_SCHEMA = {
   },
 };
 
-function buildBrainstormPrompt(prevText, currentState, profiles, relations, mode) {
-  return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy đọc văn bản chương trước dưới đây${
-    mode === "paste" ? " (người dùng dán trực tiếp)" : ""
-  }, trích trạng thái / vị trí / cảm xúc các nhân vật (dựa văn bản + dữ kiện bổ sung), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp chương mới, bám sát logic vừa xảy ra.
+function buildBrainstormPrompt(source, currentState, profiles, relations, phase) {
+  if (phase === "open") {
+    return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Dựa DÀN Ý / BIẾN CỐ CHÍNH của chương này dưới đây, hãy đề xuất 3 CÁCH MỞ ĐẦU cho chương, BÁM SÁT 100% nội dung dàn ý đó.
 
-# Văn bản chương trước
-${prevText || "(Trống — hãy đề xuất 3 hướng mở chuyện cho chương đầu.)"}
+# Dàn ý / Biến cố chính của chương này
+${source || "(Chưa có dàn ý — hãy đề xuất 3 cách mở đầu chung cho chương đầu.)"}
+
+# Dữ kiện trạng thái nhân vật (bổ sung từ Sổ Tay)
+${currentState}
+
+# Hồ sơ nhân vật
+${profiles}
+
+# Ma trận quan hệ & xưng hô
+${relations}
+
+# Yêu cầu
+- Đưa ra đúng 3 lựa chọn cách mở đầu:
+  + key "A": Mở đầu bằng nội tâm — dòng tâm sự/độc thoại nội tâm dẫn vào.
+  + key "B": Mở đầu bằng đối thoại — lời thoại trực tiếp tạo kịch tính.
+  + key "C": Mở đầu bằng hành động — mở bằng một cảnh/chuyển động sinh động.
+- Mỗi hướng: "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, KHÔNG dùng từ hiện đại, BÁM SÁT 100% dàn ý chương này, đúng tính cách & quan hệ nhân vật.
+Trả JSON đúng schema.`;
+  }
+  return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy đọc ĐOẠN KẾT dưới đây, trích trạng thái / vị trí / cảm xúc các nhân vật (dựa văn bản + dữ kiện bổ sung), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp, bám sát logic vừa xảy ra.
+
+# Đoạn kết chương trước
+${source || "(Trống — hãy đề xuất 3 hướng mở chuyện cho chương đầu.)"}
 
 # Dữ kiện trạng thái nhân vật (bổ sung từ Sổ Tay)
 ${currentState}
@@ -345,22 +375,49 @@ ${relations}
 
 # Yêu cầu
 - Đưa ra đúng 3 lựa chọn:
-  + key "A": Nối liền lập tức — tiếp ngay khoảnh khắc chương trước kết thúc.
-  + key "B": Chuyển cảnh sang hôm sau — 推移 thời gian, giữ tâm lý nhân vật.
+  + key "A": Nối liền lập tức — tiếp ngay khoảnh khắc đoạn kết dừng lại.
+  + key "B": Chuyển cảnh sang hôm sau — dịch chuyển thời gian, giữ tâm lý nhân vật.
   + key "C": Biến cố bất ngờ — một sự kiện đột phá thay đổi hướng truyện.
 - Mỗi hướng: "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, không dùng từ hiện đại, bám đúng tính cách & quan hệ nhân vật.
 Trả JSON đúng schema.`;
 }
 
-function buildScenePrompt(profiles, relations, outline, prevText, currentState, mode) {
+function buildScenePrompt(profiles, relations, outline, ctxText, currentState, phase) {
+  if (phase === "open") {
+    return `Bạn là trợ lý sáng tác văn học chuyên tiểu thuyết Bách Hợp Cổ Đại. Văn phong điền nhã, tao nhã, từ ngữ cổ kính. TUYỆT ĐỐI không dùng từ ngữ hiện đại và không giải thích meta — chỉ viết văn.
+
+Dữ liệu dưới đây lấy từ Sổ Tay Thế Giới. Hãy MỞ ĐẦU một phân cảnh của chương mới, BÁM SÁT 100% dàn ý / biến cố chính của chương này.
+
+# Dàn ý / Biến cố chính của chương này
+${ctxText || "(Chưa có dàn ý — hãy mở đầu một chương mới hợp lý theo dàn ý phân cảnh.)"}
+
+# Trạng thái & vị trí hiện tại của nhân vật
+${currentState}
+
+# Hồ sơ nhân vật xuất hiện trong cảnh
+${profiles}
+
+# Ma trận quan hệ & cách xưng hô
+${relations}
+
+# Dàn ý phân cảnh (chi tiết cận cảnh)
+${outline.trim() || "(Chưa cung cấp — hãy tự xây phân cảnh mở đầu hợp lý, đúng tính cách & quan hệ nhân vật.)"}
+
+# Yêu cầu bắt buộc
+- MỞ ĐẦU chương mới BÁM SÁT 100% dàn ý / biến cố chính của chương này.
+- Giữ tông giọng, vị trí nhân vật, diễn biến tâm lý nhất quán với Sổ Tay.
+- Xưng hô phù hợp thân phận & quan hệ (sư huynh, sư đệ, công tử, nương tử, đại nhân...).
+- Văn phong cổ kính, điền nhã, gợi hình; khoảng 700–1100 từ, chia đoạn rõ ràng.
+- Chỉ viết văn phân cảnh — không tiêu đề meta, không lời dẫn.
+
+Hãy bắt đầu:`;
+  }
   return `Bạn là trợ lý sáng tác văn học chuyên tiểu thuyết Bách Hợp Cổ Đại. Văn phong điền nhã, tao nhã, từ ngữ cổ kính. TUYỆT ĐỐI không dùng từ ngữ hiện đại và không giải thích meta — chỉ viết văn.
 
-Dữ liệu dưới đây lấy từ Sổ Tay Thế Giới & chương trước${
-    mode === "paste" ? " (người dùng dán trực tiếp)" : ""
-  }. Hãy VIẾT TIẾP MỘT PHÂN CẢNH mới một cách tự nhiên, nối mạch từ chương trước.
+Dữ liệu dưới đây lấy từ Sổ Tay Thế Giới & chương trước. Hãy VIẾT TIẾP MỘT PHÂN CẢNH mới một cách tự nhiên, nối mạch từ đoạn kết.
 
 # Đoạn kết của chương trước
-${prevText || "(Không có chương trước — viết phân cảnh mở đầu theo dàn ý.)"}
+${ctxText || "(Không có đoạn kết — viết phân cảnh tiếp theo theo dàn ý.)"}
 
 # Trạng thái & vị trí hiện tại của nhân vật
 ${currentState}
@@ -375,7 +432,7 @@ ${relations}
 ${outline.trim() || "(Chưa cung cấp — hãy tự xây một phân cảnh hợp lý, đúng tính cách & quan hệ nhân vật, nối tiếp tự nhiên với đoạn kết trên.)"}
 
 # Yêu cầu bắt buộc
-- VIẾT TIẾP mạch văn từ chương trước một cách tự nhiên, GIỮ NGUYÊN tông giọng, vị trí nhân vật và diễn biến tâm lý.
+- VIẾT TIẾP mạch văn từ đoạn kết một cách tự nhiên, GIỮ NGUYÊN tông giọng, vị trí nhân vật và diễn biến tâm lý.
 - Tuyệt đối không bị đứt gãy hay mâu thuẫn tình tiết với đoạn kết chương trước.
 - Xưng hô phù hợp thân phận & quan hệ (sư huynh, sư đệ, công tử, nương tử, đại nhân...).
 - Văn phong cổ kính, điền nhã, gợi hình; khoảng 700–1100 từ, chia đoạn rõ ràng.
