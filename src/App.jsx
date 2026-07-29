@@ -16,6 +16,8 @@ import Locations from '@/pages/Locations';
 import Timeline from '@/pages/Timeline';
 import Workspace from '@/pages/Workspace';
 import StoryMatrix from '@/pages/StoryMatrix';
+import Worldbook from '@/pages/Worldbook';
+import AICreative from '@/pages/AICreative';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -62,6 +64,8 @@ const AuthenticatedApp = () => {
           <Route path="/nien-bieu" element={<Timeline />} />
           <Route path="/soan-thao" element={<Workspace />} />
           <Route path="/cot-truyen" element={<StoryMatrix />} />
+          <Route path="/so-tay-the-gioi" element={<Worldbook />} />
+          <Route path="/sang-tac-ai" element={<AICreative />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

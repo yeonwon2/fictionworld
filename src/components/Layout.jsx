@@ -1,34 +1,46 @@
 import React, { useState, useCallback } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, PenTool, LayoutGrid, LogOut } from "lucide-react";
+import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
+import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
 import StorySwitcher from "@/components/StorySwitcher";
 import { cn } from "@/lib/utils";
 
-// Các mục điều hướng thanh bên
-const NAV_ITEMS = [
-  { label: "Tổng quan", path: "/", icon: BookOpen },
-  { label: "Soạn thảo", path: "/soan-thao", icon: PenTool },
-  { label: "Nhân vật", path: "/nhan-vat", icon: Users },
-  { label: "Sơ đồ quan hệ", path: "/so-do", icon: Network },
-  { label: "Địa danh", path: "/dia-danh", icon: MapPin },
-  { label: "Niên biểu", path: "/nien-bieu", icon: Clock },
-  { label: "Cốt truyện", path: "/cot-truyen", icon: LayoutGrid },
+// Điều hướng chính — 3 tab
+const MAIN_NAV = [
+  { label: "Tổng quan", short: "Tổng quan", path: "/", icon: BookOpen },
+  {
+    label: "Sổ Tay Thế Giới",
+    short: "Sổ Tay",
+    path: "/so-tay-the-gioi",
+    icon: Library,
+    children: [
+      { label: "Nhân vật", tab: "characters", icon: Users },
+      { label: "Sơ đồ quan hệ", tab: "relationships", icon: Network },
+      { label: "Địa danh", tab: "locations", icon: MapPin },
+      { label: "Niên biểu", tab: "timeline", icon: Clock },
+      { label: "Cốt truyện", tab: "matrix", icon: LayoutGrid },
+    ],
+  },
+  { label: "Sáng Tác AI", short: "Sáng Tác", path: "/sang-tac-ai", icon: Sparkles },
 ];
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const { logout } = useAuth();
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab");
+  const [groupOpen, setGroupOpen] = useState(location.pathname === "/so-tay-the-gioi");
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
+  const worldItem = MAIN_NAV[1];
 
   return (
     <StoryProvider>
     <div className="min-h-screen flex bg-background parchment-texture">
-      {/* Thanh bên điều hướng */}
+      {/* Thanh bên điều hướng (desktop) */}
       <aside className="hidden md:flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background sticky top-0 h-screen">
         <div className="px-6 py-7 border-b border-sidebar-border">
           <Link to="/" className="flex items-center gap-2.5 group">
@@ -43,25 +55,52 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 px-3 py-5 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                  active
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+          {/* Tổng quan */}
+          <NavLink item={MAIN_NAV[0]} active={location.pathname === "/"} />
+
+          {/* Sổ Tay Thế Giới — nhóm mở rộng */}
+          <div>
+            <button
+              onClick={() => setGroupOpen((o) => !o)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                location.pathname === worldItem.path
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <worldItem.icon className="w-4 h-4 shrink-0" />
+              {worldItem.label}
+              <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", groupOpen && "rotate-180")} />
+            </button>
+            {groupOpen && (
+              <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                {worldItem.children.map((child) => {
+                  const Icon = child.icon;
+                  const to = `${worldItem.path}?tab=${child.tab}`;
+                  const active = location.pathname === worldItem.path && activeTab === child.tab;
+                  return (
+                    <Link
+                      key={child.tab}
+                      to={to}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition",
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      {child.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Sáng Tác AI */}
+          <NavLink item={MAIN_NAV[2]} active={location.pathname === "/sang-tac-ai"} />
         </nav>
 
         <div className="p-4 border-t border-sidebar-border space-y-2">
@@ -102,9 +141,9 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Điều hướng dưới (mobile) */}
+        {/* Điều hướng dưới (mobile) — 3 tab chính */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur px-1 py-1.5">
-          {NAV_ITEMS.map((item) => {
+          {MAIN_NAV.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
             return (
@@ -112,12 +151,12 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium",
+                  "flex flex-col items-center gap-0.5 px-3 py-1 rounded-md text-[10px] font-medium",
                   active ? "text-primary" : "text-muted-foreground"
                 )}
               >
                 <Icon className="w-5 h-5" />
-                {item.label}
+                {item.short}
               </Link>
             );
           })}
@@ -144,5 +183,23 @@ export default function Layout() {
       <QuickReferenceDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </div>
     </StoryProvider>
+  );
+}
+
+function NavLink({ item, active }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      to={item.path}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+        active
+          ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      )}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      {item.label}
+    </Link>
   );
 }

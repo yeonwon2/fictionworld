@@ -27,10 +27,10 @@ export default function Home() {
   }, [ready, currentStoryId]);
 
   const cards = [
-    { label: "Nhân vật", value: stats.characters, path: "/nhan-vat", icon: Users, color: "from-violet-500/20 to-violet-500/5", iconColor: "text-violet-500" },
-    { label: "Mối quan hệ", value: stats.relationships, path: "/so-do", icon: Network, color: "from-emerald-500/20 to-emerald-500/5", iconColor: "text-emerald-500" },
-    { label: "Địa danh", value: stats.locations, path: "/dia-danh", icon: MapPin, color: "from-amber-500/20 to-amber-500/5", iconColor: "text-amber-500" },
-    { label: "Sự kiện", value: stats.events, path: "/nien-bieu", icon: Clock, color: "from-sky-500/20 to-sky-500/5", iconColor: "text-sky-500" },
+    { label: "Nhân vật", value: stats.characters, path: "/so-tay-the-gioi?tab=characters", icon: Users, color: "from-violet-500/20 to-violet-500/5", iconColor: "text-violet-500" },
+    { label: "Mối quan hệ", value: stats.relationships, path: "/so-tay-the-gioi?tab=relationships", icon: Network, color: "from-emerald-500/20 to-emerald-500/5", iconColor: "text-emerald-500" },
+    { label: "Địa danh", value: stats.locations, path: "/so-tay-the-gioi?tab=locations", icon: MapPin, color: "from-amber-500/20 to-amber-500/5", iconColor: "text-amber-500" },
+    { label: "Sự kiện", value: stats.events, path: "/so-tay-the-gioi?tab=timeline", icon: Clock, color: "from-sky-500/20 to-sky-500/5", iconColor: "text-sky-500" },
   ];
 
   return (
@@ -57,10 +57,16 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             <Link
-              to="/nhan-vat"
+              to="/so-tay-the-gioi?tab=characters"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
             >
               Xem nhân vật <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/sang-tac-ai"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/40 text-primary text-sm font-medium hover:bg-primary/10 transition"
+            >
+              <Sparkles className="w-4 h-4" /> Sáng tác AI
             </Link>
             <button
               onClick={openDrawer}
@@ -96,16 +102,16 @@ export default function Home() {
       {/* Phím tắt */}
       <div className="mt-8 grid md:grid-cols-2 gap-4">
         <FeatureLink
-          to="/so-do"
+          to="/so-tay-the-gioi?tab=relationships"
           icon={Network}
           title="Sơ đồ mối quan hệ"
           desc="Trực quan hóa mạng lưới nhân vật — sư đồ, đồng minh, kẻ thù."
         />
         <FeatureLink
-          to="/nien-bieu"
-          icon={Clock}
-          title="Dòng thời gian"
-          desc="Niên biểu các sự kiện theo thứ tự xảy ra trong thế giới của bạn."
+          to="/sang-tac-ai"
+          icon={Sparkles}
+          title="Sáng tác AI"
+          desc="Viết phân cảnh cổ phong tự động với sự trợ giúp của Gemini."
         />
       </div>
     </div>
