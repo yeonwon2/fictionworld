@@ -1,14 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useStory } from "@/lib/StoryContext";
-import { listCharacters, listRelationships, listChapters, listEvents, listLocations } from "@/lib/worldcrud";
+import {
+  listCharacters,
+  listRelationships,
+  listChapters,
+  listEvents,
+  listLocations,
+} from "@/lib/worldcrud";
 import { Sparkles, Loader2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ConceptTab from "@/components/ai/ConceptTab";
+import ArcArchitectTab from "@/components/ai/ArcArchitectTab";
+import ContinuityPanel from "@/components/ai/ContinuityPanel";
 import SceneSetupPanel from "@/components/ai/SceneSetupPanel";
 import AIEditor from "@/components/ai/AIEditor";
 
-// Trang Sáng Tác AI — có tính năng Mạch truyện (Story Continuity)
+// Hệ thống Hỗ trợ Sáng tác 4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết
 export default function AICreative() {
   const { currentStoryId, ready } = useStory();
+  const [activeTab, setActiveTab] = useState("idea");
   const [characters, setCharacters] = useState([]);
   const [relationships, setRelationships] = useState([]);
   const [chapters, setChapters] = useState([]);
@@ -16,16 +27,26 @@ export default function AICreative() {
   const [locations, setLocations] = useState([]);
   const [loadingChars, setLoadingChars] = useState(true);
   const [selectedIds, setSelectedIds] = useState([]);
+
+  // Cấp độ 2 state
+  const [idea, setIdea] = useState("");
+  const [sampleChars, setSampleChars] = useState([]);
+
+  // Cấp độ 3 state (continuity)
+  const [mode, setMode] = useState("pick");
   const [selectedChapterId, setSelectedChapterId] = useState("");
+  const [pastedText, setPastedText] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [brainstorming, setBrainstorming] = useState(false);
+
+  // Cấp độ 4 state
   const [outline, setOutline] = useState("");
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
   const [busyAction, setBusyAction] = useState(null);
   const [error, setError] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-  const [brainstorming, setBrainstorming] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
     if (!ready) return;
     setLoadingChars(true);
     Promise.all([
@@ -41,11 +62,13 @@ export default function AICreative() {
         setChapters(ch || []);
         setEvents(ev || []);
         setLocations(lo || []);
-        // Mặc định chọn chương liền trước (chương cuối cùng có sẵn)
-        if ((ch || []).length > 0) setSelectedChapterId(ch[ch.length - 1].id);
+        if ((ch || []).length > 0 && !selectedChapterId) setSelectedChapterId(ch[ch.length - 1].id);
       })
       .finally(() => setLoadingChars(false));
-  }, [ready, currentStoryId]);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadData, [ready, currentStoryId]);
 
   const charById = useMemo(() => Object.fromEntries(characters.map((c) => [c.id, c])), [characters]);
   const locById = useMemo(() => Object.fromEntries(locations.map((l) => [l.id, l])), [locations]);
@@ -70,24 +93,24 @@ export default function AICreative() {
       .join("\n");
   }, [relationships, selectedIds, charById]);
 
-  // Chương trước được chọn + đoạn kết (500–1000 từ cuối)
+  // Văn bản chương trước (chế độ A hoặc B)
   const selectedChapter = useMemo(
     () => chapters.find((c) => c.id === selectedChapterId) || null,
     [chapters, selectedChapterId]
   );
-  const chapterEnding = useMemo(
-    () => (selectedChapter?.content ? getLastWords(selectedChapter.content, 600) : ""),
-    [selectedChapter]
-  );
+  const prevText = useMemo(() => {
+    if (mode === "paste") return getLastWords(pastedText, 700);
+    return selectedChapter?.content ? getLastWords(selectedChapter.content, 600) : "";
+  }, [mode, pastedText, selectedChapter]);
 
-  // Trạng thái / vị trí / cảm xúc hiện tại (rút từ sự kiện gần nhất)
   const currentStateBlock = useMemo(() => {
-    if (!events.length) return "(Chưa có sự kiện nào để suy trạng thái hiện tại.)";
+    if (!events.length) return "(Chưa có sự kiện để suy trạng thái hiện tại.)";
     const latest = [...events].sort((a, b) => (b.timeline_order || 0) - (a.timeline_order || 0))[0];
-    const locNames = (latest.related_location_ids || [])
-      .map((id) => locById[id]?.name)
-      .filter(Boolean)
-      .join(", ") || "(không rõ)";
+    const locNames =
+      (latest.related_location_ids || [])
+        .map((id) => locById[id]?.name)
+        .filter(Boolean)
+        .join(", ") || "(không rõ)";
     const lines = selectedIds
       .map((cid) => {
         const c = charById[cid];
@@ -100,32 +123,31 @@ export default function AICreative() {
   }, [events, selectedIds, charById, locById]);
 
   const callLLM = (prompt, schema) =>
-    base44.integrations.Core.InvokeLLM({ prompt, model: "gemini_3_flash", ...(schema ? { response_json_schema: schema } : {}) });
+    base44.integrations.Core.InvokeLLM({
+      prompt,
+      model: "gemini_3_flash",
+      ...(schema ? { response_json_schema: schema } : {}),
+    });
 
-  const handleGenerate = async () => {
-    setError("");
-    if (selectedIds.length === 0) {
-      setError("Hãy chọn ít nhất một nhân vật xuất hiện trong cảnh.");
-      return;
-    }
-    setGenerating(true);
-    try {
-      const prompt = buildScenePrompt(profilesBlock, relationsBlock, outline, chapterEnding, currentStateBlock);
-      const res = await callLLM(prompt);
-      setContent((prev) => (prev.trim() ? `${prev}\n\n---\n\n${res}` : String(res)));
-    } catch (e) {
-      setError("Không thể sinh phân cảnh: " + (e?.message || "lỗi không xác định"));
-    } finally {
-      setGenerating(false);
-    }
+  // ---------- Cấp độ 1 → 2 ----------
+  const handleUseConcept = (ideaText, chars) => {
+    setIdea(ideaText);
+    setSampleChars(chars);
+    setActiveTab("plot");
   };
 
+  const handleArcSaved = () => {
+    loadData();
+    setActiveTab("write");
+  };
+
+  // ---------- Cấp độ 3: brainstorm nối tiếp ----------
   const handleBrainstorm = async () => {
     setError("");
     setBrainstorming(true);
     setSuggestions([]);
     try {
-      const prompt = buildBrainstormPrompt(chapterEnding, currentStateBlock, profilesBlock, relationsBlock);
+      const prompt = buildBrainstormPrompt(prevText, currentStateBlock, profilesBlock, relationsBlock, mode);
       const res = await callLLM(prompt, BRAINSTORM_SCHEMA);
       setSuggestions(res?.options || []);
       if (!res?.options?.length) setError("AI không trả về gợi ý nào.");
@@ -137,6 +159,25 @@ export default function AICreative() {
   };
 
   const handleSelectSuggestion = (text) => setOutline(text);
+
+  // ---------- Cấp độ 4: sinh phân cảnh ----------
+  const handleGenerate = async () => {
+    setError("");
+    if (selectedIds.length === 0) {
+      setError("Hãy chọn ít nhất một nhân vật xuất hiện trong cảnh.");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const prompt = buildScenePrompt(profilesBlock, relationsBlock, outline, prevText, currentStateBlock, mode);
+      const res = await callLLM(prompt);
+      setContent((prev) => (prev.trim() ? `${prev}\n\n---\n\n${res}` : String(res)));
+    } catch (e) {
+      setError("Không thể sinh phân cảnh: " + (e?.message || "lỗi"));
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleAITool = async (action, selectedText) => {
     if (!selectedText.trim()) return null;
@@ -159,10 +200,10 @@ export default function AICreative() {
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <header className="mb-5">
         <h1 className="font-display text-2xl md:text-3xl font-semibold flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary" /> Sáng Tác AI
+          <Sparkles className="w-6 h-6 text-primary" /> Hỗ trợ Sáng Tác AI
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Viết phân cảnh cổ phong — tự nối tiếp chương trước & giữ mạch truyện liên tục.
+          4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết phân cảnh cổ phong.
         </p>
       </header>
 
@@ -170,46 +211,78 @@ export default function AICreative() {
         <div className="mb-3 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>
       )}
 
-      <div className="grid lg:grid-cols-[340px_1fr] gap-4">
-        <SceneSetupPanel
-          characters={characters}
-          loadingChars={loadingChars}
-          selectedIds={selectedIds}
-          setSelectedIds={setSelectedIds}
-          outline={outline}
-          setOutline={setOutline}
-          onGenerate={handleGenerate}
-          generating={generating}
-          chapters={chapters}
-          selectedChapterId={selectedChapterId}
-          setSelectedChapterId={setSelectedChapterId}
-          onBrainstorm={handleBrainstorm}
-          brainstorming={brainstorming}
-          suggestions={suggestions}
-          onSelectSuggestion={handleSelectSuggestion}
-        />
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-3 w-full max-w-2xl mb-4">
+          <TabsTrigger value="idea">1 · Ý tưởng</TabsTrigger>
+          <TabsTrigger value="plot">2 · Dàn Ý</TabsTrigger>
+          <TabsTrigger value="write">3 · Nối Mạch & Viết</TabsTrigger>
+        </TabsList>
 
-        <div>
-          {generating && (
-            <div className="mb-2 flex items-center gap-2 text-sm text-primary">
-              <Loader2 className="w-4 h-4 animate-spin" /> Gemini đang viết phân cảnh...
-            </div>
-          )}
-          <AIEditor
-            value={content}
-            onChange={setContent}
-            onAITool={handleAITool}
-            busy={busyAction !== null}
-            busyAction={busyAction}
+        <TabsContent value="idea">
+          <ConceptTab onUseConcept={handleUseConcept} />
+        </TabsContent>
+
+        <TabsContent value="plot">
+          <ArcArchitectTab
+            idea={idea}
+            setIdea={setIdea}
+            sampleChars={sampleChars}
+            currentStoryId={currentStoryId}
+            onSaved={handleArcSaved}
           />
-          <p className="text-[11px] text-muted-foreground mt-2">
-            {selectedChapter
-              ? `Nối tiếp «${selectedChapter.title}» — đã trích ${chapterEnding.split(/\s+/).filter(Boolean).length} từ đoạn kết.`
-              : "Không nối tiếp chương nào."}{" "}
-            {selectedIds.length > 0 && `Trích hồ sơ + quan hệ của ${selectedIds.length} nhân vật.`}
-          </p>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="write">
+          <ContinuityPanel
+            chapters={chapters}
+            selectedChapterId={selectedChapterId}
+            setSelectedChapterId={setSelectedChapterId}
+            mode={mode}
+            setMode={setMode}
+            pastedText={pastedText}
+            setPastedText={setPastedText}
+            onBrainstorm={handleBrainstorm}
+            brainstorming={brainstorming}
+            suggestions={suggestions}
+            onSelectSuggestion={handleSelectSuggestion}
+          />
+
+          <div className="grid lg:grid-cols-[340px_1fr] gap-4 mt-4">
+            <SceneSetupPanel
+              characters={characters}
+              loadingChars={loadingChars}
+              selectedIds={selectedIds}
+              setSelectedIds={setSelectedIds}
+              outline={outline}
+              setOutline={setOutline}
+              onGenerate={handleGenerate}
+              generating={generating}
+            />
+            <div>
+              {generating && (
+                <div className="mb-2 flex items-center gap-2 text-sm text-primary">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Gemini đang viết phân cảnh...
+                </div>
+              )}
+              <AIEditor
+                value={content}
+                onChange={setContent}
+                onAITool={handleAITool}
+                busy={busyAction !== null}
+                busyAction={busyAction}
+              />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                {prevText
+                  ? `Đã nạp ${prevText.split(/\s+/).filter(Boolean).length} từ chương trước (chế độ ${
+                      mode === "pick" ? "A" : "B"
+                    }).`
+                  : "Chưa cấp bối cảnh chương trước — AI sẽ viết phân cảnh mở mới."}{" "}
+                {selectedIds.length > 0 && `Trích hồ sơ + quan hệ của ${selectedIds.length} nhân vật.`}
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -253,13 +326,15 @@ const BRAINSTORM_SCHEMA = {
   },
 };
 
-function buildBrainstormPrompt(chapterEnding, currentState, profiles, relations) {
-  return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy phân tích dữ liệu dưới đây và đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp chương mới, bám sát logic vừa xảy ra ở chương trước.
+function buildBrainstormPrompt(prevText, currentState, profiles, relations, mode) {
+  return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy đọc văn bản chương trước dưới đây${
+    mode === "paste" ? " (người dùng dán trực tiếp)" : ""
+  }, trích trạng thái / vị trí / cảm xúc các nhân vật (dựa văn bản + dữ kiện bổ sung), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp chương mới, bám sát logic vừa xảy ra.
 
-# Đoạn kết chương trước
-${chapterEnding || "(Chưa có chương trước — hãy đề xuất 3 hướng mở chuyện cho chương đầu.)"}
+# Văn bản chương trước
+${prevText || "(Trống — hãy đề xuất 3 hướng mở chuyện cho chương đầu.)"}
 
-# Trạng thái / vị trí / cảm xúc hiện tại nhân vật
+# Dữ kiện trạng thái nhân vật (bổ sung từ Sổ Tay)
 ${currentState}
 
 # Hồ sơ nhân vật
@@ -271,19 +346,21 @@ ${relations}
 # Yêu cầu
 - Đưa ra đúng 3 lựa chọn:
   + key "A": Nối liền lập tức — tiếp ngay khoảnh khắc chương trước kết thúc.
-  + key "B": Chuyển cảnh sang hôm sau —推移 thời gian, giữ tâm lý nhân vật.
+  + key "B": Chuyển cảnh sang hôm sau — 推移 thời gian, giữ tâm lý nhân vật.
   + key "C": Biến cố bất ngờ — một sự kiện đột phá thay đổi hướng truyện.
-- Mỗi hướng: "title" ngắn gọn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt, văn phong cổ kính, điền nhã, không từ hiện đại, bám đúng tính cách & quan hệ nhân vật.
-Trả JSON theo schema.`;
+- Mỗi hướng: "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, không dùng từ hiện đại, bám đúng tính cách & quan hệ nhân vật.
+Trả JSON đúng schema.`;
 }
 
-function buildScenePrompt(profiles, relations, outline, chapterEnding, currentState) {
+function buildScenePrompt(profiles, relations, outline, prevText, currentState, mode) {
   return `Bạn là trợ lý sáng tác văn học chuyên tiểu thuyết Bách Hợp Cổ Đại. Văn phong điền nhã, tao nhã, từ ngữ cổ kính. TUYỆT ĐỐI không dùng từ ngữ hiện đại và không giải thích meta — chỉ viết văn.
 
-Dữ liệu dưới đây lấy từ Sổ Tay Thế Giới & chương trước. Hãy VIẾT TIẾP MỘT PHÂN CẢNH mới một cách tự nhiên, nối mạch từ chương trước.
+Dữ liệu dưới đây lấy từ Sổ Tay Thế Giới & chương trước${
+    mode === "paste" ? " (người dùng dán trực tiếp)" : ""
+  }. Hãy VIẾT TIẾP MỘT PHÂN CẢNH mới một cách tự nhiên, nối mạch từ chương trước.
 
 # Đoạn kết của chương trước
-${chapterEnding || "(Không nối tiếp chương nào — viết phân cảnh mở đầu.)"}
+${prevText || "(Không có chương trước — viết phân cảnh mở đầu theo dàn ý.)"}
 
 # Trạng thái & vị trí hiện tại của nhân vật
 ${currentState}
