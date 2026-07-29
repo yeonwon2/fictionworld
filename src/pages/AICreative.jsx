@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { aiCall } from "@/lib/aiCall";
+import { buildDirectionBlock } from "@/lib/directionUtils";
 import { useStory } from "@/lib/StoryContext";
 import {
   listCharacters,
@@ -20,7 +21,7 @@ import IdeaTools from "@/components/ai/IdeaTools";
 
 // Hệ thống Hỗ trợ Sáng tác 4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết
 export default function AICreative() {
-  const { currentStoryId, ready } = useStory();
+  const { currentStoryId, currentStory, ready } = useStory();
   const [activeTab, setActiveTab] = useState("idea");
   const [characters, setCharacters] = useState([]);
   const [relationships, setRelationships] = useState([]);
@@ -47,6 +48,7 @@ export default function AICreative() {
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
   const [busyAction, setBusyAction] = useState(null);
+  const [orientationNote, setOrientationNote] = useState("");
   const [error, setError] = useState("");
 
   // Consistency check
@@ -115,6 +117,8 @@ export default function AICreative() {
       .join("\n");
   }, [events]);
 
+  const directionBlock = useMemo(() => buildDirectionBlock(currentStory?.direction), [currentStory]);
+
   // Văn bản chương trước (chế độ A hoặc B)
   const selectedChapter = useMemo(
     () => chapters.find((c) => c.id === selectedChapterId) || null,
@@ -146,8 +150,9 @@ export default function AICreative() {
         return `- ${c.name}: ${st || "bình thường"} (đang ở: ${locNames})`;
       })
       .filter(Boolean);
-    return `Sự kiện gần nhất: ${latest.title}\n${lines.join("\n") || "(các nhân vật được chọn chưa xuất hiện trong sự kiện gần nhất)"}`;
-  }, [events, selectedIds, charById, locById]);
+    const base = `Sự kiện gần nhất: ${latest.title}\n${lines.join("\n") || "(các nhân vật được chọn chưa xuất hiện trong sự kiện gần nhất)"}`;
+    return `${directionBlock}\n\n${base}`;
+  }, [events, selectedIds, charById, locById, directionBlock]);
 
   const callLLM = (prompt, schema) => aiCall(prompt, { jsonSchema: schema || undefined });
 
@@ -199,10 +204,13 @@ export default function AICreative() {
     }
     setGenerating(true);
     try {
+      const orientedOutline = orientationNote.trim()
+        ? `[Ghi chú định hướng của tác giả]: ${orientationNote.trim()}\n\n${outline}`
+        : outline;
       const prompt = buildScenePrompt(
         profilesBlock,
         relationsBlock,
-        outline,
+        orientedOutline,
         ctxText,
         currentStateBlock,
         phase,
@@ -218,13 +226,13 @@ export default function AICreative() {
     }
   };
 
-  const handleAITool = async (action, selectedText) => {
+  const handleAITool = async (action, selectedText, note) => {
     if (!selectedText.trim()) return null;
     setBusyAction(action);
     setError("");
     try {
-      const ctxBlock = `${profilesBlock}\n\n${relationsBlock}\n\n# Thuật ngữ cổ phong\n${glossaryBlock}`;
-      const prompt = buildToolPrompt(action, selectedText, ctxBlock);
+      const ctxBlock = `${directionBlock}\n\n${profilesBlock}\n\n${relationsBlock}\n\n# Thuật ngữ cổ phong\n${glossaryBlock}`;
+      const prompt = buildToolPrompt(action, selectedText, ctxBlock, note);
       const res = await callLLM(prompt);
       return String(res);
     } catch (e) {
@@ -288,6 +296,7 @@ export default function AICreative() {
             sampleChars={sampleChars}
             currentStoryId={currentStoryId}
             onSaved={handleArcSaved}
+            directionBlock={directionBlock}
           />
         </TabsContent>
 
@@ -325,6 +334,13 @@ export default function AICreative() {
                   <Loader2 className="w-4 h-4 animate-spin" /> AI đang viết phân cảnh...
                 </div>
               )}
+              <textarea
+                value={orientationNote}
+                onChange={(e) => setOrientationNote(e.target.value)}
+                rows={2}
+                placeholder="Ghi chú định hướng trước khi viết tiếp (VD: để nhân vật nghi ngờ trước khi hành động, đừng vội vàng) — sẽ chèn vào prompt khi AI sinh/write tiếp..."
+                className="w-full mb-2 rounded-md border border-input bg-transparent px-3 py-2 text-xs resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
               <AIEditor
                 value={content}
                 onChange={setContent}
@@ -609,7 +625,7 @@ Mỗi lỗi: severity ("nghiêm trọng" / "cảnh báo"), where (trích đoạn
 Nếu không có lỗi, trả issues là mảng rỗng []. Trả JSON đúng schema.`;
 }
 
-function buildToolPrompt(action, selectedText, ctxBlock) {
+function buildToolPrompt(action, selectedText, ctxBlock, note) {
   switch (action) {
     case "continue":
       return `${ctxBlock}
@@ -666,6 +682,15 @@ GỢI Ý 3 hành động/khắc tiếp theo của nhân vật trong cảnh (mỗ
     case "suggest":
       return `Dựa đoạn sau, GỢI Ý 3 tình huống tiếp theo phù hợp Bách Hợp Cổ Đại, mỗi tình huống 1–2 câu cụ thể. Chỉ liệt kê.
 
+"""${selectedText}"""`;
+    case "rewrite_by_feedback":
+      return `${ctxBlock}
+
+Hãy VIẾT LẠI đoạn sau theo góp ý của tác giả (giữ cổ phong, bám xưng hô Story Bible, không từ hiện đại, giữ ý cốt lõi). Chỉ trả kết quả viết lại.
+
+Góp ý: ${note || "(làm cho hay hơn, giữ ý chính)"}
+
+Đoạn gốc:
 """${selectedText}"""`;
     default:
       return selectedText;
