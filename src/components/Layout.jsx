@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon } from "lucide-react";
+import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon, BookMarked } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -17,6 +17,7 @@ const MAIN_NAV = [
     path: "/so-tay-the-gioi",
     icon: Library,
     children: [
+      { label: "Hồ Sơ Truyện", tab: "bible", icon: BookMarked },
       { label: "Nhân vật", tab: "characters", icon: Users },
       { label: "Sơ đồ quan hệ", tab: "relationships", icon: Network },
       { label: "Địa danh", tab: "locations", icon: MapPin },

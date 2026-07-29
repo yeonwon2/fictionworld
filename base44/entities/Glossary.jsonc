@@ -1,0 +1,36 @@
+{
+  "name": "Glossary",
+  "type": "object",
+  "title": "Thu\u1eadt ng\u1eef c\u1ed5 phong",
+  "properties": {
+    "term": {
+      "type": "string",
+      "title": "Thu\u1eadt ng\u1eef / T\u1eeb"
+    },
+    "category": {
+      "type": "string",
+      "title": "Ph\u00e2n lo\u1ea1i",
+      "enum": [
+        "X\u01b0ng h\u00f4",
+        "\u0110\u1ecba danh",
+        "Ch\u1ee9c quan",
+        "M\u00f4n ph\u00e1i / T\u1ed5 ch\u1ee9c",
+        "Thu\u1eadt ng\u1eef",
+        "Kh\u00e1c"
+      ],
+      "default": "Kh\u00e1c"
+    },
+    "definition": {
+      "type": "string",
+      "title": "\u0110\u1ecbnh ngh\u0129a / C\u00e1ch d\u00f9ng"
+    },
+    "story_id": {
+      "type": "string",
+      "title": "B\u1ed9 truy\u1ec7n (id)"
+    }
+  },
+  "required": [
+    "term",
+    "story_id"
+  ]
+}

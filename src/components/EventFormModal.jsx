@@ -55,6 +55,8 @@ export default function EventFormModal({
         related_character_ids: event.related_character_ids || [],
         related_location_ids: event.related_location_ids || [],
         participant_states: event.participant_states || {},
+        foreshadow_note: event.foreshadow_note || "",
+        foreshadow_resolved: !!event.foreshadow_resolved,
         custom_fields: event.custom_fields || {},
       });
     } else {
@@ -65,6 +67,8 @@ export default function EventFormModal({
         related_character_ids: [],
         related_location_ids: [],
         participant_states: {},
+        foreshadow_note: "",
+        foreshadow_resolved: false,
         custom_fields: {},
       });
     }
@@ -196,6 +200,26 @@ export default function EventFormModal({
               onChange={set("related_location_ids")}
               placeholder="Tìm địa danh..."
             />
+          </div>
+
+          <div className="space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Ghi chú phục bút (foreshadowing)</span>
+            <Input
+              value={form.foreshadow_note || ""}
+              onChange={(e) => set("foreshadow_note")(e.target.value)}
+              placeholder="Đánh dấu một phục bút chưa giải — để trống nếu không phải"
+            />
+            {form.foreshadow_note ? (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground mt-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!form.foreshadow_resolved}
+                  onChange={(e) => set("foreshadow_resolved")(e.target.checked)}
+                  className="accent-primary w-4 h-4"
+                />
+                Đã hồi đáp (phục bút đã giải quyết)
+              </label>
+            ) : null}
           </div>
 
           <CustomFieldsEditor

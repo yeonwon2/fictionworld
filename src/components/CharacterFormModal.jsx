@@ -49,10 +49,15 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
         aliases: character.aliases || "",
         avatar_url: character.avatar_url || "",
         role: character.role || "",
+        age: character.age ?? "",
         power_level: character.power_level || "",
         description: character.description || "",
         appearance: character.appearance || "",
         personality: character.personality || "",
+        speech_style: character.speech_style || "",
+        goals: character.goals || "",
+        secret: character.secret || "",
+        inner_conflict: character.inner_conflict || "",
         skills: character.skills || "",
         items: character.items || "",
         first_appeared_chapter: character.first_appeared_chapter ?? "",
@@ -61,8 +66,9 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
       setTagsText((character.tags || []).join(", "));
     } else {
       setForm({
-        name: "", aliases: "", avatar_url: "", role: "Phụ", power_level: "",
-        description: "", appearance: "", personality: "", skills: "", items: "",
+        name: "", aliases: "", avatar_url: "", role: "Phụ", age: "", power_level: "",
+        description: "", appearance: "", personality: "", speech_style: "",
+        goals: "", secret: "", inner_conflict: "", skills: "", items: "",
         first_appeared_chapter: "", custom_fields: {},
       });
       setTagsText("");
@@ -178,6 +184,33 @@ export default function CharacterFormModal({ open, character, onClose, onSaved, 
             <div className="space-y-1.5">
               <EditableLabel label={label("items", "Vật phẩm / Pháp bảo")} onRename={renameField("items")} />
               <Textarea value={form.items} onChange={set.fromEvent("items")} rows={2} placeholder="VD: Trảm Linh kiếm..." />
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Tuổi</Label>
+              <Input type="number" value={form.age ?? ""} onChange={set.fromEvent("age")} placeholder="VD: 18" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Giọng văn / Cách xưng hô đặc trưng</Label>
+              <Input value={form.speech_style || ""} onChange={set.fromEvent("speech_style")} placeholder="VD: lạnh lùng, xưng 'ta', gọi 'ngươi'" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Mục tiêu / Động cơ</Label>
+            <Textarea value={form.goals || ""} onChange={set.fromEvent("goals")} rows={2} placeholder="Mục tiêu / động cơ của nhân vật..." />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Bí mật đang giữ</Label>
+              <Textarea value={form.secret || ""} onChange={set.fromEvent("secret")} rows={2} placeholder="Bí mật nhân vật giữ..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mâu thuẫn nội tâm</Label>
+              <Textarea value={form.inner_conflict || ""} onChange={set.fromEvent("inner_conflict")} rows={2} placeholder="Mâu thuẫn nội tâm..." />
             </div>
           </div>
 

@@ -23,17 +23,38 @@
       "title": "Vai tr\u00f2",
       "description": "VD: Nam ch\u00ednh, N\u1eef ch\u00ednh, Ph\u1ea3n di\u1ec7n, Ph\u1ee5..."
     },
+    "age": {
+      "type": "number",
+      "title": "Tu\u1ed5i"
+    },
     "description": {
       "type": "string",
       "title": "M\u00f4 t\u1ea3 ng\u1eafn"
     },
     "appearance": {
       "type": "string",
-      "title": "Ngo\u1ea1i h\u00ecnh"
+      "title": "Ngo\u1ea1i h\u00ecnh c\u1ed1 \u0111\u1ecbnh"
     },
     "personality": {
       "type": "string",
       "title": "T\u00ednh c\u00e1ch"
+    },
+    "speech_style": {
+      "type": "string",
+      "title": "Gi\u1ecdng v\u0103n / C\u00e1ch x\u01b0ng h\u00f4 \u0111\u1eb7c tr\u01b0ng",
+      "description": "VD: lu\u00f4n x\u01b0ng \"ta\", g\u1ecdi ng\u01b0\u1eddi kh\u00e1c l\u00e0 \"ng\u01b0\u01a1i\"..."
+    },
+    "goals": {
+      "type": "string",
+      "title": "M\u1ee5c ti\u00eau / \u0110\u1ed9ng c\u01a1"
+    },
+    "secret": {
+      "type": "string",
+      "title": "B\u00ed m\u1eadt \u0111ang gi\u1eef"
+    },
+    "inner_conflict": {
+      "type": "string",
+      "title": "M\u00e2u thu\u1eabn n\u1ed9i t\u00e2m"
     },
     "power_level": {
       "type": "string",

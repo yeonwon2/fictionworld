@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Library, Users, Network, MapPin, Clock, LayoutGrid, Loader2 } from "lucide-react";
+import { Library, Users, Network, MapPin, Clock, LayoutGrid, BookMarked, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Import chậm các trang con để chỉ tải trang đang chọn
@@ -9,8 +9,10 @@ const Relationships = React.lazy(() => import("@/pages/Relationships"));
 const Locations = React.lazy(() => import("@/pages/Locations"));
 const Timeline = React.lazy(() => import("@/pages/Timeline"));
 const StoryMatrix = React.lazy(() => import("@/pages/StoryMatrix"));
+const StoryBible = React.lazy(() => import("@/pages/StoryBible"));
 
 const TABS = [
+  { value: "bible", label: "Hồ Sơ Truyện", icon: BookMarked, Comp: StoryBible },
   { value: "characters", label: "Nhân vật", icon: Users, Comp: Characters },
   { value: "relationships", label: "Sơ đồ quan hệ", icon: Network, Comp: Relationships },
   { value: "locations", label: "Địa danh", icon: MapPin, Comp: Locations },

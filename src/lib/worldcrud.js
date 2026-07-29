@@ -81,6 +81,20 @@ export async function deleteEvent(id) {
   return await base44.entities.Event.delete(id);
 }
 
+// ---------- Thuật ngữ cổ phong (Glossary) ----------
+export async function listGlossary(storyId) {
+  return (await listByStory("Glossary", storyId, "category", 500)) || [];
+}
+export async function createGlossary(data) {
+  return await base44.entities.Glossary.create(cleanPayload(data));
+}
+export async function updateGlossary(id, data) {
+  return await base44.entities.Glossary.update(id, cleanPayload(data));
+}
+export async function deleteGlossary(id) {
+  return await base44.entities.Glossary.delete(id);
+}
+
 // ---------- Chương truyện (Chapter) ----------
 export async function listChapters(storyId) {
   return (await listByStory("Chapter", storyId, "chapter_number", 200)) || [];
