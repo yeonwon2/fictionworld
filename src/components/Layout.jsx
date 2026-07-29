@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown } from "lucide-react";
+import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
 import StorySwitcher from "@/components/StorySwitcher";
+import AISettingsModal from "@/components/AISettingsModal";
 import { cn } from "@/lib/utils";
 
 // Điều hướng chính — 3 tab
@@ -33,6 +34,7 @@ export default function Layout() {
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get("tab");
   const [groupOpen, setGroupOpen] = useState(location.pathname === "/so-tay-the-gioi");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const worldItem = MAIN_NAV[1];
@@ -112,6 +114,13 @@ export default function Layout() {
             Tra cứu nhanh
           </button>
           <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition"
+          >
+            <SettingsIcon className="w-4 h-4" />
+            Cài đặt AI
+          </button>
+          <button
             onClick={() => logout()}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-destructive transition"
           >
@@ -132,6 +141,9 @@ export default function Layout() {
             <span className="font-display font-semibold">Fiction World</span>
           </Link>
           <div className="flex items-center gap-1">
+            <button onClick={() => setSettingsOpen(true)} className="p-2 rounded-lg hover:bg-muted" title="Cài đặt AI">
+              <SettingsIcon className="w-5 h-5" />
+            </button>
             <button onClick={() => logout()} className="p-2 rounded-lg hover:bg-muted" title="Đăng xuất">
               <LogOut className="w-5 h-5" />
             </button>
@@ -168,6 +180,13 @@ export default function Layout() {
             <span className="text-xs text-muted-foreground hidden sm:inline">Bộ truyện hiện tại</span>
             <StorySwitcher />
             <button
+              onClick={() => setSettingsOpen(true)}
+              title="Cài đặt AI"
+              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition"
+            >
+              <SettingsIcon className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => logout()}
               title="Đăng xuất"
               className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted transition"
@@ -181,6 +200,9 @@ export default function Layout() {
 
       {/* Bảng tra cứu nhanh toàn cục */}
       <QuickReferenceDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+
+      {/* Cài đặt AI API Key cá nhân */}
+      <AISettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
     </StoryProvider>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { aiCall } from "@/lib/aiCall";
 import { createChapter, createEvent, createCharacter } from "@/lib/worldcrud";
 import { Wand2, Loader2, Save, CheckCircle2, Layers, Clock } from "lucide-react";
 
@@ -58,11 +58,7 @@ export default function ArcArchitectTab({ idea, setIdea, sampleChars, currentSto
 
 Ý tưởng / Bối cảnh:
 """${idea}"""`;
-      const res = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        model: "gemini_3_flash",
-        response_json_schema: ARC_SCHEMA,
-      });
+      const res = await aiCall(prompt, { jsonSchema: ARC_SCHEMA });
       setArc(res);
       if (!res?.chapters?.length) setError("AI không trả về dàn ý chương.");
     } catch (e) {

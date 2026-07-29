@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { aiCall } from "@/lib/aiCall";
 import { Lightbulb, Loader2, ArrowRight } from "lucide-react";
 
 const CONCEPT_SCHEMA = {
@@ -51,11 +51,7 @@ export default function ConceptTab({ onUseConcept }) {
       const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng Bách Hợp Cổ Đại. Dựa thể loại / từ khóa dưới đây, hãy đề xuất 3 CONCEPT sáng tác (mỗi concept gồm tiêu đề, bối cảnh, tiền đề cốt truyện và 2-3 nhân vật mẫu kèm tên / thân phận / giới thiệu ngắn). Văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại. Trả JSON đúng schema.
 
 Thể loại / từ khóa: ${genre}`;
-      const res = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        model: "gemini_3_flash",
-        response_json_schema: CONCEPT_SCHEMA,
-      });
+      const res = await aiCall(prompt, { jsonSchema: CONCEPT_SCHEMA });
       setConcepts(res?.concepts || []);
       if (!res?.concepts?.length) setError("AI không trả về concept nào.");
     } catch (e) {

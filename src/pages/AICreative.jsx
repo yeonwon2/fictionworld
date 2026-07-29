@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
   listCharacters,
@@ -129,12 +129,7 @@ export default function AICreative() {
     return `Sự kiện gần nhất: ${latest.title}\n${lines.join("\n") || "(các nhân vật được chọn chưa xuất hiện trong sự kiện gần nhất)"}`;
   }, [events, selectedIds, charById, locById]);
 
-  const callLLM = (prompt, schema) =>
-    base44.integrations.Core.InvokeLLM({
-      prompt,
-      model: "gemini_3_flash",
-      ...(schema ? { response_json_schema: schema } : {}),
-    });
+  const callLLM = (prompt, schema) => aiCall(prompt, { jsonSchema: schema || undefined });
 
   // ---------- Cấp độ 1 → 2 ----------
   const handleUseConcept = (ideaText, chars) => {
