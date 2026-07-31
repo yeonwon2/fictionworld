@@ -6,6 +6,7 @@ import {
   listCharacters,
   listRelationships,
   listChapters,
+  getChapter,
   listEvents,
   listLocations,
   listGlossary,
@@ -81,6 +82,23 @@ export default function AICreative() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadData, [ready, currentStoryId]);
 
+  // listChapters() chỉ trả cột nhẹ (không có content) — tải nội dung đầy đủ
+  // riêng cho đúng 1 chương đang chọn làm ngữ cảnh, tránh kéo content mọi chương.
+  const [selectedChapterContent, setSelectedChapterContent] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    if (selectedChapterId) {
+      getChapter(selectedChapterId).then((full) => {
+        if (!cancelled) setSelectedChapterContent(full?.content || "");
+      });
+    } else {
+      setSelectedChapterContent("");
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChapterId]);
+
   const charById = useMemo(() => Object.fromEntries(characters.map((c) => [c.id, c])), [characters]);
   const locById = useMemo(() => Object.fromEntries(locations.map((l) => [l.id, l])), [locations]);
 
@@ -120,13 +138,9 @@ export default function AICreative() {
   const directionBlock = useMemo(() => buildDirectionBlock(currentStory?.direction), [currentStory]);
 
   // Văn bản chương trước (chế độ A hoặc B)
-  const selectedChapter = useMemo(
-    () => chapters.find((c) => c.id === selectedChapterId) || null,
-    [chapters, selectedChapterId]
-  );
   const chapterOutline = useMemo(
-    () => (mode === "pick" ? selectedChapter?.content || "" : outline || ""),
-    [mode, selectedChapter, outline]
+    () => (mode === "pick" ? selectedChapterContent || "" : outline || ""),
+    [mode, selectedChapterContent, outline]
   );
   const phase = useMemo(() => (mode === "pick" && !content.trim() ? "open" : "continue"), [mode, content]);
   const ctxText = useMemo(() => {

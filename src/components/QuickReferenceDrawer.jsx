@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
+import { listCharacters, listLocations } from "@/lib/worldcrud";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Image } from "@/components/ui/image";
@@ -20,8 +20,8 @@ export default function QuickReferenceDrawer({ open, onOpenChange }) {
     if (!open || !ready) return;
     setLoading(true);
     Promise.all([
-      base44.entities.Character.filter({ story_id: currentStoryId }, "-updated_date", 100),
-      base44.entities.Location.filter({ story_id: currentStoryId }, "-updated_date", 100),
+      listCharacters(currentStoryId),
+      listLocations(currentStoryId),
     ])
       .then(([c, l]) => {
         setCharacters(c || []);

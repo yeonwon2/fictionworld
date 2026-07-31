@@ -2,33 +2,23 @@
 
 ## Project Context
 
-This is a Base44 app repository. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
+This started as a Base44 app scaffold but no longer uses the Base44 backend — auth, database, and file storage all run directly against a Supabase project (see `supabase/migration.sql` for the schema). Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
 
-Start with `README.md` for local setup, environment variables, and publish workflow.
-
-## Base44 References
-
-- CLI overview: https://docs.base44.com/developers/references/cli/get-started/overview.md
-- Agent skills: https://docs.base44.com/developers/backend/overview/skills.md
-
-If your agent supports Agent Skills, install or update Base44 skills before Base44-specific work:
-
-```bash
-npx skills add base44/skills
-```
+Start with `README.md` for local setup and environment variables.
 
 ## Key Files
 
 - `src/`: frontend application source.
-- `src/api/base44Client.js`: frontend Base44 SDK client.
-- `vite.config.js`: Vite config and Base44 Vite plugin setup.
-- `.env.local`: local-only environment values; never commit secrets.
+- `src/lib/supabase.js`: Supabase client (reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
+- `src/lib/worldcrud.js`: single funnel for all data access — every Supabase query for the app's entities goes through here (column-scoped selects, image compression on upload, old-image cleanup). Extend this file rather than calling `supabase.from(...)` directly from a page/component.
+- `src/lib/AuthContext.jsx`: Supabase Auth session/profile state.
+- `supabase/migration.sql`: full schema + RLS + storage bucket — the source of truth for the database shape. Any schema change should be added here too (and re-run by the user in the Supabase SQL Editor — no automated migration runner in this project).
+- `base44/entities/*.jsonc`: leftover from the Base44 scaffold, kept only as human-readable field documentation. Not read by the app at runtime.
+- `.env.local`: local-only environment values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`); never commit secrets.
 
 ## Working Notes
 
-- Use `base44 dev` as the default local development command when you need the local Base44 backend. It can run the backend and frontend together.
-- When docs or code mention the frontend being started automatically, that usually means the Base44 project config includes `site.serveCommand`, for example `"serveCommand": "npm run dev"` in `base44/config.jsonc`.
-- Use `npm run dev` only for frontend-only work against the hosted Base44 backend.
-- Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.
-- Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.
+- `npm run dev` is the only local dev command now — there is no separate backend process to start.
+- This is a single-admin app by design: RLS policies grant full access to any authenticated user rather than modeling per-user ownership. If the user asks to support multiple accounts with different permissions, that requires revisiting the RLS policies in `supabase/migration.sql`, not just frontend gating.
+- I cannot run SQL against the user's Supabase project (no service role key, only what's in `.env.local`) — hand them SQL to run themselves in the Supabase Dashboard's SQL Editor for anything schema-related.
 - Run the relevant checks from `package.json` before finishing code changes.

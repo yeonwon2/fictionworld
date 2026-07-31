@@ -7,7 +7,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 import ReferencePanel from "@/components/ReferencePanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useStory } from "@/lib/StoryContext";
-import { listChapters, createChapter, updateChapter, deleteChapter } from "@/lib/worldcrud";
+import { listChapters, getChapter, createChapter, updateChapter, deleteChapter } from "@/lib/worldcrud";
 
 // Không gian soạn thảo (split-screen): trái = trình soạn thảo chương, phải = tra cứu.
 export default function Workspace() {
@@ -38,19 +38,28 @@ export default function Workspace() {
 
   const active = useMemo(() => chapters.find((c) => c.id === activeId) || null, [chapters, activeId]);
 
+  // listChapters() chỉ trả cột nhẹ (không có content) — tải nội dung đầy đủ
+  // riêng cho đúng 1 chương đang mở, tránh kéo content của mọi chương.
   useEffect(() => {
-    if (active) {
-      setTitle(active.title || "");
-      setNumber(active.chapter_number ?? "");
-      setContent(active.content || "");
-      setDirty(false);
+    let cancelled = false;
+    if (activeId) {
+      getChapter(activeId).then((full) => {
+        if (cancelled) return;
+        setTitle(full.title || "");
+        setNumber(full.chapter_number ?? "");
+        setContent(full.content || "");
+        setDirty(false);
+      });
     } else {
       setTitle("");
       setNumber("");
       setContent("");
       setDirty(false);
     }
-  }, [activeId]); // eslint-disable-line
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId]);
 
   if (!ready) {
     return (

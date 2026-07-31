@@ -1,12 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
-import { updateStory } from "@/lib/worldcrud";
+import { listStories, createStory, updateStory } from "@/lib/worldcrud";
 
 const StoryContext = createContext(null);
 const LS_KEY = "fw_current_story_id";
-const MIG_KEY = "fw_story_migrated_v2";
 
-// Provider toàn cục: nạp danh sách bộ truyện + quản lý story đang chọn + gán dữ liệu cũ vào story đầu (một lần).
+// Provider toàn cục: nạp danh sách bộ truyện + quản lý story đang chọn.
 export function StoryProvider({ children }) {
   const [stories, setStories] = useState([]);
   const [currentStoryId, setCurrentStoryId] = useState(null);
@@ -14,24 +12,12 @@ export function StoryProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      let list = (await base44.entities.Story.list("-updated_date", 100)) || [];
+      let list = (await listStories()) || [];
       if (!list.length) {
-        const def = await base44.entities.Story.create({ name: "Bộ truyện đầu tiên" });
+        const def = await createStory({ name: "Bộ truyện đầu tiên" });
         list = [def];
       }
       setStories(list);
-
-      // Gán các record chưa có story_id vào story đầu tiên (chạy 1 lần)
-      if (!localStorage.getItem(MIG_KEY)) {
-        const targetId = list[0].id;
-        await Promise.all([
-          base44.entities.Character.updateMany({ story_id: null }, { $set: { story_id: targetId } }).catch(() => {}),
-          base44.entities.Location.updateMany({ story_id: null }, { $set: { story_id: targetId } }).catch(() => {}),
-          base44.entities.Relationship.updateMany({ story_id: null }, { $set: { story_id: targetId } }).catch(() => {}),
-          base44.entities.Event.updateMany({ story_id: null }, { $set: { story_id: targetId } }).catch(() => {}),
-        ]);
-        localStorage.setItem(MIG_KEY, "1");
-      }
 
       let sid = localStorage.getItem(LS_KEY);
       if (!sid || !list.find((s) => s.id === sid)) sid = list[0]?.id || null;

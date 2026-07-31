@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { listCharacters, listLocations } from "@/lib/worldcrud";
 import { Input } from "@/components/ui/input";
 import { Image } from "@/components/ui/image";
 import { Search, Users, MapPin } from "lucide-react";
@@ -19,8 +19,8 @@ export default function ReferencePanel() {
     if (!ready) return;
     setLoading(true);
     Promise.all([
-      base44.entities.Character.filter({ story_id: currentStoryId }, "-updated_date", 200),
-      base44.entities.Location.filter({ story_id: currentStoryId }, "-updated_date", 200),
+      listCharacters(currentStoryId),
+      listLocations(currentStoryId),
     ])
       .then(([c, l]) => {
         setCharacters(c || []);

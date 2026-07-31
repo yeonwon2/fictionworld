@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { getCharacter, listRelationships, listCharacters } from "@/lib/worldcrud";
 import { Image } from "@/components/ui/image";
 import { ArrowLeft, User, Heart, Sword, Sparkles, Package, BookOpen, Users as UsersIcon, Pencil } from "lucide-react";
 import CharacterFormModal from "@/components/CharacterFormModal";
@@ -20,16 +20,12 @@ export default function CharacterDetail() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    base44.entities.Character.get(id).then(async (c) => {
+    getCharacter(id).then(async (c) => {
       setCharacter(c);
       const sid = c?.story_id || null;
       const [rels, chars] = await Promise.all([
-        sid
-          ? base44.entities.Relationship.filter({ story_id: sid }, "-updated_date", 300)
-          : base44.entities.Relationship.list("-updated_date", 300),
-        sid
-          ? base44.entities.Character.filter({ story_id: sid }, "-updated_date", 200)
-          : base44.entities.Character.list("-updated_date", 200),
+        listRelationships(sid),
+        listCharacters(sid),
       ]);
       setRelationships(rels || []);
       setAllChars(chars || []);
@@ -194,9 +190,9 @@ export default function CharacterDetail() {
         onClose={() => setEditOpen(false)}
         onSaved={() => {
           setEditOpen(false);
-          base44.entities.Character.get(id).then(setCharacter);
+          getCharacter(id).then(setCharacter);
           // Cập nhật lại liên quan nếu cần (tên/avatar có thể thay đổi)
-          base44.entities.Relationship.list("-updated_date", 200).then(setRelationships);
+          listRelationships(character?.story_id || null).then(setRelationships);
         }}
         onDeleted={() => navigate("/nhan-vat")}
       />

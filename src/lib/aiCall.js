@@ -1,9 +1,7 @@
-import { base44 } from "@/api/base44Client";
-
 // =============================================================================
-// AI Call — ưu tiên Custom Google Gemini API Key (localStorage) nếu có.
-//   + Có key  → gọi thẳng Google AI Studio endpoint.
-//   + Không   → fallback Base44 InvokeLLM (gemini_3_flash).
+// AI Call — gọi thẳng Google AI Studio bằng Gemini API Key riêng của người
+// dùng (lưu ở localStorage). Không còn backend trung gian nào giữ key hộ —
+// mỗi người dùng phải tự nhập key riêng (miễn phí) ở phần Cài đặt AI.
 // =============================================================================
 
 const KEY_STORAGE = "fiction_ai_gemini_key";
@@ -110,16 +108,13 @@ async function callGemini(prompt, jsonSchema) {
   return text;
 }
 
-// Gọi AI thống nhất — custom key trước, Base44 dự phòng
+// Gọi AI — bắt buộc phải có Gemini API Key riêng (không còn fallback qua backend).
 export async function aiCall(prompt, { jsonSchema } = {}) {
-  if (getCustomKey()) {
-    const text = await callGemini(prompt, jsonSchema);
-    return jsonSchema ? safeJsonParse(text) : text;
+  if (!getCustomKey()) {
+    throw new Error(
+      "Chưa có Gemini API Key. Vào Cài đặt AI để nhập key riêng (miễn phí) trước khi dùng tính năng này."
+    );
   }
-  const res = await base44.integrations.Core.InvokeLLM({
-    prompt,
-    model: "gemini_3_flash",
-    ...(jsonSchema ? { response_json_schema: jsonSchema } : {}),
-  });
-  return res;
+  const text = await callGemini(prompt, jsonSchema);
+  return jsonSchema ? safeJsonParse(text) : text;
 }
