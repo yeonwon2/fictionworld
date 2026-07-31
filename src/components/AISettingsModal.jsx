@@ -13,8 +13,9 @@ import {
   setCustomModel,
   testGeminiConnection,
 } from "@/lib/aiCall";
+import { GEMINI_MODELS } from "@/lib/geminiModels";
 
-const MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-1.5-flash"];
+const DEFAULT_MODEL_ID = "gemini-3.1-flash-lite";
 
 export default function AISettingsModal({ open, onOpenChange }) {
   const [key, setKey] = useState(getCustomKey());
@@ -88,13 +89,17 @@ export default function AISettingsModal({ open, onOpenChange }) {
               onChange={(e) => setModel(e.target.value)}
               className="w-full mt-1 rounded-md border border-input bg-transparent px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                  {m === "gemini-3.1-flash-lite" ? " (mặc định)" : ""}
+              {GEMINI_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label} — {m.perMinute}/phút, {m.perDay}/ngày
+                  {m.id === DEFAULT_MODEL_ID ? " (mặc định)" : ""}
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Hạn mức theo trang aistudio.google.com/rate-limit — có thể đổi theo thời gian, kiểm
+              tra lại trang đó nếu nghi ngờ hoặc gặp lỗi kết nối.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -141,9 +146,9 @@ export default function AISettingsModal({ open, onOpenChange }) {
           )}
 
           <p className="text-[11px] text-muted-foreground">
-            API Key lưu trong <b>localStorage</b> của trình duyệt. Khi có Custom Key, mọi lời gọi AI
-            (gợi ý/dịch/sáng tác) sẽ gửi thẳng tới Google AI Studio; không có thì dùng API mặc định
-            của Base44 làm phương án dự phòng.
+            API Key lưu trong <b>localStorage</b> của trình duyệt, gửi thẳng tới Google AI Studio.
+            Bắt buộc phải có key riêng (miễn phí tại aistudio.google.com/apikey) — không có key thì
+            mọi tính năng AI sẽ báo lỗi.
           </p>
         </div>
       </DialogContent>
