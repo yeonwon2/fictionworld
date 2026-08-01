@@ -19,6 +19,7 @@ import ContinuityPanel from "@/components/ai/ContinuityPanel";
 import SceneSetupPanel from "@/components/ai/SceneSetupPanel";
 import AIEditor from "@/components/ai/AIEditor";
 import IdeaTools from "@/components/ai/IdeaTools";
+import AssistantChat from "@/components/ai/AssistantChat";
 
 // Hệ thống Hỗ trợ Sáng tác 4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết
 export default function AICreative() {
@@ -169,6 +170,12 @@ export default function AICreative() {
   }, [events, selectedIds, charById, locById, directionBlock]);
 
   const callLLM = (prompt, schema) => aiCall(prompt, { jsonSchema: schema || undefined });
+
+  // ---------- Trợ lý chat tự do: chèn kết quả vào ô tương ứng theo tab ----------
+  const handleInsertToIdea = (text) => setIdea((prev) => (prev.trim() ? `${prev}\n\n${text}` : text));
+  const handleInsertToOutline = (text) => setOutline((prev) => (prev.trim() ? `${prev}\n\n${text}` : text));
+  const handleInsertToContent = (text) =>
+    setContent((prev) => (prev.trim() ? `${prev}\n\n---\n\n${text}` : String(text)));
 
   // ---------- Cấp độ 1 → 2 ----------
   const handleUseConcept = (ideaText, chars) => {
@@ -429,6 +436,22 @@ export default function AICreative() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <AssistantChat
+        currentStoryId={currentStoryId}
+        activeTab={activeTab}
+        directionBlock={directionBlock}
+        profilesBlock={profilesBlock}
+        relationsBlock={relationsBlock}
+        glossaryBlock={glossaryBlock}
+        foreshadowBlock={foreshadowBlock}
+        idea={idea}
+        outline={outline}
+        content={content}
+        onInsertToIdea={handleInsertToIdea}
+        onInsertToOutline={handleInsertToOutline}
+        onInsertToContent={handleInsertToContent}
+      />
     </div>
   );
 }
@@ -521,7 +544,7 @@ ${bible}
   + key "A": Mở đầu bằng nội tâm — dòng tâm sự/độc thoại nội tâm dẫn vào.
   + key "B": Mở đầu bằng đối thoại — lời thoại trực tiếp tạo kịch tính.
   + key "C": Mở đầu bằng hành động — mở bằng một cảnh/chuyển động sinh động.
-- Mỗi hướng: "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, KHÔNG dùng từ hiện đại, BÁM SÁT 100% dàn ý, đúng tính cách & quan hệ, DÙNG ĐÚNG xưng hô theo Glossary giọng nhân vật.
+- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể lấy từ dàn ý (không chỉ mô tả không khí/khung cảnh phiếm như "trời đẹp, ngồi uống trà"). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, KHÔNG dùng từ hiện đại, BÁM SÁT 100% dàn ý, đúng tính cách & quan hệ, DÙNG ĐÚNG xưng hô theo Glossary giọng nhân vật.
 Trả JSON đúng schema.`;
   }
   return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy đọc ĐOẠN KẾT dưới đây, trích trạng thái/vị trí/cảm xúc nhân vật (dựa văn bản + Story Bible), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp.
@@ -543,7 +566,7 @@ ${bible}
   + key "A": Nối liền lập tức — tiếp ngay khoảnh khắc đoạn kết dừng lại.
   + key "B": Chuyển cảnh sang hôm sau — dịch chuyển thời gian, giữ tâm lý nhân vật.
   + key "C": Biến cố bất ngờ — một sự kiện đột phá thay đổi hướng truyện.
-- Mỗi hướng: "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng, cổ kính, điền nhã, không từ hiện đại, bám tính cách & quan hệ, dùng đúng Glossary xưng hô. Nếu sắp hết arc, ưu tiên hướng hồi đáp phục bút.
+- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể (không chỉ mô tả không khí/hành động phiếm). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng, cổ kính, điền nhã, không từ hiện đại, bám tính cách & quan hệ, dùng đúng Glossary xưng hô. Nếu sắp hết arc, ưu tiên hướng hồi đáp phục bút.
 Trả JSON đúng schema.`;
 }
 

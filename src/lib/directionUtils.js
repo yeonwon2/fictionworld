@@ -17,11 +17,12 @@ export function buildDirectionBlock(direction) {
   lines.push(`- Kiểu kết thúc: ${ENDING_LABEL[direction.ending] || "chưa quyết định"}`);
   if (direction.tones?.length) lines.push(`- Tông truyện: ${direction.tones.join(", ")}`);
   if (direction.emphasis) {
-    const e = direction.emotion ?? 50;
-    const p = direction.plot ?? 50;
-    const a = direction.action ?? 50;
+    const e = direction.emphasis.emotion ?? 50;
+    const p = direction.emphasis.plot ?? 50;
+    const a = direction.emphasis.action ?? 50;
     lines.push(`- Nhấn mạnh: Tình cảm ${e}% · Âm mưu/chính trị ${p}% · Hành động/võ hiệp ${a}%`);
   }
+  if (direction.castWants?.length) lines.push(`- Dàn nhân vật phụ mong muốn: ${direction.castWants.join(", ")}`);
   if (direction.want?.trim()) lines.push(`- Điều muốn có: ${direction.want}`);
   if (direction.avoid?.trim()) lines.push(`- Điều muốn tránh: ${direction.avoid}`);
   if (!lines.length) return "";

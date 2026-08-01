@@ -3,6 +3,49 @@ import { aiCall } from "@/lib/aiCall";
 import { Lightbulb, Loader2, ArrowRight, Pencil, Check, RefreshCw, Bot, X } from "lucide-react";
 import StoryDirectionForm from "@/components/ai/StoryDirectionForm";
 
+const CHARACTER_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    role: { type: "string" },
+    description: { type: "string" },
+  },
+  required: ["name", "role", "description"],
+};
+
+const ANTAGONIST_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    role: { type: "string" },
+    motivation: { type: "string" },
+    description: { type: "string" },
+  },
+  required: ["name", "role", "motivation", "description"],
+};
+
+const SUPPORTING_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    role: { type: "string" },
+    narrative_function: { type: "string" },
+    description: { type: "string" },
+  },
+  required: ["name", "role", "narrative_function", "description"],
+};
+
+const CONCEPT_FIELDS_SCHEMA = {
+  title: { type: "string" },
+  hook: { type: "string" },
+  conflict: { type: "string" },
+  premise: { type: "string" },
+  setting: { type: "string" },
+  protagonists: { type: "array", items: CHARACTER_ITEM_SCHEMA },
+  antagonist: ANTAGONIST_SCHEMA,
+  supporting_characters: { type: "array", items: SUPPORTING_ITEM_SCHEMA },
+};
+
 const CONCEPT_SCHEMA = {
   type: "object",
   properties: {
@@ -10,24 +53,8 @@ const CONCEPT_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: {
-          title: { type: "string" },
-          premise: { type: "string" },
-          setting: { type: "string" },
-          characters: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                name: { type: "string" },
-                role: { type: "string" },
-                description: { type: "string" },
-              },
-              required: ["name", "role", "description"],
-            },
-          },
-        },
-        required: ["title", "premise", "setting", "characters"],
+        properties: CONCEPT_FIELDS_SCHEMA,
+        required: ["title", "hook", "conflict", "premise", "setting", "protagonists", "antagonist", "supporting_characters"],
       },
     },
   },
@@ -35,24 +62,8 @@ const CONCEPT_SCHEMA = {
 
 const SINGLE_SCHEMA = {
   type: "object",
-  properties: {
-    title: { type: "string" },
-    premise: { type: "string" },
-    setting: { type: "string" },
-    characters: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          role: { type: "string" },
-          description: { type: "string" },
-        },
-        required: ["name", "role", "description"],
-      },
-    },
-  },
-  required: ["title", "premise", "setting", "characters"],
+  properties: CONCEPT_FIELDS_SCHEMA,
+  required: ["title", "hook", "conflict", "premise", "setting", "protagonists", "antagonist", "supporting_characters"],
 };
 
 // Cấp độ 1 — Khởi tạo Ý tưởng. Mỗi concept có 3 lựa chọn: chốt / góp ý AI sửa lại / sửa tay.
@@ -75,7 +86,18 @@ export default function ConceptTab({ onUseConcept }) {
     setLoading(true);
     setConcepts([]);
     try {
-      const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng Bách Hợp Cổ Đại. Dựa thể loại / từ khóa dưới đây, hãy đề xuất 3 CONCEPT sáng tác (mỗi concept gồm tiêu đề, bối cảnh, tiền đề và 2-3 nhân vật mẫu kèm tên / thân phận / giới thiệu ngắn). Văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại. Trả JSON đúng schema.
+      const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng Bách Hợp Cổ Đại. Dựa thể loại / từ khóa dưới đây, hãy đề xuất 3 CONCEPT sáng tác CÓ THỰC CHẤT KỊCH TÍNH, không chỉ tả không khí/khung cảnh chung chung kiểu "buổi sáng nắng đẹp, ngồi uống trà".
+
+Mỗi concept BẮT BUỘC gồm:
+- "hook": biến cố khởi đầu cụ thể kéo hai nhân vật chính vào nhau (1-2 câu, phải là một SỰ KIỆN, không phải mô tả cảnh).
+- "conflict": xung đột trung tâm xuyên suốt cả truyện — gồm cả xung đột nội tâm (VD: thân phận, mặc cảm, lời thề) LẪN xung đột ngoại cảnh (VD: rào cản lễ giáo, gia tộc, thù hận, bí mật) — không được để trống hoặc chung chung.
+- "premise": tiền đề nêu rõ ai muốn gì, điều gì cản trở, và vì sao khán giả nên quan tâm.
+- "setting": bối cảnh không gian/thời gian.
+- "protagonists": đúng 2 nhân vật chính (tên, thân phận, giới thiệu ngắn có gắn với xung đột).
+- "antagonist": MỘT thế lực/nhân vật đối đầu cụ thể. Nếu thể loại phù hợp hơn với rào cản trừu tượng (lễ giáo, gia tộc, số phận) thay vì một nhân vật phản diện, hãy đặt "role" là thế lực đó và mô tả "motivation" của nó — KHÔNG được bỏ trống hay ghi "không có".
+- "supporting_characters": 1-3 nhân vật phụ, mỗi người có "narrative_function" rõ ràng (VD: sư phụ dẫn dắt, tri kỷ an ủi, gia tộc cản trở, tình địch xen vào...).
+
+Văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại. Trả JSON đúng schema.
 
 Thể loại / từ khóa: ${genre}${note ? `\n\nĐịnh hướng lại của tác giả: ${note}` : ""}`;
       const res = await aiCall(prompt, { jsonSchema: CONCEPT_SCHEMA });
@@ -92,7 +114,7 @@ Thể loại / từ khóa: ${genre}${note ? `\n\nĐịnh hướng lại của t�
     setBusyIdx(idx);
     setError("");
     try {
-      const prompt = `Bạn là chuyên gia kịch thuật Bách Hợp Cổ Đại. Tác giả muốn CHỈ sửa RIÊNG concept số ${idx + 1} theo góp ý, 2 concept còn lại giữ nguyên. Hãy sinh lại concept số ${idx + 1} (giữ không khí chung, điều chỉnh theo góp ý). Văn phong cổ kính, không từ hiện đại. Trả JSON đúng schema của 1 concept (gồm title, premise, setting, characters[]).
+      const prompt = `Bạn là chuyên gia kịch thuật Bách Hợp Cổ Đại. Tác giả muốn CHỈ sửa RIÊNG concept số ${idx + 1} theo góp ý, 2 concept còn lại giữ nguyên. Hãy sinh lại concept số ${idx + 1} (giữ không khí chung, điều chỉnh theo góp ý). Phải có thực chất kịch tính: "hook" là một sự kiện cụ thể, "conflict" nêu rõ xung đột nội tâm + ngoại cảnh, "antagonist" là thế lực/nhân vật đối đầu cụ thể (không bỏ trống), "supporting_characters" có narrative_function rõ ràng. Văn phong cổ kính, không từ hiện đại. Trả JSON đúng schema của 1 concept (gồm title, hook, conflict, premise, setting, protagonists[], antagonist, supporting_characters[]).
 
 # Concept gốc cần chỉnh sửa
 ${JSON.stringify(concepts[idx])}
@@ -138,7 +160,20 @@ ${note || "(chỉ làm cho hay hơn, giữ ý chính)"}`;
 
   const beginManualEdit = (i) => {
     // clone để chỉnh tay không ảnh hưởng Object gốc từ AI
-    setConcepts((cs) => cs.map((c, k) => (k === i ? { ...c, characters: Array.isArray(c.characters) ? c.characters.map((x) => ({ ...x })) : [] } : c)));
+    setConcepts((cs) =>
+      cs.map((c, k) =>
+        k === i
+          ? {
+              ...c,
+              protagonists: Array.isArray(c.protagonists) ? c.protagonists.map((x) => ({ ...x })) : [],
+              antagonist: c.antagonist ? { ...c.antagonist } : { name: "", role: "", motivation: "", description: "" },
+              supporting_characters: Array.isArray(c.supporting_characters)
+                ? c.supporting_characters.map((x) => ({ ...x }))
+                : [],
+            }
+          : c
+      )
+    );
     setEditIdx(i);
   };
   const commitEdit = () => setEditIdx(null);
@@ -151,10 +186,17 @@ ${note || "(chỉ làm cho hay hơn, giữ ý chính)"}`;
   const [picked, setPicked] = useState(null);
 
   const doUseConcept = (c) => {
-    const ideaText = `Tiêu đề: ${c.title}\nBối cảnh: ${c.setting}\nTiền đề: ${c.premise}\nNhân vật: ${
-      (c.characters || []).map((x) => `${x.name} (${x.role})`).join(", ") || "(chưa có)"
+    const allChars = [
+      ...(c.protagonists || []),
+      ...(c.antagonist?.name ? [{ ...c.antagonist, role: c.antagonist.role, description: `${c.antagonist.description || ""}${c.antagonist.motivation ? ` (Động cơ: ${c.antagonist.motivation})` : ""}` }] : []),
+      ...(c.supporting_characters || []).map((s) => ({ name: s.name, role: s.role, description: `${s.description || ""}${s.narrative_function ? ` (Vai trò: ${s.narrative_function})` : ""}` })),
+    ];
+    const ideaText = `Tiêu đề: ${c.title}\nBiến cố khởi đầu: ${c.hook || ""}\nXung đột trung tâm: ${c.conflict || ""}\nBối cảnh: ${c.setting}\nTiền đề: ${c.premise}\nNhân vật chính: ${
+      (c.protagonists || []).map((x) => `${x.name} (${x.role})`).join(", ") || "(chưa có)"
+    }\nPhản diện / thế lực đối đầu: ${c.antagonist?.name ? `${c.antagonist.name} (${c.antagonist.role}) — ${c.antagonist.motivation || ""}` : "(chưa có)"}\nNhân vật phụ: ${
+      (c.supporting_characters || []).map((x) => `${x.name} (${x.narrative_function || x.role})`).join(", ") || "(chưa có)"
     }`;
-    onUseConcept(ideaText, c.characters || []);
+    onUseConcept(ideaText, allChars);
   };
 
   if (picked) {
@@ -163,6 +205,8 @@ ${note || "(chỉ làm cho hay hơn, giữ ý chính)"}`;
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="text-[11px] font-semibold text-primary">Ý tưởng đã chốt</div>
           <h3 className="font-display font-semibold mt-0.5">{picked.title}</h3>
+          {picked.hook && <p className="text-xs text-foreground/90 mt-1"><b>Biến cố khởi đầu:</b> {picked.hook}</p>}
+          {picked.conflict && <p className="text-xs text-foreground/90 mt-1"><b>Xung đột trung tâm:</b> {picked.conflict}</p>}
           <p className="text-xs text-muted-foreground mt-1">{picked.premise}</p>
           <p className="text-[11px] text-muted-foreground mt-1">Bối cảnh: {picked.setting}</p>
         </div>
@@ -233,26 +277,82 @@ ${note || "(chỉ làm cho hay hơn, giữ ý chính)"}`;
                       placeholder="Tiền đề"
                     />
                     <textarea
+                      value={c.hook || ""}
+                      onChange={(e) => setConcepts((cs) => cs.map((x, k) => (k === i ? { ...x, hook: e.target.value } : x)))}
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs resize-y"
+                      placeholder="Biến cố khởi đầu (hook)"
+                    />
+                    <textarea
+                      value={c.conflict || ""}
+                      onChange={(e) => setConcepts((cs) => cs.map((x, k) => (k === i ? { ...x, conflict: e.target.value } : x)))}
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs resize-y"
+                      placeholder="Xung đột trung tâm"
+                    />
+                    <textarea
                       value={c.setting}
                       onChange={(e) => setConcepts((cs) => cs.map((x, k) => (k === i ? { ...x, setting: e.target.value } : x)))}
                       rows={2}
                       className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs resize-y"
                       placeholder="Bối cảnh"
                     />
+                    <div className="text-[10px] font-semibold text-muted-foreground pt-1">Nhân vật chính</div>
                     <div className="space-y-1">
-                      {(c.characters || []).map((ch, j) => (
+                      {(c.protagonists || []).map((ch, j) => (
                         <div key={j} className="flex gap-1">
                           <input
                             value={ch.name}
-                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, characters: x.characters.map((p, q) => q === j ? { ...p, name: e.target.value } : p) } : x))}
+                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, protagonists: x.protagonists.map((p, q) => q === j ? { ...p, name: e.target.value } : p) } : x))}
                             className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
                             placeholder="Tên"
                           />
                           <input
                             value={ch.role}
-                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, characters: x.characters.map((p, q) => q === j ? { ...p, role: e.target.value } : p) } : x))}
+                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, protagonists: x.protagonists.map((p, q) => q === j ? { ...p, role: e.target.value } : p) } : x))}
                             className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
                             placeholder="Vai"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-[10px] font-semibold text-muted-foreground pt-1">Phản diện / thế lực đối đầu</div>
+                    <div className="flex gap-1">
+                      <input
+                        value={c.antagonist?.name || ""}
+                        onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, antagonist: { ...x.antagonist, name: e.target.value } } : x))}
+                        className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
+                        placeholder="Tên"
+                      />
+                      <input
+                        value={c.antagonist?.role || ""}
+                        onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, antagonist: { ...x.antagonist, role: e.target.value } } : x))}
+                        className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
+                        placeholder="Vai"
+                      />
+                    </div>
+                    <textarea
+                      value={c.antagonist?.motivation || ""}
+                      onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, antagonist: { ...x.antagonist, motivation: e.target.value } } : x))}
+                      rows={1}
+                      className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs resize-y"
+                      placeholder="Động cơ của phản diện"
+                    />
+                    <div className="text-[10px] font-semibold text-muted-foreground pt-1">Nhân vật phụ</div>
+                    <div className="space-y-1">
+                      {(c.supporting_characters || []).map((ch, j) => (
+                        <div key={j} className="flex gap-1">
+                          <input
+                            value={ch.name}
+                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, supporting_characters: x.supporting_characters.map((p, q) => q === j ? { ...p, name: e.target.value } : p) } : x))}
+                            className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
+                            placeholder="Tên"
+                          />
+                          <input
+                            value={ch.narrative_function || ""}
+                            onChange={(e) => setConcepts((cs) => cs.map((x, k) => k === i ? { ...x, supporting_characters: x.supporting_characters.map((p, q) => q === j ? { ...p, narrative_function: e.target.value } : p) } : x))}
+                            className="w-24 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
+                            placeholder="Vai trò"
                           />
                         </div>
                       ))}
@@ -264,15 +364,41 @@ ${note || "(chỉ làm cho hay hơn, giữ ý chính)"}`;
                 ) : (
                   <>
                     <h3 className="font-display font-semibold mt-0.5">{c.title}</h3>
+                    {c.hook && (
+                      <p className="text-xs text-foreground/90 mt-1.5">
+                        <span className="font-medium text-primary">Biến cố:</span> {c.hook}
+                      </p>
+                    )}
+                    {c.conflict && (
+                      <p className="text-xs text-foreground/90 mt-1">
+                        <span className="font-medium text-primary">Xung đột:</span> {c.conflict}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.premise}</p>
                     <div className="text-[11px] text-muted-foreground mt-2">
                       <span className="font-medium">Bối cảnh:</span> {c.setting}
                     </div>
-                    {c.characters?.length > 0 && (
+                    {c.protagonists?.length > 0 && (
                       <ul className="mt-2 space-y-1 text-xs">
-                        {c.characters.map((ch, j) => (
+                        {c.protagonists.map((ch, j) => (
                           <li key={j} className="text-foreground/90">
                             <b>{ch.name}</b> <span className="text-muted-foreground">· {ch.role}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {c.antagonist?.name && (
+                      <div className="mt-2 text-xs text-foreground/90">
+                        <span className="font-medium text-destructive/80">Phản diện:</span>{" "}
+                        <b>{c.antagonist.name}</b> <span className="text-muted-foreground">· {c.antagonist.role}</span>
+                      </div>
+                    )}
+                    {c.supporting_characters?.length > 0 && (
+                      <ul className="mt-1.5 space-y-1 text-xs">
+                        {c.supporting_characters.map((ch, j) => (
+                          <li key={j} className="text-foreground/90">
+                            <b>{ch.name}</b>{" "}
+                            <span className="text-muted-foreground">· {ch.narrative_function || ch.role}</span>
                           </li>
                         ))}
                       </ul>
