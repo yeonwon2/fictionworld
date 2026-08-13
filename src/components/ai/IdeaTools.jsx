@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { aiCall } from "@/lib/aiCall";
+import { genreStyleLine } from "@/lib/genreStyle";
 import {
   GitBranch,
   Drama,
@@ -61,21 +62,22 @@ function buildProfileLite(c) {
   return p.join("\n");
 }
 
-function buildIdeaPrompt(tool, { context, profile, glossary, theme }) {
-  const gi = glossary ? `\n# Bảng thuật ngữ cổ phong (tham khảo xưng hô/địa danh)\n${glossary}\n` : "";
+function buildIdeaPrompt(tool, { context, profile, glossary, theme, genre }) {
+  const gi = glossary ? `\n# Bảng thuật ngữ (tham khảo xưng hô/địa danh)\n${glossary}\n` : "";
+  const style = genreStyleLine(genre);
   switch (tool) {
     case "branch":
-      return `Bạn là cố vấn kịch thuật Bách Hợp Cổ Đại. Dựa đoạn đang viết dưới đây, đề xuất 3-4 HƯỚNG PHÁT TRIỂN khác nhau, mỗi hướng kèm 1 câu ưu + 1 câu nhược (ghi nhãn: "kịch tính hơn" / "hợp lý hơn" / "bất ngờ hơn"...).${gi}\n# Đoạn đang viết\n${context || "(chưa có nội dung)"}\n\nLiệt kê gọn, cổ phong, KHÔNG dùng từ hiện đại.`;
+      return `Bạn là cố vấn kịch thuật tiểu thuyết. ${style} Dựa đoạn đang viết dưới đây, đề xuất 3-4 HƯỚNG PHÁT TRIỂN khác nhau, mỗi hướng kèm 1 câu ưu + 1 câu nhược (ghi nhãn: "kịch tính hơn" / "hợp lý hơn" / "bất ngờ hơn"...).${gi}\n# Đoạn đang viết\n${context || "(chưa có nội dung)"}\n\nLiệt kê gọn.`;
     case "intensify":
-      return `Hãy gợi ý 2-3 cách làm đoạn sau CĂNG THẲNG / gay cấn hơn (thêm kịch tính, đẩy cao trào), cụ thể, cổ phong.${gi}\n\n# Đoạn\n${context || "(chưa có nội dung)"}`;
+      return `${style} Hãy gợi ý 2-3 cách làm đoạn sau CĂNG THẲNG / gay cấn hơn (thêm kịch tính, đẩy cao trào), cụ thể.${gi}\n\n# Đoạn\n${context || "(chưa có nội dung)"}`;
     case "conflict":
-      return `Gợi ý 1 chi tiết trở ngại / mâu thuẫn nhỏ để chèn vào cảnh đang quá êm đềm — cụ thể, hợp bối cảnh, cổ phong (1-2 câu mô tả).${gi}\n\n# Bối cảnh\n${context || ""}`;
+      return `${style} Gợi ý 1 chi tiết trở ngại / mâu thuẫn nhỏ để chèn vào cảnh đang quá êm đềm — cụ thể, hợp bối cảnh (1-2 câu mô tả).${gi}\n\n# Bối cảnh\n${context || ""}`;
     case "imagery":
-      return `Ngân hàng ý tượng cổ phong cho chủ đề "${theme}". Đưa 8-12 cụm từ / ẩn dụ / thành ngữ Hán Việt phù hợp để ${THEME_DESC[theme] || theme}. Mỗi cụm kèm 1 câu giải thích ngắn. Cổ kính, không dùng từ hiện đại.`;
+      return `${style} Ngân hàng ý tượng cho chủ đề "${theme}". Đưa 8-12 cụm từ / ẩn dụ / thành ngữ phù hợp thể loại truyện để ${THEME_DESC[theme] || theme}. Mỗi cụm kèm 1 câu giải thích ngắn.`;
     case "voice":
-      return `Bạn hoá thân thành nhân vật dưới đây. Hãy viết 1 đoạn lời thoại/độc thoại ĐÚNG tính cách + cách xưng hô đặc trưng, bối cảnh: ${context || "(tự chọn bối cảnh phù hợp)"}.${gi}\n\n# Hồ sơ nhân vật\n${profile || "(chưa chọn nhân vật)"}\n\nChỉ viết lời thoại + vài câu hành động ngắn, cổ phong.`;
+      return `Bạn hoá thân thành nhân vật dưới đây. ${style} Hãy viết 1 đoạn lời thoại/độc thoại ĐÚNG tính cách + cách xưng hô đặc trưng, bối cảnh: ${context || "(tự chọn bối cảnh phù hợp)"}.${gi}\n\n# Hồ sơ nhân vật\n${profile || "(chưa chọn nhân vật)"}\n\nChỉ viết lời thoại + vài câu hành động ngắn.`;
     case "challenge":
-      return `Hãy sinh 1 tình huống BẤT NGỜ liên quan bối cảnh dưới đây để phá bế tắc — cụ thể, bất ngờ, hợp tone cổ phong.${gi}\n\n# Bối cảnh\n${context || "(chưa có nội dung)"}`;
+      return `${style} Hãy sinh 1 tình huống BẤT NGỜ liên quan bối cảnh dưới đây để phá bế tắc — cụ thể, bất ngờ.${gi}\n\n# Bối cảnh\n${context || "(chưa có nội dung)"}`;
     default:
       return "";
   }
@@ -86,6 +88,7 @@ export default function IdeaTools({
   characters,
   selectedIds,
   glossaryBlock,
+  genre,
   onAppend,
 }) {
   const [busy, setBusy] = useState("");
@@ -114,6 +117,7 @@ export default function IdeaTools({
         profile,
         glossary: glossaryBlock,
         theme,
+        genre,
       });
       const res = await aiCall(prompt);
       setResult(String(res));

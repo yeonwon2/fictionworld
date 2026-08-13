@@ -113,8 +113,8 @@ export default function GlossaryPanel() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted-foreground">
-          Bảng thuật ngữ cổ phong — xưng hô, địa danh, chức quan, môn phái, thuật ngữ thế giới. AI
-          sẽ tự nạp để giữ nhất quán khi sáng tác.
+          Bảng thuật ngữ riêng của truyện — xưng hô, địa danh, chức danh, tổ chức, thuật ngữ thế giới.
+          AI sẽ tự nạp để giữ nhất quán khi sáng tác, phù hợp thể loại bạn chọn.
         </p>
         <Button onClick={openAdd} size="sm">
           <Plus className="w-4 h-4" /> Thêm thuật ngữ
@@ -180,7 +180,7 @@ export default function GlossaryPanel() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {editing ? "Sửa thuật ngữ" : "Thêm thuật ngữ cổ phong"}
+              {editing ? "Sửa thuật ngữ" : "Thêm thuật ngữ"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">

@@ -111,7 +111,7 @@ export default function Home() {
           to="/sang-tac-ai"
           icon={Sparkles}
           title="Sáng tác AI"
-          desc="Viết phân cảnh cổ phong tự động với sự trợ giúp của Gemini."
+          desc="Viết phân cảnh tự động theo đúng thể loại bạn chọn, với sự trợ giúp của Gemini."
         />
       </div>
     </div>

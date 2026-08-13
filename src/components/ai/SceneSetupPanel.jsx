@@ -11,6 +11,7 @@ export default function SceneSetupPanel({
   setOutline,
   onGenerate,
   generating,
+  genre,
 }) {
   const toggle = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -72,7 +73,7 @@ export default function SceneSetupPanel({
         <div className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-md p-2">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
-            Yêu cầu văn phong: <b>Bách Hợp Cổ Đại</b>, điền nhã, không dùng từ ngữ hiện đại.
+            Yêu cầu văn phong: <b>{genre || "chưa chọn thể loại"}</b> — đặt/đổi thể loại ở đầu trang Hỗ trợ Sáng Tác AI.
           </span>
         </div>
 

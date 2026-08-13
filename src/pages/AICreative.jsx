@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { aiCall } from "@/lib/aiCall";
 import { buildDirectionBlock } from "@/lib/directionUtils";
+import { genreStyleLine } from "@/lib/genreStyle";
 import { useStory } from "@/lib/StoryContext";
 import {
   listCharacters,
@@ -25,6 +26,13 @@ import AssistantChat from "@/components/ai/AssistantChat";
 export default function AICreative() {
   const { currentStoryId, currentStory, ready } = useStory();
   const [activeTab, setActiveTab] = useState("idea");
+  const [genre, setGenre] = useState("");
+
+  // Nạp thể loại mặc định từ Story khi đổi truyện (tác giả vẫn có thể sửa tay ở đây).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setGenre(currentStory?.genre || "");
+  }, [currentStoryId]);
   const [characters, setCharacters] = useState([]);
   const [relationships, setRelationships] = useState([]);
   const [chapters, setChapters] = useState([]);
@@ -124,7 +132,7 @@ export default function AICreative() {
   }, [relationships, selectedIds, charById]);
 
   const glossaryBlock = useMemo(() => {
-    if (!glossary.length) return "(Chưa có thuật ngữ cổ phong.)";
+    if (!glossary.length) return "(Chưa có thuật ngữ nào.)";
     return glossary.map((g) => `- [${g.category || "Khác"}] ${g.term}: ${g.definition || ""}`).join("\n");
   }, [glossary]);
 
@@ -202,7 +210,8 @@ export default function AICreative() {
         relationsBlock,
         phase,
         glossaryBlock,
-        foreshadowBlock
+        foreshadowBlock,
+        genre
       );
       const res = await callLLM(prompt, BRAINSTORM_SCHEMA);
       setSuggestions(res?.options || []);
@@ -236,7 +245,8 @@ export default function AICreative() {
         currentStateBlock,
         phase,
         glossaryBlock,
-        foreshadowBlock
+        foreshadowBlock,
+        genre
       );
       const res = await callLLM(prompt);
       setContent((prev) => (prev.trim() ? `${prev}\n\n---\n\n${res}` : String(res)));
@@ -252,8 +262,8 @@ export default function AICreative() {
     setBusyAction(action);
     setError("");
     try {
-      const ctxBlock = `${directionBlock}\n\n${profilesBlock}\n\n${relationsBlock}\n\n# Thuật ngữ cổ phong\n${glossaryBlock}`;
-      const prompt = buildToolPrompt(action, selectedText, ctxBlock, note);
+      const ctxBlock = `${genreStyleLine(genre)}\n\n${directionBlock}\n\n${profilesBlock}\n\n${relationsBlock}\n\n# Bảng thuật ngữ (Glossary)\n${glossaryBlock}`;
+      const prompt = buildToolPrompt(action, selectedText, ctxBlock, note, genre);
       const res = await callLLM(prompt);
       return String(res);
     } catch (e) {
@@ -274,7 +284,7 @@ export default function AICreative() {
     setConsistency(null);
     setError("");
     try {
-      const prompt = buildConsistencyPrompt(content, profilesBlock, relationsBlock, glossaryBlock, currentStateBlock, foreshadowBlock);
+      const prompt = buildConsistencyPrompt(content, profilesBlock, relationsBlock, glossaryBlock, currentStateBlock, foreshadowBlock, genre);
       const res = await callLLM(prompt, CONSISTENCY_SCHEMA);
       setConsistency(res?.issues || []);
     } catch (e) {
@@ -291,7 +301,19 @@ export default function AICreative() {
           <Sparkles className="w-6 h-6 text-primary" /> Hỗ trợ Sáng Tác AI
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết phân cảnh cổ phong.
+          4 cấp độ: Ý tưởng → Dàn Ý → Nối Mạch → Viết phân cảnh đúng thể loại bạn chọn.
+        </p>
+        <div className="mt-3 flex items-center gap-2 max-w-md">
+          <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Thể loại truyện</label>
+          <input
+            value={genre}
+            onChange={(e) => setGenre(e.target.value)}
+            placeholder="VD: Bách hợp cổ đại, Đô thị hiện đại, Trinh thám, Huyền huyễn..."
+            className="flex-1 rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Mọi gợi ý/viết của AI ở các cấp độ dưới đây sẽ bám theo thể loại này — để trống nếu chưa rõ.
         </p>
       </header>
 
@@ -307,7 +329,7 @@ export default function AICreative() {
         </TabsList>
 
         <TabsContent value="idea">
-          <ConceptTab onUseConcept={handleUseConcept} />
+          <ConceptTab genre={genre} onGenreChange={setGenre} onUseConcept={handleUseConcept} />
         </TabsContent>
 
         <TabsContent value="plot">
@@ -318,6 +340,7 @@ export default function AICreative() {
             currentStoryId={currentStoryId}
             onSaved={handleArcSaved}
             directionBlock={directionBlock}
+            genre={genre}
           />
         </TabsContent>
 
@@ -348,6 +371,7 @@ export default function AICreative() {
               setOutline={setOutline}
               onGenerate={handleGenerate}
               generating={generating}
+              genre={genre}
             />
             <div>
               {generating && (
@@ -376,7 +400,7 @@ export default function AICreative() {
                       mode === "pick" ? "A" : "B"
                     }).`}{" "}
                 {selectedIds.length > 0 && `Trích hồ sơ + quan hệ của ${selectedIds.length} nhân vật.`}{" "}
-                {glossary.length > 0 && `· Nạp ${glossary.length} thuật ngữ cổ phong.`}
+                {glossary.length > 0 && `· Nạp ${glossary.length} thuật ngữ.`}
               </p>
             </div>
           </div>
@@ -386,6 +410,7 @@ export default function AICreative() {
             characters={characters}
             selectedIds={selectedIds}
             glossaryBlock={glossaryBlock}
+            genre={genre}
             onAppend={(text) => setContent((prev) => `${prev}\n\n${text}`.trim())}
           />
 
@@ -440,6 +465,7 @@ export default function AICreative() {
       <AssistantChat
         currentStoryId={currentStoryId}
         activeTab={activeTab}
+        genre={genre}
         directionBlock={directionBlock}
         profilesBlock={profilesBlock}
         relationsBlock={relationsBlock}
@@ -519,13 +545,13 @@ const CONSISTENCY_SCHEMA = {
 };
 
 function bibleExtra(glossary, foreshadow) {
-  return `\n# Bảng thuật ngữ cổ phong (Glossary — xưng hô/địa danh/chức quan)\n${glossary}\n\n# Phục bút chưa giải quyết (cân nhắc hồi đáp khi gần hết arc)\n${foreshadow}`;
+  return `\n# Bảng thuật ngữ (Glossary — xưng hô/địa danh/chức danh...)\n${glossary}\n\n# Phục bút chưa giải quyết (cân nhắc hồi đáp khi gần hết arc)\n${foreshadow}`;
 }
 
-function buildBrainstormPrompt(source, currentState, profiles, relations, phase, glossary, foreshadow) {
+function buildBrainstormPrompt(source, currentState, profiles, relations, phase, glossary, foreshadow, genre) {
   const bible = `${relations}${bibleExtra(glossary, foreshadow)}`;
   if (phase === "open") {
-    return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Dựa DÀN Ý / BIẾN CỐ CHÍNH của chương này, hãy đề xuất 3 CÁCH MỞ ĐẦU, BÁM SÁT 100% nội dung dàn ý.
+    return `Bạn là trợ lý kịch thuật tiểu thuyết. ${genreStyleLine(genre)} Dựa DÀN Ý / BIẾN CỐ CHÍNH của chương này, hãy đề xuất 3 CÁCH MỞ ĐẦU, BÁM SÁT 100% nội dung dàn ý.
 
 # Dàn ý / Biến cố chính của chương này
 ${source || "(Chưa có dàn ý — hãy đề xuất 3 cách mở đầu chung cho chương đầu.)"}
@@ -536,7 +562,7 @@ ${currentState}
 # Hồ sơ nhân vật
 ${profiles}
 
-# Ma trận quan hệ & xưng hô + Glossary cổ phong & Phục bút
+# Ma trận quan hệ & xưng hô + Glossary & Phục bút
 ${bible}
 
 # Yêu cầu
@@ -544,10 +570,10 @@ ${bible}
   + key "A": Mở đầu bằng nội tâm — dòng tâm sự/độc thoại nội tâm dẫn vào.
   + key "B": Mở đầu bằng đối thoại — lời thoại trực tiếp tạo kịch tính.
   + key "C": Mở đầu bằng hành động — mở bằng một cảnh/chuyển động sinh động.
-- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể lấy từ dàn ý (không chỉ mô tả không khí/khung cảnh phiếm như "trời đẹp, ngồi uống trà"). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt cổ kính, điền nhã, KHÔNG dùng từ hiện đại, BÁM SÁT 100% dàn ý, đúng tính cách & quan hệ, DÙNG ĐÚNG xưng hô theo Glossary giọng nhân vật.
+- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể lấy từ dàn ý (không chỉ mô tả không khí/khung cảnh phiếm như "trời đẹp, ngồi uống trà"). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng bằng tiếng Việt, đúng văn phong & bối cảnh thể loại đã chọn, BÁM SÁT 100% dàn ý, đúng tính cách & quan hệ, DÙNG ĐÚNG xưng hô theo Glossary giọng nhân vật.
 Trả JSON đúng schema.`;
   }
-  return `Bạn là trợ lý kịch thuật Bách Hợp Cổ Đại. Hãy đọc ĐOẠN KẾT dưới đây, trích trạng thái/vị trí/cảm xúc nhân vật (dựa văn bản + Story Bible), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp.
+  return `Bạn là trợ lý kịch thuật tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc ĐOẠN KẾT dưới đây, trích trạng thái/vị trí/cảm xúc nhân vật (dựa văn bản + Story Bible), rồi đề xuất 3 HƯỚNG KỊCH BẢN viết tiếp.
 
 # Đoạn kết chương trước
 ${source || "(Trống — hãy đề xuất 3 hướng mở chuyện cho chương đầu.)"}
@@ -558,7 +584,7 @@ ${currentState}
 # Hồ sơ nhân vật
 ${profiles}
 
-# Ma trận quan hệ & xưng hô + Glossary cổ phong & Phục bút
+# Ma trận quan hệ & xưng hô + Glossary & Phục bút
 ${bible}
 
 # Yêu cầu
@@ -566,14 +592,14 @@ ${bible}
   + key "A": Nối liền lập tức — tiếp ngay khoảnh khắc đoạn kết dừng lại.
   + key "B": Chuyển cảnh sang hôm sau — dịch chuyển thời gian, giữ tâm lý nhân vật.
   + key "C": Biến cố bất ngờ — một sự kiện đột phá thay đổi hướng truyện.
-- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể (không chỉ mô tả không khí/hành động phiếm). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng, cổ kính, điền nhã, không từ hiện đại, bám tính cách & quan hệ, dùng đúng Glossary xưng hô. Nếu sắp hết arc, ưu tiên hướng hồi đáp phục bút.
+- Mỗi hướng BẮT BUỘC chứa ít nhất 1 BIẾN CỐ/XUNG ĐỘT cụ thể (không chỉ mô tả không khí/hành động phiếm). "title" ngắn (≤ 8 từ), "outline" là dàn ý chi tiết 4-6 gạch đầu dòng, đúng văn phong thể loại đã chọn, bám tính cách & quan hệ, dùng đúng Glossary xưng hô. Nếu sắp hết arc, ưu tiên hướng hồi đáp phục bút.
 Trả JSON đúng schema.`;
 }
 
-function buildScenePrompt(profiles, relations, outline, ctxText, currentState, phase, glossary, foreshadow) {
+function buildScenePrompt(profiles, relations, outline, ctxText, currentState, phase, glossary, foreshadow, genre) {
   const bible = `${relations}${bibleExtra(glossary, foreshadow)}`;
   if (phase === "open") {
-    return `Bạn là trợ lý sáng tác văn học chuyên tiểu thuyết Bách Hợp Cổ Đại. Văn phong điền nhã, tao nhã, từ ngữ cổ kính. TUYỆT ĐỐI không dùng từ hiện đại và không giải thích meta — chỉ viết văn.
+    return `Bạn là trợ lý sáng tác văn học tiểu thuyết. ${genreStyleLine(genre)} TUYỆT ĐỐI không giải thích meta — chỉ viết văn.
 
 Dữ liệu dưới đây lấy từ Story Bible (Hồ Sơ Truyện). Hãy MỞ ĐẦU một phân cảnh của chương mới, BÁM SÁT 100% dàn ý / biến cố chính.
 
@@ -586,7 +612,7 @@ ${currentState}
 # Hồ sơ nhân vật xuất hiện trong cảnh (kể cả giọng văn/xưng hô/mục tiêu/bí mật)
 ${profiles}
 
-# Quan hệ & xưng hô + Glossary cổ phong & Phục bút
+# Quan hệ & xưng hô + Glossary & Phục bút
 ${bible}
 
 # Dàn ý phân cảnh (chi tiết cận cảnh)
@@ -595,14 +621,14 @@ ${outline.trim() || "(Chưa cung cấp — hãy tự xây phân cảnh mở đ�
 # Yêu cầu bắt buộc
 - MỞ ĐẦU chương mới BÁM SÁT 100% dàn ý.
 - Giữ tông giọng, Ngoại hình cố định, vị trí & tâm lý nhất quán với Story Bible.
-- Xưng hô ĐÚNG theo giọng văn nhân vật + Glossary (sư huynh, sư đệ, công tử, nương tử, đại nhân...).
-- Văn phong cổ kính, điền nhã, gợi hình; khoảng 700–1100 từ, chia đoạn rõ ràng.
+- Xưng hô ĐÚNG theo giọng văn nhân vật + Glossary, phù hợp thể loại đã chọn.
+- Văn phong gợi hình, đúng thể loại đã chọn; khoảng 700–1100 từ, chia đoạn rõ ràng.
 - Không mâu thuẫn tính cách/bí mật/động cơ nhân vật; nếu hợp lý có thể gợi hồi đáp phục bút.
 - Chỉ viết văn phân cảnh — không tiêu đề meta, không lời dẫn.
 
 Hãy bắt đầu:`;
   }
-  return `Bạn là trợ lý sáng tác văn học chuyên tiểu thuyết Bách Hợp Cổ Đại. Văn phong điền nhã, tao nhã, cổ kính. TUYỆT ĐỐI không dùng từ hiện đại, không giải thích meta — chỉ viết văn.
+  return `Bạn là trợ lý sáng tác văn học tiểu thuyết. ${genreStyleLine(genre)} TUYỆT ĐỐI không giải thích meta — chỉ viết văn.
 
 Dữ liệu dưới đây lấy từ Story Bible & chương trước. Hãy VIẾT TIẾP MỘT PHÂN CẢNH mới tự nhiên, nối mạch từ đoạn kết.
 
@@ -615,7 +641,7 @@ ${currentState}
 # Hồ sơ nhân vật xuất hiện trong cảnh (kể cả giọng văn/xưng hô/mục tiêu/bí mật)
 ${profiles}
 
-# Quan hệ & xưng hô + Glossary cổ phong & Phục bút
+# Quan hệ & xưng hô + Glossary & Phục bút
 ${bible}
 
 # Dàn ý phân cảnh mới
@@ -625,14 +651,14 @@ ${outline.trim() || "(Chưa cung cấp — hãy tự xây một phân cảnh h�
 - VIẾT TIẾP mạch văn tự nhiên, GIỮ NGUYÊN tông giọng, vị trí, tâm lý, Ngoại hình cố định.
 - Tuyệt đối không đứt gãy / mâu thuẫn tình tiết với đoạn kết.
 - Xưng hô ĐÚNG giọng nhân vật + Glossary.
-- Văn phong cổ kính, điền nhã, gợi hình; khoảng 700–1100 từ, chia đoạn rõ.
+- Văn phong gợi hình, đúng thể loại đã chọn; khoảng 700–1100 từ, chia đoạn rõ.
 - Chỉ viết văn phân cảnh — không tiêu đề meta, không lời dẫn.
 
 Hãy bắt đầu:`;
 }
 
-function buildConsistencyPrompt(content, profiles, relations, glossary, currentState, foreshadow) {
-  return `Bạn là biên tập viên kiểm tra nhất quán cho tiểu thuyết Bách Hợp Cổ Đại. Hãy so sánh nội dung chương vừa viết với Story Bible (Hồ Sơ Truyện) dưới đây, phát hiện các MÂU THUẪN và vi phạm.
+function buildConsistencyPrompt(content, profiles, relations, glossary, currentState, foreshadow, genre) {
+  return `Bạn là biên tập viên kiểm tra nhất quán cho tiểu thuyết${genre ? ` (thể loại: "${genre}")` : ""}. Hãy so sánh nội dung chương vừa viết với Story Bible (Hồ Sơ Truyện) dưới đây, phát hiện các MÂU THUẪN và vi phạm.
 
 # Nội dung chương vừa viết
 """${content}"""
@@ -643,7 +669,7 @@ ${profiles}
 # Story Bible — Quan hệ & xưng hô
 ${relations}
 
-# Story Bible — Glossary cổ phong
+# Story Bible — Glossary
 ${glossary}
 
 # Trạng thái nhân vật hiện tại (timeline)
@@ -662,45 +688,46 @@ Mỗi lỗi: severity ("nghiêm trọng" / "cảnh báo"), where (trích đoạn
 Nếu không có lỗi, trả issues là mảng rỗng []. Trả JSON đúng schema.`;
 }
 
-function buildToolPrompt(action, selectedText, ctxBlock, note) {
+function buildToolPrompt(action, selectedText, ctxBlock, note, genre) {
+  const styleTail = genre ? `đúng thể loại "${genre}"` : "văn phong tự nhiên phù hợp mạch truyện";
   switch (action) {
     case "continue":
       return `${ctxBlock}
 
-Dựa văn phong đoạn dưới đây, hãy VIẾT TIẾP khoảng 300 từ nối tiếp mượt mà, Bách Hợp Cổ Đại, điền nhã, không từ hiện đại, không lặp đoạn gốc, GIỮ ĐÚNG xưng hô Story Bible.
+Dựa văn phong đoạn dưới đây, hãy VIẾT TIẾP khoảng 300 từ nối tiếp mượt mà, ${styleTail}, không lặp đoạn gốc, GIỮ ĐÚNG xưng hô Story Bible.
 
 Đoạn gốc:
 """${selectedText}"""
 
 Chỉ viết phần tiếp:`;
     case "expand":
-      return `Hãy MỞ RỘNG phần miêu tả cổ phong sau đây — điền nhã, thêm chi tiết ngoại hình / quang cảnh / cảm xúc (~200 từ), giữ ý cốt lõi, không từ hiện đại. Chỉ trả phần mở rộng.
+      return `Hãy MỞ RỘNG phần miêu tả sau đây — thêm chi tiết ngoại hình / quang cảnh / cảm xúc (~200 từ), giữ ý cốt lõi, ${styleTail}. Chỉ trả phần mở rộng.
 
 """${selectedText}"""`;
     case "shorten":
-      return `RÚT GỌN đoạn sau giữ ý cốt lõi, văn phong cổ phong, khoảng 55-65% độ dài gốc. Chỉ trả kết quả.
+      return `RÚT GỌN đoạn sau giữ ý cốt lõi và văn phong gốc, khoảng 55-65% độ dài gốc. Chỉ trả kết quả.
 
 """${selectedText}"""`;
     case "polish":
-      return `POLISH đoạn sau sang văn phong cổ phong Hán Việt CHUẨN — thay từ hiện đại bằng điển cố/thành ngữ Hán Việt, điền nhã, mượt mà, giữ nguyên ý. Bám xưng hô Story Bible. Chỉ trả kết quả đã polish.
+      return `POLISH đoạn sau cho mượt mà, trau chuốt hơn, ${styleTail} — sửa từ ngữ lệch tông nếu có, giữ nguyên ý. Bám xưng hô Story Bible. Chỉ trả kết quả đã polish.
 
 """${selectedText}"""`;
     case "tone_formal":
-      return `Viết lại đoạn sau TRANG TRỌNG / lễ nghiêm hơn (giữ cổ phong, bám xưng hô). Chỉ trả kết quả.
+      return `Viết lại đoạn sau TRANG TRỌNG / lễ nghiêm hơn (giữ ${styleTail}, bám xưng hô). Chỉ trả kết quả.
 
 """${selectedText}"""`;
     case "tone_intimate":
-      return `Viết lại đoạn sau GẦN GŨI / ấm áp hơn (giữ cổ phong, bám xưng hô). Chỉ trả kết quả.
+      return `Viết lại đoạn sau GẦN GŨI / ấm áp hơn (giữ ${styleTail}, bám xưng hô). Chỉ trả kết quả.
 
 """${selectedText}"""`;
     case "tone_poetic":
-      return `Viết lại đoạn sau THƠ MỘNG / gợi hình hơn (thêm ẩn dụ, điển cố cổ phong, bám xưng hô). Chỉ trả kết quả.
+      return `Viết lại đoạn sau THƠ MỘNG / gợi hình hơn (thêm ẩn dụ phù hợp thể loại, bám xưng hô, giữ ${styleTail}). Chỉ trả kết quả.
 
 """${selectedText}"""`;
     case "dialogue":
       return `${ctxBlock}
 
-Dựa quan hệ & xưng hô giữa các nhân vật (Story Bible), hãy SINH lời thoại chuẩn xưng hô nối tiếp đoạn sau (chỉ lời thoại + vài câu hành động ngắn, 4–8 câu), cổ phong.
+Dựa quan hệ & xưng hô giữa các nhân vật (Story Bible), hãy SINH lời thoại chuẩn xưng hô nối tiếp đoạn sau (chỉ lời thoại + vài câu hành động ngắn, 4–8 câu), ${styleTail}.
 
 Đoạn hiện tại:
 """${selectedText}"""`;
@@ -713,17 +740,17 @@ SINH lời thoại TIẾP THEO nối sau đoạn dưới (4–8 câu), ĐÚNG t�
     case "action_next":
       return `${ctxBlock}
 
-GỢI Ý 3 hành động/khắc tiếp theo của nhân vật trong cảnh (mỗi cái 1 câu cụ thể, cổ phong). Chỉ liệt kê.
+GỢI Ý 3 hành động/khắc tiếp theo của nhân vật trong cảnh (mỗi cái 1 câu cụ thể, ${styleTail}). Chỉ liệt kê.
 
 """${selectedText}"""`;
     case "suggest":
-      return `Dựa đoạn sau, GỢI Ý 3 tình huống tiếp theo phù hợp Bách Hợp Cổ Đại, mỗi tình huống 1–2 câu cụ thể. Chỉ liệt kê.
+      return `Dựa đoạn sau, GỢI Ý 3 tình huống tiếp theo phù hợp mạch truyện${genre ? ` (thể loại "${genre}")` : ""}, mỗi tình huống 1–2 câu cụ thể. Chỉ liệt kê.
 
 """${selectedText}"""`;
     case "rewrite_by_feedback":
       return `${ctxBlock}
 
-Hãy VIẾT LẠI đoạn sau theo góp ý của tác giả (giữ cổ phong, bám xưng hô Story Bible, không từ hiện đại, giữ ý cốt lõi). Chỉ trả kết quả viết lại.
+Hãy VIẾT LẠI đoạn sau theo góp ý của tác giả (giữ ${styleTail}, bám xưng hô Story Bible, giữ ý cốt lõi). Chỉ trả kết quả viết lại.
 
 Góp ý: ${note || "(làm cho hay hơn, giữ ý chính)"}
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { aiCall } from "@/lib/aiCall";
 import { Lightbulb, Loader2, ArrowRight, Pencil, Check, RefreshCw, Bot, X } from "lucide-react";
 import StoryDirectionForm from "@/components/ai/StoryDirectionForm";
+import { genreStyleLine } from "@/lib/genreStyle";
 
 const CHARACTER_ITEM_SCHEMA = {
   type: "object",
@@ -68,8 +69,8 @@ const SINGLE_SCHEMA = {
 
 // Cấp độ 1 — Khởi tạo Ý tưởng. Mỗi concept có 3 lựa chọn: chốt / góp ý AI sửa lại / sửa tay.
 // Có nút sinh lại cả 3 kèm ghi chú. Sau khi chốt → form định hướng → sang Dàn Ý.
-export default function ConceptTab({ onUseConcept }) {
-  const [genre, setGenre] = useState("");
+export default function ConceptTab({ genre, onGenreChange, onUseConcept }) {
+  const setGenre = onGenreChange;
   const [loading, setLoading] = useState(false);
   const [concepts, setConcepts] = useState([]);
   const [error, setError] = useState("");
@@ -86,7 +87,7 @@ export default function ConceptTab({ onUseConcept }) {
     setLoading(true);
     setConcepts([]);
     try {
-      const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng Bách Hợp Cổ Đại. Dựa thể loại / từ khóa dưới đây, hãy đề xuất 3 CONCEPT sáng tác CÓ THỰC CHẤT KỊCH TÍNH, không chỉ tả không khí/khung cảnh chung chung kiểu "buổi sáng nắng đẹp, ngồi uống trà".
+      const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng. ${genreStyleLine(genre)} Dựa thể loại / từ khóa dưới đây, hãy đề xuất 3 CONCEPT sáng tác CÓ THỰC CHẤT KỊCH TÍNH, không chỉ tả không khí/khung cảnh chung chung kiểu "buổi sáng nắng đẹp, ngồi uống trà".
 
 Mỗi concept BẮT BUỘC gồm:
 - "hook": biến cố khởi đầu cụ thể kéo hai nhân vật chính vào nhau (1-2 câu, phải là một SỰ KIỆN, không phải mô tả cảnh).
@@ -97,7 +98,7 @@ Mỗi concept BẮT BUỘC gồm:
 - "antagonist": MỘT thế lực/nhân vật đối đầu cụ thể. Nếu thể loại phù hợp hơn với rào cản trừu tượng (lễ giáo, gia tộc, số phận) thay vì một nhân vật phản diện, hãy đặt "role" là thế lực đó và mô tả "motivation" của nó — KHÔNG được bỏ trống hay ghi "không có".
 - "supporting_characters": 1-3 nhân vật phụ, mỗi người có "narrative_function" rõ ràng (VD: sư phụ dẫn dắt, tri kỷ an ủi, gia tộc cản trở, tình địch xen vào...).
 
-Văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại. Trả JSON đúng schema.
+Trả JSON đúng schema.
 
 Thể loại / từ khóa: ${genre}${note ? `\n\nĐịnh hướng lại của tác giả: ${note}` : ""}`;
       const res = await aiCall(prompt, { jsonSchema: CONCEPT_SCHEMA });
@@ -114,7 +115,7 @@ Thể loại / từ khóa: ${genre}${note ? `\n\nĐịnh hướng lại của t�
     setBusyIdx(idx);
     setError("");
     try {
-      const prompt = `Bạn là chuyên gia kịch thuật Bách Hợp Cổ Đại. Tác giả muốn CHỈ sửa RIÊNG concept số ${idx + 1} theo góp ý, 2 concept còn lại giữ nguyên. Hãy sinh lại concept số ${idx + 1} (giữ không khí chung, điều chỉnh theo góp ý). Phải có thực chất kịch tính: "hook" là một sự kiện cụ thể, "conflict" nêu rõ xung đột nội tâm + ngoại cảnh, "antagonist" là thế lực/nhân vật đối đầu cụ thể (không bỏ trống), "supporting_characters" có narrative_function rõ ràng. Văn phong cổ kính, không từ hiện đại. Trả JSON đúng schema của 1 concept (gồm title, hook, conflict, premise, setting, protagonists[], antagonist, supporting_characters[]).
+      const prompt = `Bạn là chuyên gia kịch thuật tiểu thuyết mạng. ${genreStyleLine(genre)} Tác giả muốn CHỈ sửa RIÊNG concept số ${idx + 1} theo góp ý, 2 concept còn lại giữ nguyên. Hãy sinh lại concept số ${idx + 1} (giữ không khí chung, điều chỉnh theo góp ý). Phải có thực chất kịch tính: "hook" là một sự kiện cụ thể, "conflict" nêu rõ xung đột nội tâm + ngoại cảnh, "antagonist" là thế lực/nhân vật đối đầu cụ thể (không bỏ trống), "supporting_characters" có narrative_function rõ ràng. Trả JSON đúng schema của 1 concept (gồm title, hook, conflict, premise, setting, protagonists[], antagonist, supporting_characters[]).
 
 # Concept gốc cần chỉnh sửa
 ${JSON.stringify(concepts[idx])}

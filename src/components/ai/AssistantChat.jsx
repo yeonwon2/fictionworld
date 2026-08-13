@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { aiCall } from "@/lib/aiCall";
+import { genreStyleLine } from "@/lib/genreStyle";
 import { Sparkles, X, Send, Loader2, Trash2, CornerDownRight } from "lucide-react";
 
 const TAB_LABEL = {
@@ -20,13 +21,14 @@ function buildChatPrompt({
   activeTab,
   history,
   question,
+  genre,
 }) {
   const historyBlock = history
     .slice(-8)
     .map((m) => `${m.role === "user" ? "Tác giả" : "Trợ lý"}: ${m.text}`)
     .join("\n\n");
   const contentTail = (content || "").split(/\s+/).filter(Boolean).slice(-300).join(" ");
-  return `Bạn là trợ lý sáng tác TOÀN DIỆN cho tiểu thuyết mạng Bách Hợp Cổ Đại. Tác giả có thể hỏi/yêu cầu TỰ DO bất cứ điều gì — gợi ý thêm nhân vật, đào sâu cốt truyện, kiểm tra logic, viết thử đoạn văn, brainstorm không giới hạn số lượng phương án — không bị bó buộc vào khuôn có sẵn của các form. Luôn trả lời bằng tiếng Việt; khi viết văn mẫu trong bối cảnh truyện, dùng văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại.
+  return `Bạn là trợ lý sáng tác TOÀN DIỆN cho tiểu thuyết mạng. Tác giả có thể hỏi/yêu cầu TỰ DO bất cứ điều gì — gợi ý thêm nhân vật, đào sâu cốt truyện, kiểm tra logic, viết thử đoạn văn, brainstorm không giới hạn số lượng phương án — không bị bó buộc vào khuôn có sẵn của các form. Luôn trả lời bằng tiếng Việt. ${genreStyleLine(genre)}
 
 # Tác giả đang ở: ${TAB_LABEL[activeTab] || ""}
 
@@ -38,7 +40,7 @@ ${profilesBlock || "(chưa chọn nhân vật)"}
 # Quan hệ & xưng hô
 ${relationsBlock || "(chưa có)"}
 
-# Glossary cổ phong
+# Glossary
 ${glossaryBlock || "(chưa có)"}
 
 # Phục bút chưa giải quyết
@@ -68,6 +70,7 @@ const HISTORY_CAP = 40;
 export default function AssistantChat({
   currentStoryId,
   activeTab,
+  genre,
   directionBlock,
   profilesBlock,
   relationsBlock,
@@ -131,6 +134,7 @@ export default function AssistantChat({
         activeTab,
         history: withUser,
         question,
+        genre,
       });
       const res = await aiCall(prompt);
       persist([...withUser, { role: "assistant", text: String(res || ""), ts: Date.now() }]);

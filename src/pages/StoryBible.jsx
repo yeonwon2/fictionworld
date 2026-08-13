@@ -14,7 +14,7 @@ export default function StoryBible() {
           <BookMarked className="w-6 h-6 text-primary" /> Hồ Sơ Truyện
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Bảng dữ liệu trung tâm — nhân vật, phục bút, thuật ngữ cổ phong. Mọi lệnh gọi AI ở tab
+          Bảng dữ liệu trung tâm — nhân vật, phục bút, thuật ngữ riêng của truyện. Mọi lệnh gọi AI ở tab
           "Nối Mạch & Viết" tự nạp dữ liệu này làm bối cảnh.
         </p>
       </header>

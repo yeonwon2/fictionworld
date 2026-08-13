@@ -8,7 +8,7 @@ const TOOLS = [
   { action: "continue", label: "Viết tiếp", mode: "append" },
   { action: "expand", label: "Mở rộng miêu tả", mode: "replace" },
   { action: "shorten", label: "Rút gọn", mode: "replace" },
-  { action: "polish", label: "Polish cổ phong", mode: "replace" },
+  { action: "polish", label: "Polish văn phong", mode: "replace" },
   { action: "tone_formal", label: "Trang trọng hơn", mode: "replace" },
   { action: "tone_intimate", label: "Gần gũi hơn", mode: "replace" },
   { action: "tone_poetic", label: "Thơ mộng hơn", mode: "replace" },
@@ -133,7 +133,7 @@ export default function AIEditor({ value, onChange, onAITool, busy, busyAction }
         onSelect={updateSelection}
         onMouseUp={updateSelection}
         onKeyUp={updateSelection}
-        placeholder="Phân cảnh do AI tạo ra hiển thị tại đây. Bôi đen đoạn và dùng toolbar phía trên: viết tiếp / mở rộng / rút gọn / polish cổ phong / đổi văn phong / sinh thoại / gợi ý hành động / viết lại theo góp ý..."
+        placeholder="Phân cảnh do AI tạo ra hiển thị tại đây. Bôi đen đoạn và dùng toolbar phía trên: viết tiếp / mở rộng / rút gọn / polish văn phong / đổi văn phong / sinh thoại / gợi ý hành động / viết lại theo góp ý..."
         className="w-full min-h-[420px] resize-y px-4 py-3 text-[15px] leading-7 bg-card focus:outline-none font-body"
       />
     </section>

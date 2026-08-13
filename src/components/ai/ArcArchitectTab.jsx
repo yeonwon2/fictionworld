@@ -4,6 +4,7 @@ import { createChapter, createEvent, createCharacter } from "@/lib/worldcrud";
 import { Wand2, Loader2, Save, CheckCircle2 } from "lucide-react";
 import OutlineEditor from "@/components/ai/OutlineEditor";
 import OutlineVersionHistory from "@/components/ai/OutlineVersionHistory";
+import { genreStyleLine } from "@/lib/genreStyle";
 
 const ARC_SCHEMA = {
   type: "object",
@@ -63,7 +64,7 @@ const ARC_SINGLE_SCHEMA = {
 };
 
 // Cấp độ 2 — Lập & SỬA Dàn Ý. Sửa trực tiếp / AI viết lại từng phần / thêm-xoá-kéo-thả / lịch sử.
-export default function ArcArchitectTab({ idea, setIdea, sampleChars, currentStoryId, onSaved, directionBlock }) {
+export default function ArcArchitectTab({ idea, setIdea, sampleChars, currentStoryId, onSaved, directionBlock, genre }) {
   const [loading, setLoading] = useState(false);
   const [arc, setArc] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -108,9 +109,9 @@ export default function ArcArchitectTab({ idea, setIdea, sampleChars, currentSto
     setLoading(true);
     setArc(null);
     try {
-      const prompt = `Bạn là biên kịch chuyên nghiệp tiểu thuyết mạng Bách Hợp Cổ Đại. Phân tích ý tưởng và đề xuất cấu trúc cột truyện: Tổng số chương, chia thành các Arc (Màn), kèm danh sách sự kiện biến cố chính cho từng chương.
+      const prompt = `Bạn là biên kịch chuyên nghiệp tiểu thuyết mạng. ${genreStyleLine(genre)} Phân tích ý tưởng và đề xuất cấu trúc cột truyện: Tổng số chương, chia thành các Arc (Màn), kèm danh sách sự kiện biến cố chính cho từng chương.
 
-YÊU CẦU BẮT BUỘC: mỗi Arc phải có ít nhất một bước ngoặt/xung đột CỤ THỂ (không chỉ tóm tắt không khí chung chung); nếu ý tưởng có phản diện/thế lực đối đầu hoặc nhân vật phụ, PHẢI cho họ tham gia đẩy mạch truyện ở các chương liên quan (âm mưu tiến triển, xung đột leo thang, nhân vật phụ can thiệp) — không được lãng quên họ. Mỗi "key_events" của 1 chương phải là các biến cố cụ thể xảy ra, không phải mô tả tâm trạng chung. Văn phong cổ kính, điền nhã, KHÔNG dùng từ hiện đại. Trả JSON đúng schema.
+YÊU CẦU BẮT BUỘC: mỗi Arc phải có ít nhất một bước ngoặt/xung đột CỤ THỂ (không chỉ tóm tắt không khí chung chung); nếu ý tưởng có phản diện/thế lực đối đầu hoặc nhân vật phụ, PHẢI cho họ tham gia đẩy mạch truyện ở các chương liên quan (âm mưu tiến triển, xung đột leo thang, nhân vật phụ can thiệp) — không được lãng quên họ. Mỗi "key_events" của 1 chương phải là các biến cố cụ thể xảy ra, không phải mô tả tâm trạng chung. Trả JSON đúng schema.
 
 ${directionBlock || ""}
 
@@ -131,7 +132,7 @@ ${directionBlock || ""}
     setRegenBusy({ type: "chapter", idx });
     try {
       const ch = arc.chapters[idx];
-      const prompt = `Bạn là biên kịch Bách Hợp Cổ Đại. Chỉ SINH LẠI RIÊNG chương số ${ch.chapter_number} trong dàn ý — giữ nguyên số chương và các chương khác không thay đổi. Giữ nguyên tiêu đề và arc_name nếu không cần đổi; điều chỉnh summary & key_events theo góp ý. "key_events" phải là biến cố cụ thể (không mô tả tâm trạng chung chung); nếu ý tưởng có phản diện/nhân vật phụ liên quan tới chương này, hãy để họ xuất hiện thúc đẩy mạch truyện. Văn phong cổ kính, điền nhã, không từ hiện đại. Trả JSON đúng schema của 1 chương (chapter_number, arc_name, title, summary, key_events[]).
+      const prompt = `Bạn là biên kịch tiểu thuyết mạng. ${genreStyleLine(genre)} Chỉ SINH LẠI RIÊNG chương số ${ch.chapter_number} trong dàn ý — giữ nguyên số chương và các chương khác không thay đổi. Giữ nguyên tiêu đề và arc_name nếu không cần đổi; điều chỉnh summary & key_events theo góp ý. "key_events" phải là biến cố cụ thể (không mô tả tâm trạng chung chung); nếu ý tưởng có phản diện/nhân vật phụ liên quan tới chương này, hãy để họ xuất hiện thúc đẩy mạch truyện. Trả JSON đúng schema của 1 chương (chapter_number, arc_name, title, summary, key_events[]).
 
 ${directionBlock || ""}
 
@@ -160,7 +161,7 @@ ${note || "(làm cho hay hơn, giữ ý chính)"}`;
     setRegenBusy({ type: "arc", idx });
     try {
       const a0 = arc.arcs[idx];
-      const prompt = `Bạn là biên kịch Bách Hợp Cổ Đại. Chỉ SINH LẠI RIÊNG arc "${a0.name}" (từ chương ${a0.from_chapter} đến ${a0.to_chapter}) — giữ nguyên from_chapter/to_chapter, có thể đổi tên + tóm tắt theo góp ý. "summary" phải nêu rõ bước ngoặt/xung đột cụ thể của arc này, không chỉ mô tả không khí chung. Văn phong cổ kính. Trả JSON đúng schema của 1 arc (name, from_chapter, to_chapter, summary).
+      const prompt = `Bạn là biên kịch tiểu thuyết mạng. ${genreStyleLine(genre)} Chỉ SINH LẠI RIÊNG arc "${a0.name}" (từ chương ${a0.from_chapter} đến ${a0.to_chapter}) — giữ nguyên from_chapter/to_chapter, có thể đổi tên + tóm tắt theo góp ý. "summary" phải nêu rõ bước ngoặt/xung đột cụ thể của arc này, không chỉ mô tả không khí chung. Trả JSON đúng schema của 1 arc (name, from_chapter, to_chapter, summary).
 
 ${directionBlock || ""}
 
@@ -183,7 +184,7 @@ ${note || "(làm tóm tắt rõ ràng hơn)"}`;
     setRegenAllBusy(true);
     pushHistory(`Trước khi sinh lại toàn bộ · ${new Date().toLocaleTimeString("vi-VN")}`);
     try {
-      const prompt = `Bạn là biên kịch Bách Hợp Cổ Đại. Hãy SINH LẠI TOÀN BỘ dàn ý NHƯNG GIỮ NGUYÊN cấu trúc: đúng ${arc.arcs?.length || 0} arc và đúng ${arc.chapters?.length || 0} chương, giữ nguyên thứ tự & tiêu đề chương (chỉ đổi nội dung summary & key_events cho hay hơn theo góp ý). Mỗi arc/chương phải có bước ngoặt/xung đột cụ thể, có sự tham gia của phản diện/nhân vật phụ (nếu ý tưởng có) — không chỉ mô tả không khí chung chung. Văn phong cổ kính, điền nhã, không từ hiện đại. Trả JSON đúng schema (arcs + chapters, giữ nguyên chapter_number & title).
+      const prompt = `Bạn là biên kịch tiểu thuyết mạng. ${genreStyleLine(genre)} Hãy SINH LẠI TOÀN BỘ dàn ý NHƯNG GIỮ NGUYÊN cấu trúc: đúng ${arc.arcs?.length || 0} arc và đúng ${arc.chapters?.length || 0} chương, giữ nguyên thứ tự & tiêu đề chương (chỉ đổi nội dung summary & key_events cho hay hơn theo góp ý). Mỗi arc/chương phải có bước ngoặt/xung đột cụ thể, có sự tham gia của phản diện/nhân vật phụ (nếu ý tưởng có) — không chỉ mô tả không khí chung chung. Trả JSON đúng schema (arcs + chapters, giữ nguyên chapter_number & title).
 
 ${directionBlock || ""}
 

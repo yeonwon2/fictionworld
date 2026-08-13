@@ -138,7 +138,7 @@ export async function deleteEvent(id) {
   return deleteRow("events", id);
 }
 
-// ---------- Thuật ngữ cổ phong (Glossary) ----------
+// ---------- Thuật ngữ riêng của truyện (Glossary) ----------
 export async function listGlossary(storyId) {
   return listTable("glossary_terms", storyId, "category", true, 500);
 }
