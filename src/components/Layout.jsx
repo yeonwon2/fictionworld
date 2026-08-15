@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon, BookMarked } from "lucide-react";
+import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon, BookMarked, Gamepad2 } from "lucide-react";
 import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -8,7 +8,7 @@ import StorySwitcher from "@/components/StorySwitcher";
 import AISettingsModal from "@/components/AISettingsModal";
 import { cn } from "@/lib/utils";
 
-// Điều hướng chính — 3 tab
+// Điều hướng chính — 4 tab
 const MAIN_NAV = [
   { label: "Tổng quan", short: "Tổng quan", path: "/", icon: BookOpen },
   {
@@ -26,6 +26,7 @@ const MAIN_NAV = [
     ],
   },
   { label: "Sáng Tác AI", short: "Sáng Tác", path: "/sang-tac-ai", icon: Sparkles },
+  { label: "Xưởng Game", short: "Game", path: "/xuong-game", icon: Gamepad2 },
 ];
 
 export default function Layout() {
@@ -104,6 +105,9 @@ export default function Layout() {
 
           {/* Sáng Tác AI */}
           <NavLink item={MAIN_NAV[2]} active={location.pathname === "/sang-tac-ai"} />
+
+          {/* Xưởng Game */}
+          <NavLink item={MAIN_NAV[3]} active={location.pathname === "/xuong-game"} />
         </nav>
 
         <div className="p-4 border-t border-sidebar-border space-y-2">

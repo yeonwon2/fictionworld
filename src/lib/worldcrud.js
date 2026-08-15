@@ -180,6 +180,40 @@ export async function deleteChapter(id) {
   return deleteRow("chapters", id);
 }
 
+// ---------- Xưởng Game (Game) ----------
+// listGames() chỉ trả cột nhẹ (KHÔNG có nodes/meta) — dùng cho thư viện/danh
+// sách game. Gọi getGame(id) riêng khi mở một game cụ thể để chơi/sửa/xuất —
+// tránh tải toàn bộ node graph (có thể vài chục KB) chỉ để hiển thị tiêu đề.
+const GAME_LITE_COLUMNS = "id, story_id, title, node_count, updated_at, created_at";
+
+export async function listGames() {
+  const { data, error } = await supabase
+    .from("games")
+    .select(GAME_LITE_COLUMNS)
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data || [];
+}
+export async function getGame(id) {
+  const { data, error } = await supabase.from("games").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+export async function createGame(data) {
+  const payload = { ...data };
+  if (payload.nodes) payload.node_count = Object.keys(payload.nodes).length;
+  return createRow("games", payload);
+}
+export async function updateGame(id, data) {
+  const payload = { ...data };
+  if (payload.nodes) payload.node_count = Object.keys(payload.nodes).length;
+  return updateRow("games", id, payload);
+}
+export async function deleteGame(id) {
+  return deleteRow("games", id);
+}
+
 // ---------- Tiện ích: tải tệp lên Storage (tự nén ảnh trước khi lưu) ----------
 export async function uploadFile(file) {
   const compressed = await compressImage(file);

@@ -166,11 +166,25 @@ create table if not exists public.glossary_terms (
 );
 create index if not exists glossary_terms_story_id_idx on public.glossary_terms (story_id);
 
+-- Xưởng Game: game nhập vai phân nhánh do AI sinh (thư viện nhiều game, không gắn chặt vào 1 truyện)
+create table if not exists public.games (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete set null,
+  title text not null default 'Tựa Game Mới',
+  meta jsonb not null default '{}'::jsonb,
+  nodes jsonb not null default '{}'::jsonb,
+  node_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists games_story_id_idx on public.games (story_id);
+create index if not exists games_updated_at_idx on public.games (updated_at desc);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -184,7 +198,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

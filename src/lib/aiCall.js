@@ -1,65 +1,98 @@
 // =============================================================================
-// AI Call — gọi thẳng Google AI Studio bằng Gemini API Key riêng của người
-// dùng (lưu ở localStorage). Không còn backend trung gian nào giữ key hộ —
-// mỗi người dùng phải tự nhập key riêng (miễn phí) ở phần Cài đặt AI.
+// AI Call — gọi thẳng tới nhà cung cấp AI bằng key riêng của người dùng (lưu ở
+// localStorage). Không còn backend trung gian nào giữ key hộ — mỗi người dùng
+// phải tự nhập key riêng ở phần Cài đặt AI.
+//
+// Hỗ trợ 2 nhà cung cấp:
+//   - "gemini": gọi thẳng Google AI Studio (mặc định, miễn phí, có bật CORS
+//     cho trình duyệt nên gọi thẳng được).
+//   - "custom": chuẩn OpenAI Chat Completions. Với các dịch vụ ĐÃ XÁC MINH
+//     không bật CORS cho trình duyệt (Stali, EcoAPI — kiểm chứng bằng
+//     preflight request thật, khác Gemini/OpenAI/Claude chính chủ), phải đi
+//     qua trạm trung chuyển `/api/ai-relay?provider=...` (Vercel Serverless,
+//     xem api/ai-relay.js) — CHỈ hoạt động sau khi deploy lên Vercel, KHÔNG
+//     chạy được ở `npm run dev` local. Nếu người dùng nhập một Base URL khác
+//     (không nằm trong KNOWN_RELAY_PROVIDERS), gọi thẳng — có thể lỗi CORS
+//     tuỳ nhà cung cấp đó có bật hay không, không có gì đảm bảo.
 // =============================================================================
 
 const KEY_STORAGE = "fiction_ai_gemini_key";
 const MODEL_STORAGE = "fiction_ai_gemini_model";
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
-export function getCustomKey() {
+const PROVIDER_STORAGE = "fiction_ai_provider";
+const CUSTOM_PROVIDER_ID_STORAGE = "fiction_ai_custom_provider_id";
+const CUSTOM_BASEURL_STORAGE = "fiction_ai_custom_baseurl";
+const CUSTOM_KEY_STORAGE = "fiction_ai_custom_key";
+const CUSTOM_MODEL_STORAGE = "fiction_ai_custom_model";
+
+// Nhà cung cấp đã xác minh không bật CORS trình duyệt — bắt buộc đi qua relay.
+export const KNOWN_RELAY_PROVIDERS = {
+  stali: { label: "Stali", baseUrl: "https://api.stali.vn/v1" },
+  ecoapi: { label: "EcoAPI", baseUrl: "https://ecoapi.net/v1" },
+};
+
+function lsGet(key, fallback = "") {
   try {
-    return localStorage.getItem(KEY_STORAGE) || "";
+    return localStorage.getItem(key) || fallback;
   } catch {
-    return "";
+    return fallback;
   }
 }
-export function setCustomKey(key) {
+function lsSet(key, value) {
   try {
-    if (key) localStorage.setItem(KEY_STORAGE, key);
-    else localStorage.removeItem(KEY_STORAGE);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch {}
-}
-export function getCustomModel() {
-  try {
-    return localStorage.getItem(MODEL_STORAGE) || DEFAULT_MODEL;
-  } catch {
-    return DEFAULT_MODEL;
-  }
-}
-export function setCustomModel(model) {
-  try {
-    localStorage.setItem(MODEL_STORAGE, model || DEFAULT_MODEL);
-  } catch {}
-}
-export function hasCustomKey() {
-  return !!getCustomKey();
 }
 
-// Test kết nối tới Google AI Studio với key + model cụ thể
-export async function testGeminiConnection(key, model) {
-  if (!key) throw new Error("Chưa nhập API Key.");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
-  )}:generateContent?key=${encodeURIComponent(key)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: "ping, hãy trả: ok" }] }],
-    }),
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Lỗi ${res.status}: ${t.slice(0, 240)}`);
+// ---------- Gemini (mặc định) ----------
+export function getCustomKey() {
+  return lsGet(KEY_STORAGE);
+}
+export function setCustomKey(key) {
+  lsSet(KEY_STORAGE, key);
+}
+export function getCustomModel() {
+  return lsGet(MODEL_STORAGE, DEFAULT_MODEL);
+}
+export function setCustomModel(model) {
+  lsSet(MODEL_STORAGE, model || DEFAULT_MODEL);
+}
+
+// ---------- Nhà cung cấp đang chọn ----------
+export function getAIProvider() {
+  const p = lsGet(PROVIDER_STORAGE, "gemini");
+  return p === "custom" ? "custom" : "gemini";
+}
+export function setAIProvider(provider) {
+  lsSet(PROVIDER_STORAGE, provider === "custom" ? "custom" : "gemini");
+}
+
+// ---------- Cổng API tuỳ chỉnh (OpenAI-compatible) ----------
+// providerId: "stali" | "ecoapi" (đi qua relay) hoặc "other" (URL tự do, gọi thẳng).
+export function getCustomProviderConfig() {
+  return {
+    providerId: lsGet(CUSTOM_PROVIDER_ID_STORAGE, "other"),
+    baseUrl: lsGet(CUSTOM_BASEURL_STORAGE),
+    key: lsGet(CUSTOM_KEY_STORAGE),
+    model: lsGet(CUSTOM_MODEL_STORAGE),
+  };
+}
+export function setCustomProviderConfig({ providerId, baseUrl, key, model }) {
+  lsSet(CUSTOM_PROVIDER_ID_STORAGE, providerId || "other");
+  lsSet(CUSTOM_BASEURL_STORAGE, (baseUrl || "").trim().replace(/\/+$/, ""));
+  lsSet(CUSTOM_KEY_STORAGE, (key || "").trim());
+  lsSet(CUSTOM_MODEL_STORAGE, (model || "").trim());
+}
+
+export function hasCustomKey() {
+  if (getAIProvider() === "custom") {
+    const { providerId, baseUrl, key, model } = getCustomProviderConfig();
+    if (!key || !model) return false;
+    return providerId === "other" ? !!baseUrl : !!KNOWN_RELAY_PROVIDERS[providerId];
   }
-  const data = await res.json().catch(() => ({}));
-  const text = (data?.candidates?.[0]?.content?.parts || [])
-    .map((p) => p.text || "")
-    .join("");
-  if (!text) throw new Error("Phản hồi rỗng — API Key có thể không hợp lệ.");
-  return true;
+  return !!getCustomKey();
 }
 
 function safeJsonParse(text) {
@@ -76,18 +109,30 @@ function safeJsonParse(text) {
   throw new Error("Không phân tích được JSON từ AI: " + text.slice(0, 200));
 }
 
-async function callGemini(prompt, jsonSchema) {
+function jsonInstructionSuffix(jsonSchema, compact) {
+  if (!jsonSchema) return "";
+  return `\n\nTrả JSON đúng schema sau (KHÔNG kèm giải thích):\n${JSON.stringify(jsonSchema)}${
+    compact
+      ? "\n\nLẦN TRƯỚC PHẢN HỒI ĐÃ BỊ CẮT. Hãy trả lại TOÀN BỘ JSON, viết súc tích, mỗi trường tối đa 1-2 câu và tuyệt đối không bỏ dở chuỗi JSON."
+      : ""
+  }`;
+}
+
+async function callGeminiNative(prompt, jsonSchema, { compact = false } = {}) {
   const key = getCustomKey();
   const model = getCustomModel();
-  let finalPrompt = prompt;
-  if (jsonSchema) {
-    finalPrompt = `${prompt}\n\nTrả JSON đúng schema sau (KHÔNG kèm giải thích):\n${JSON.stringify(jsonSchema)}`;
-  }
+  const finalPrompt = prompt + jsonInstructionSuffix(jsonSchema, compact);
   const body = {
     contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
   };
   if (jsonSchema) {
-    body.generationConfig = { responseMimeType: "application/json" };
+    // Mặc định của một số model khá thấp và có thể cắt JSON giữa chuỗi.
+    // 8192 đủ cho các schema lớn (concept/architecture/scene cards) nhưng vẫn
+    // giữ phản hồi trong giới hạn hợp lý của các model Gemini phổ biến.
+    body.generationConfig = {
+      responseMimeType: "application/json",
+      maxOutputTokens: 8192,
+    };
   }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
@@ -105,16 +150,128 @@ async function callGemini(prompt, jsonSchema) {
   const text = (data?.candidates?.[0]?.content?.parts || [])
     .map((p) => p.text || "")
     .join("");
-  return text;
+  return {
+    text,
+    finishReason: data?.candidates?.[0]?.finishReason || "",
+  };
 }
 
-// Gọi AI — bắt buộc phải có Gemini API Key riêng (không còn fallback qua backend).
-export async function aiCall(prompt, { jsonSchema } = {}) {
-  if (!getCustomKey()) {
+// Cổng API tuỳ chỉnh, chuẩn OpenAI Chat Completions — dùng cho các dịch vụ
+// như Stali, EcoAPI (chỉ cần chọn nhà cung cấp + API Key + tên model), hoặc
+// một Base URL tự nhập khác (gọi thẳng, best-effort).
+async function callOpenAICompatible(prompt, jsonSchema, { compact = false } = {}) {
+  const { providerId, baseUrl, key, model } = getCustomProviderConfig();
+  if (!key || !model || (providerId === "other" && !baseUrl)) {
     throw new Error(
-      "Chưa có Gemini API Key. Vào Cài đặt AI để nhập key riêng (miễn phí) trước khi dùng tính năng này."
+      "Chưa cấu hình đủ Cổng API tuỳ chỉnh (Nhà cung cấp/Base URL / API Key / Model). Vào Cài đặt AI để nhập đầy đủ."
     );
   }
-  const text = await callGemini(prompt, jsonSchema);
-  return jsonSchema ? safeJsonParse(text) : text;
+  const finalPrompt = prompt + jsonInstructionSuffix(jsonSchema, compact);
+  const body = {
+    model,
+    messages: [{ role: "user", content: finalPrompt }],
+    max_tokens: 8192,
+  };
+  if (jsonSchema) body.response_format = { type: "json_object" };
+
+  const isKnownRelay = KNOWN_RELAY_PROVIDERS[providerId];
+  const url = isKnownRelay ? `/api/ai-relay?provider=${providerId}` : `${baseUrl}/chat/completions`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Cổng API HTTP ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  const text = data?.choices?.[0]?.message?.content || "";
+  return {
+    text,
+    finishReason: data?.choices?.[0]?.finish_reason || "",
+  };
+}
+
+async function callProvider(prompt, jsonSchema, opts) {
+  return getAIProvider() === "custom"
+    ? callOpenAICompatible(prompt, jsonSchema, opts)
+    : callGeminiNative(prompt, jsonSchema, opts);
+}
+
+// Test kết nối với thông số NHÁP (chưa lưu) từ màn hình Cài đặt AI.
+export async function testAIConnection({ provider, key, model, baseUrl, providerId }) {
+  if (provider === "custom") {
+    if (!key || !model || (providerId === "other" && !baseUrl)) throw new Error("Chưa nhập đủ Nhà cung cấp/Base URL / API Key / Model.");
+    const isKnownRelay = KNOWN_RELAY_PROVIDERS[providerId];
+    const url = isKnownRelay ? `/api/ai-relay?provider=${providerId}` : `${baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: "ping, hãy trả: ok" }], max_tokens: 32 }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`Lỗi ${res.status}: ${t.slice(0, 240)}`);
+    }
+    const data = await res.json().catch(() => ({}));
+    const text = data?.choices?.[0]?.message?.content || "";
+    if (!text) throw new Error("Phản hồi rỗng — kiểm tra lại Base URL/API Key/Model.");
+    return true;
+  }
+  // Gemini
+  if (!key) throw new Error("Chưa nhập API Key.");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping, hãy trả: ok" }] }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Lỗi ${res.status}: ${t.slice(0, 240)}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+  if (!text) throw new Error("Phản hồi rỗng — API Key có thể không hợp lệ.");
+  return true;
+}
+
+// Giữ lại tên cũ (tương thích ngược) — mặc định test Gemini.
+export async function testGeminiConnection(key, model) {
+  return testAIConnection({ provider: "gemini", key, model });
+}
+
+// Gọi AI — bắt buộc phải có cấu hình (Gemini key, hoặc Cổng API tuỳ chỉnh đầy đủ).
+export async function aiCall(prompt, { jsonSchema } = {}) {
+  if (!hasCustomKey()) {
+    throw new Error(
+      getAIProvider() === "custom"
+        ? "Chưa cấu hình đủ Cổng API tuỳ chỉnh. Vào Cài đặt AI để nhập Base URL/API Key/Model."
+        : "Chưa có Gemini API Key. Vào Cài đặt AI để nhập key riêng (miễn phí) trước khi dùng tính năng này."
+    );
+  }
+  const first = await callProvider(prompt, jsonSchema, {});
+  if (!jsonSchema) return first.text;
+
+  try {
+    return safeJsonParse(first.text);
+  } catch (firstError) {
+    // JSON có thể bị cắt vì MAX_TOKENS hoặc đôi khi model tạo ký tự JSON lỗi.
+    // Thử lại một lần với yêu cầu súc tích sẽ an toàn hơn việc cố "vá" một
+    // chuỗi đang dở, vì vá có thể âm thầm tạo dữ liệu sai/thiếu.
+    const retry = await callProvider(prompt, jsonSchema, { compact: true });
+    try {
+      return safeJsonParse(retry.text);
+    } catch {
+      const reason = retry.finishReason || first.finishReason;
+      const suffix = reason ? ` (Kết thúc: ${reason})` : "";
+      throw new Error(`${firstError.message}${suffix}. AI đã thử trả lại JSON lần hai nhưng vẫn chưa hoàn chỉnh.`);
+    }
+  }
 }
