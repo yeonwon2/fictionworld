@@ -211,22 +211,36 @@ export const ENDING_TYPES = {
   BAD_END: { label: 'Kết Thúc Xấu', color: '#ff4d4d', icon: '💀' },
 };
 
-// Chỉ dùng các style DiceBear kiểu chân dung/phác hoạ trưởng thành — tránh
-// style hoạt hình trẻ con (adventurer/pixel-art/croodles/fun-emoji/bottts/
-// big-smile/thumbs đã bị loại khỏi danh sách).
+// Dùng ảnh avatar tĩnh đã có sẵn trên LilyHub (public/avatars, WebP nhẹ ~10KB, phục vụ qua
+// Vercel CDN) thay vì gọi API DiceBear bên ngoài - nhất quán với avatar bình luận trên chính
+// LilyHub, không phụ thuộc dịch vụ ngoài, không rò domain lạ ra file HTML đã xuất.
 export const PRESET_AVATARS = [
-  'https://api.dicebear.com/7.x/lorelei/svg?seed=Sage&backgroundColor=2b1d10,7a5a3a&radius=12',
-  'https://api.dicebear.com/7.x/notionists/svg?seed=Scholar&backgroundColor=1e293b,4a6a8a&radius=12',
-  'https://api.dicebear.com/7.x/micah/svg?seed=Stranger&backgroundColor=241140,6b4d8f&radius=12',
-  'https://api.dicebear.com/7.x/personas/svg?seed=Noble&backgroundColor=0a2818,2f6f6a&radius=12',
-  'https://api.dicebear.com/7.x/lorelei/svg?seed=Wanderer&backgroundColor=2a0d0d,9a5b2e&radius=12',
-  'https://api.dicebear.com/7.x/notionists/svg?seed=Dreamer&backgroundColor=1a0613,6b4d8f&radius=12',
-  'https://api.dicebear.com/7.x/micah/svg?seed=Hero&backgroundColor=0f172a,3d5a80&radius=12',
-  'https://api.dicebear.com/7.x/personas/svg?seed=Machine&backgroundColor=04140d,5c7a3a&radius=12',
+  'https://www.lilyhub.top/avatars/a13.webp',
+  'https://www.lilyhub.top/avatars/a14.webp',
+  'https://www.lilyhub.top/avatars/a15.webp',
+  'https://www.lilyhub.top/avatars/a16.webp',
+  'https://www.lilyhub.top/avatars/a17.webp',
+  'https://www.lilyhub.top/avatars/a18.webp',
+  'https://www.lilyhub.top/avatars/a19.webp',
+  'https://www.lilyhub.top/avatars/a20.webp',
+  'https://www.lilyhub.top/avatars/a22.webp',
+  'https://www.lilyhub.top/avatars/a23.webp',
+  'https://www.lilyhub.top/avatars/a24.webp',
+  'https://www.lilyhub.top/avatars/a25.webp',
+  'https://www.lilyhub.top/avatars/a26.webp',
+  'https://www.lilyhub.top/avatars/a27.webp',
+  'https://www.lilyhub.top/avatars/a28.webp',
 ];
 
+function hashSeed(seed) {
+  const s = String(seed || 'Hero');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
 export function dicebearAvatar(seed) {
-  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed || 'Hero')}&backgroundColor=1e293b,4a6a8a&radius=12`;
+  return PRESET_AVATARS[hashSeed(seed) % PRESET_AVATARS.length];
 }
 
 export function statsArrayToObject(arr) {

@@ -37,7 +37,8 @@ const ENGINE_JS = [
   '  var ENDINGS = { TRUE_END:{l:"Kết Thúc Thật",i:"V"}, GOOD_END:{l:"Kết Thúc Tốt",i:"*"}, NORMAL_END:{l:"Kết Thúc Thường",i:"="}, BAD_END:{l:"Kết Thúc Xấu",i:"X"} };',
   '  var STAT_STYLES={hp:{c:"#ff4d6d",i:"❤"},mp:{c:"#3b82f6",i:"💧"},mana:{c:"#3b82f6",i:"💧"},gold:{c:"#fbbf24",i:"🪙"},money:{c:"#fbbf24",i:"🪙"},reputation:{c:"#a855f7",i:"⭐"},san:{c:"#22d3ee",i:"🧠"},stamina:{c:"#f97316",i:"🔥"},exp:{c:"#a3e635",i:"✨"},pastKnowledge:{c:"#38bdf8",i:"📖"}};',
   '  function statStyle(k){ return STAT_STYLES[k]||{c:"#94a3b8",i:"⚪"}; }',
-  '  function dicebear(seed){ return "https://api.dicebear.com/7.x/adventurer/svg?seed="+encodeURIComponent(seed||"Hero")+"&backgroundColor=0f172a,22d3ee&radius=12"; }',
+  '  var LILYHUB_AVATARS=["https://www.lilyhub.top/avatars/a13.webp","https://www.lilyhub.top/avatars/a14.webp","https://www.lilyhub.top/avatars/a15.webp","https://www.lilyhub.top/avatars/a16.webp","https://www.lilyhub.top/avatars/a17.webp","https://www.lilyhub.top/avatars/a18.webp","https://www.lilyhub.top/avatars/a19.webp","https://www.lilyhub.top/avatars/a20.webp","https://www.lilyhub.top/avatars/a22.webp","https://www.lilyhub.top/avatars/a23.webp","https://www.lilyhub.top/avatars/a24.webp","https://www.lilyhub.top/avatars/a25.webp","https://www.lilyhub.top/avatars/a26.webp","https://www.lilyhub.top/avatars/a27.webp","https://www.lilyhub.top/avatars/a28.webp"];',
+  '  function dicebear(seed){ var s=String(seed||"Hero"); var h=0; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return LILYHUB_AVATARS[h%LILYHUB_AVATARS.length]; }',
   '',
   '  var SAVE_KEY = "rpg_save_" + (meta.title||"game").replace(/[^a-z0-9]/gi,"_");',
   '  var state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{} };',
@@ -301,7 +302,7 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-cbtn:hover{filter:brightness(1.15);}
 .rpg-cbtn:disabled{opacity:0.5;cursor:not-allowed;}
 .rpg-combat-over{text-align:center;font-size:18px;font-weight:bold;color:#39d14a;display:flex;flex-direction:column;align-items:center;gap:12px;}
-@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;} }
+@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;max-height:38vh;overflow-y:auto;padding-right:4px;} }
 `;
 
 export function generateStandaloneHTML(gameData) {
