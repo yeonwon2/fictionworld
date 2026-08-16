@@ -218,13 +218,13 @@
 .rpg-choices-toggle svg{transition:transform .2s ease;}
 
 .rpg-vn-choices{padding-top:14px;display:flex;flex-direction:column;gap:11px;}
-.rpg-vn-choice{display:flex;align-items:flex-start;gap:11px;text-align:left;min-height:58px;border-radius:var(--rpg-btn-radius, 16px);padding:13px 16px;font-size:15px;background:color-mix(in srgb, var(--rpg-panel-2) 62%, transparent);color:var(--rpg-text);border:1px solid color-mix(in srgb, var(--rpg-accent2) 16%, transparent);cursor:pointer;transition:transform .18s ease, background .18s ease, box-shadow .18s ease;animation:rpgFadeIn .3s ease both;}
+.rpg-vn-choice{display:flex;align-items:flex-start;gap:11px;text-align:left;min-height:58px;border-radius:var(--rpg-btn-radius, 16px);padding:15px 16px;font-size:15px;line-height:1.55;background:color-mix(in srgb, var(--rpg-panel-2) 62%, transparent);color:var(--rpg-text);border:1px solid color-mix(in srgb, var(--rpg-accent2) 16%, transparent);cursor:pointer;transition:transform .18s ease, background .18s ease, box-shadow .18s ease;animation:rpgFadeIn .3s ease both;}
 .rpg-vn-choice:not(:disabled):hover{background:color-mix(in srgb, var(--rpg-accent2) 14%, var(--rpg-panel-2));box-shadow:0 6px 18px rgba(0,0,0,.18);}
 .rpg-vn-choice:not(:disabled):active{transform:scale(.98);}
 .rpg-vn-choice:disabled{opacity:.5;cursor:not-allowed;border-style:dashed;color:var(--rpg-muted);}
 .rpg-vn-choice-idx{flex-shrink:0;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:color-mix(in srgb, var(--rpg-accent2) 22%, transparent);color:var(--rpg-accent2);margin-top:1px;}
 .rpg-vn-choice-body{flex:1;min-width:0;}
-.rpg-vn-choice-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.rpg-vn-choice-row{display:flex;align-items:flex-start;gap:8px 8px;flex-wrap:wrap;}
 .rpg-vn-choice-label{font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;}
 .rpg-vn-choice-dice{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:color-mix(in srgb, var(--rpg-accent2) 16%, transparent);color:var(--rpg-accent2);}
 .rpg-vn-choice-reason{font-size:11px;margin-top:4px;color:var(--rpg-muted);}
