@@ -180,11 +180,22 @@ create table if not exists public.games (
 create index if not exists games_story_id_idx on public.games (story_id);
 create index if not exists games_updated_at_idx on public.games (updated_at desc);
 
+-- Xưởng Theme: mẫu theme tự tạo (màu/font/hình dạng nút-khung/nền trang trí) —
+-- lưu riêng để dùng lại giữa nhiều game, độc lập với bảng games.
+create table if not exists public.custom_themes (
+  id uuid primary key default gen_random_uuid(),
+  name text not null default 'Theme mới',
+  vars jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists custom_themes_updated_at_idx on public.custom_themes (updated_at desc);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -198,7 +209,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

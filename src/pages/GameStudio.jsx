@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2 } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
+import ThemeWorkshop from "@/components/game-studio/ThemeWorkshop";
 import { newEmptyGame } from "@/lib/gameStudio/rpgThemes";
 import { listGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,7 +17,7 @@ const TABS = [
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
 
-function GameLibrary({ onOpen }) {
+function GameLibrary({ onOpen, onOpenThemeWorkshop }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -63,13 +64,21 @@ function GameLibrary({ onOpen }) {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Xưởng sản xuất game nhập vai AI — cho LilyHub.</p>
         </div>
-        <button
-          onClick={handleCreate}
-          disabled={creating}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shrink-0 disabled:opacity-60"
-        >
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Game mới
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onOpenThemeWorkshop}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent transition"
+          >
+            <Palette className="w-4 h-4" /> Xưởng Theme
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={creating}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-60"
+          >
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Game mới
+          </button>
+        </div>
       </header>
 
       {loading ? (
@@ -263,9 +272,13 @@ function GameEditor({ gameId, onBack }) {
 
 export default function GameStudio() {
   const [activeGameId, setActiveGameId] = useState(null);
+  const [view, setView] = useState("library"); // "library" | "theme-workshop"
 
   if (activeGameId) {
     return <GameEditor gameId={activeGameId} onBack={() => setActiveGameId(null)} />;
   }
-  return <GameLibrary onOpen={setActiveGameId} />;
+  if (view === "theme-workshop") {
+    return <ThemeWorkshop onBack={() => setView("library")} />;
+  }
+  return <GameLibrary onOpen={setActiveGameId} onOpenThemeWorkshop={() => setView("theme-workshop")} />;
 }

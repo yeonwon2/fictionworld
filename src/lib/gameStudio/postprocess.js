@@ -90,11 +90,18 @@ function cleanRandomEvents(evs) {
  *   mặc định vào lựa chọn không có statModifiers. Bật cho kịch bản AI sinh (AI
  *   dễ "lười" bỏ hệ quả); TẮT cho kịch bản viết tay (người viết có thể cố ý
  *   để lựa chọn thuần rẽ nhánh, không đổi điểm).
+ * @returns {{ nodes: Object, warnings: string[] }} — `warnings` liệt kê MỌI
+ *   targetNodeId trỏ tới cảnh không tồn tại (lỗi đánh số/nhãn kết thúc trong
+ *   kịch bản gốc) — trước đây các lựa chọn này bị ÂM THẦM chuyển về
+ *   "start_node" khiến người chơi tưởng game bị reset; giờ dẫn tới 1 ending
+ *   dùng chung "Thiếu cảnh" (broken_link_end) và được liệt kê rõ trong warnings
+ *   để người viết sửa lại kịch bản.
  */
 export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}) {
   const { forceNonEmptyModifiers = true } = options;
   const nodesMap = {};
   const ids = new Set();
+  const warnings = [];
   for (const n of Object.values(rawNodesMap || {})) {
     if (n && n.id) {
       if (!n.choices) n.choices = [];
@@ -129,7 +136,17 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
     n.randomEvents = cleanRandomEvents(n.randomEvents);
     if (n.endingType === "null" || n.endingType === "") n.endingType = null;
     for (const c of (n.choices || [])) {
-      if (c.targetNodeId && !ids.has(c.targetNodeId)) c.targetNodeId = "start_node";
+      if (c.targetNodeId && !ids.has(c.targetNodeId)) {
+        const refLabel = c.targetNodeId.startsWith("scene_") ? ("cảnh " + c.targetNodeId.slice(6))
+          : c.targetNodeId.startsWith("ending_") ? ('kết thúc "' + c.targetNodeId.slice(7) + '"')
+          : ('"' + c.targetNodeId + '"');
+        warnings.push('Cảnh "' + n.id + '" — lựa chọn "' + (c.text || "(không có chữ)") + '": trỏ tới ' + refLabel + ' nhưng không tồn tại trong kịch bản. Đã tạm dẫn tới ending "Thiếu cảnh" — kiểm tra lại số cảnh/nhãn kết thúc trong bản gốc.');
+        if (!ids.has("broken_link_end")) {
+          nodesMap["broken_link_end"] = { id: "broken_link_end", speaker: "", text: "(Đường dẫn bị thiếu trong kịch bản gốc — cảnh hoặc kết thúc được trỏ tới chưa được viết. Hãy kiểm tra lại số cảnh/nhãn kết thúc rồi sản xuất lại.)", bgImage: "", isEnding: true, endingType: "NORMAL_END", choices: [] };
+          ids.add("broken_link_end");
+        }
+        c.targetNodeId = "broken_link_end";
+      }
       if (!c.statRequirements) c.statRequirements = {};
       if (!c.statModifiers) c.statModifiers = {};
       if (forceNonEmptyModifiers && Object.keys(c.statModifiers).length === 0) {
@@ -145,6 +162,7 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
       }
       c.requiresItem = cleanStr(c.requiresItem);
       c.requiresFlag = cleanStr(c.requiresFlag);
+      c.requiresFlagAbsent = cleanStr(c.requiresFlagAbsent);
       c.grantFlag = cleanStr(c.grantFlag);
       c.grantItem = cleanStr(c.grantItem);
       c.removeItem = cleanStr(c.removeItem);
@@ -240,5 +258,5 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
     }
   }
 
-  return nodesMap;
+  return { nodes: nodesMap, warnings };
 }

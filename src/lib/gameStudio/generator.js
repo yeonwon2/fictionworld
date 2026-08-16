@@ -295,6 +295,7 @@ export async function generateGameScenario({ prompt, length, meta }) {
     for (const node of batchResult.value) rawNodesMap[node.id] = node;
   }
 
-  const nodes = normalizeAndRepair(rawNodesMap, blueprint.statKeys, cfg.minDepth);
-  return { meta: buildMeta(meta, blueprint.title), nodes };
+  const repaired = normalizeAndRepair(rawNodesMap, blueprint.statKeys, cfg.minDepth);
+  if (repaired.warnings.length) console.warn("[Xưởng Game] AI sinh ra targetNodeId lệch blueprint, đã tự vá:", repaired.warnings);
+  return { meta: buildMeta(meta, blueprint.title), nodes: repaired.nodes, warnings: repaired.warnings };
 }

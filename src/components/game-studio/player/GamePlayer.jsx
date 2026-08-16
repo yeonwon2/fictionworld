@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Info, RotateCcw, Lock, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices } from 'lucide-react';
-import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar } from '@/lib/gameStudio/rpgThemes';
+import { Info, RotateCcw, Lock, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, ChevronDown, ChevronUp } from 'lucide-react';
+import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 
@@ -34,6 +34,7 @@ export default function GamePlayer({ gameData }) {
   const [typed, setTyped] = useState('');
   const [typingDone, setTypingDone] = useState(false);
   const [activeTab, setActiveTab] = useState('stats');
+  const [panelOpen, setPanelOpen] = useState(false);
   const [systemPopup, setSystemPopup] = useState(null);
   const [events, setEvents] = useState([]);
   const [forceKey, setForceKey] = useState(0);
@@ -178,6 +179,9 @@ export default function GamePlayer({ gameData }) {
     if (c.requiresFlag && !rt.flags.includes(c.requiresFlag)) {
       return { ok: false, reason: 'Cần cờ: ' + c.requiresFlag };
     }
+    if (c.requiresFlagAbsent && rt.flags.includes(c.requiresFlagAbsent)) {
+      return { ok: false, reason: 'Chỉ khi chưa có cờ: ' + c.requiresFlagAbsent };
+    }
     return { ok: true };
   };
 
@@ -290,8 +294,9 @@ export default function GamePlayer({ gameData }) {
     setCombatActive(false);
     setDicePending(null);
   };
-  const themeStyle = {};
-  for (const k of Object.keys(theme.vars)) themeStyle[k] = theme.vars[k];
+  const themeStyle = meta.theme === 'custom' && meta.customTheme
+    ? customThemeStyle(meta.customTheme)
+    : { ...theme.vars };
   const endingMeta = ENDING_TYPES[node?.endingType];
   const showTabs = archetype !== 'none';
   const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg';
@@ -300,8 +305,7 @@ export default function GamePlayer({ gameData }) {
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
 
   return (
-    <div style={themeStyle} data-presentation={presentation} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative neon-border${shake ? ' animate-shake' : ''}`}>
-      <div className="rpg-cinematic-bg absolute inset-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: `url(${node?.bgImage || heroineArt})` }} />
+    <div style={themeStyle} data-presentation={presentation} data-bg-pattern={meta.theme === 'custom' ? (meta.customTheme?.bgPattern || 'plain') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative neon-border${shake ? ' animate-shake' : ''}`}>
       <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
         {/* Status bar */}
         <div className="flex justify-between items-start gap-2 rounded-xl p-2.5 flex-wrap" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 65%, transparent)', border: '1px solid var(--rpg-accent)44', backdropFilter: 'blur(10px)', boxShadow: '0 0 14px var(--rpg-accent)11' }}>
@@ -309,17 +313,6 @@ export default function GamePlayer({ gameData }) {
             <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" style={{ border: '2px solid var(--rpg-accent)', boxShadow: '0 0 10px var(--rpg-accent)66' }} />
             <div className="min-w-0">
               <div className="font-bold text-sm truncate" style={{ color: 'var(--rpg-text)' }}>{meta.player_name || 'Người Chơi'}</div>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {statsConfig.map((sc) => {
-                  const st = statStyle(sc.key);
-                  const Icon = STAT_ICONS[st.icon] || Circle;
-                  return (
-                    <span key={sc.key} title={sc.label} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: st.color + '1f', border: `1px solid ${st.color}66`, color: st.color, boxShadow: `0 0 6px ${st.color}33` }}>
-                      <Icon size={11} /> <span className="opacity-80 font-normal">{sc.label}</span> {rt.stats[sc.key] || 0}
-                    </span>
-                  );
-                })}
-              </div>
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
@@ -344,20 +337,40 @@ export default function GamePlayer({ gameData }) {
           </div>
         )}
 
-        {/* Tabs */}
+        {/* Tabs — thu gọn mặc định (đặc biệt trên điện thoại): panel chỉ số/túi
+            đồ/nhiệm vụ nếu luôn mở sẽ đẩy chân dung + lựa chọn xuống rất xa,
+            phải cuộn qua mới thấy. */}
         {showTabs && (
           <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--rpg-border)' }}>
             <div className="flex">
-              <TabBtn active={activeTab === 'stats'} onClick={() => setActiveTab('stats')} theme={theme}>Chỉ số</TabBtn>
-              {showInventoryTab && <TabBtn active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} theme={theme}><Package size={12} className="inline mr-1 -mt-0.5" />Túi đồ ({rt.inventory.length}/{archetype === 'mystery' ? mysterySlots : '∞'})</TabBtn>}
-              {showQuestTab && <TabBtn active={activeTab === 'quests'} onClick={() => setActiveTab('quests')} theme={theme}><ScrollText size={12} className="inline mr-1 -mt-0.5" />Nhiệm vụ ({Object.values(rt.quests).filter((q) => q.status === 'active').length})</TabBtn>}
+              <TabBtn active={panelOpen && activeTab === 'stats'} onClick={() => { setActiveTab('stats'); setPanelOpen(true); }} theme={theme}>Chỉ số</TabBtn>
+              {showInventoryTab && <TabBtn active={panelOpen && activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); setPanelOpen(true); }} theme={theme}><Package size={12} className="inline mr-1 -mt-0.5" />Túi đồ ({rt.inventory.length}/{archetype === 'mystery' ? mysterySlots : '∞'})</TabBtn>}
+              {showQuestTab && <TabBtn active={panelOpen && activeTab === 'quests'} onClick={() => { setActiveTab('quests'); setPanelOpen(true); }} theme={theme}><ScrollText size={12} className="inline mr-1 -mt-0.5" />Nhiệm vụ ({Object.values(rt.quests).filter((q) => q.status === 'active').length})</TabBtn>}
+              <button onClick={() => setPanelOpen((o) => !o)} className="px-2.5 flex items-center justify-center shrink-0" style={{ background: 'var(--rpg-panel-2)', color: 'var(--rpg-muted)' }} title={panelOpen ? 'Thu gọn' : 'Mở rộng'}>
+                {panelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
             </div>
+            {panelOpen && (
             <div className="p-2.5 text-xs" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)', color: 'var(--rpg-text)' }}>
               {activeTab === 'stats' && (
                 <div className="space-y-1.5">
-                  {statsConfig.map((sc) => (
-                    <div key={sc.key} className="flex justify-between"><span>{sc.label}</span><b>{rt.stats[sc.key] || 0}</b></div>
-                  ))}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {statsConfig.map((sc) => {
+                      const st = statStyle(sc.key);
+                      const Icon = STAT_ICONS[st.icon] || Circle;
+                      return (
+                        <div key={sc.key} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: 'var(--rpg-panel-2)', border: `1px solid ${st.color}33` }}>
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: st.color + '22', color: st.color }}>
+                            <Icon size={12} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[9px] truncate" style={{ color: 'var(--rpg-muted)' }}>{sc.label}</div>
+                            <div className="font-bold text-xs" style={{ color: 'var(--rpg-text)' }}>{rt.stats[sc.key] || 0}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   {archetype === 'isekai' && (
                     <>
                       {rt.flags.length > 0 && (
@@ -414,6 +427,7 @@ export default function GamePlayer({ gameData }) {
                 </div>
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -423,32 +437,11 @@ export default function GamePlayer({ gameData }) {
         )}
         {/* Scene */}
         {screen === 'scene' && node && !combatActive && (
-          <div className="rpg-story-panel flex flex-col flex-1 gap-3 rounded-2xl p-5 relative" style={{ background: 'linear-gradient(90deg, color-mix(in srgb, var(--rpg-panel) 62%, transparent) 0%, color-mix(in srgb, var(--rpg-panel) 24%, transparent) 58%, color-mix(in srgb, var(--rpg-panel) 8%, transparent) 100%)', border: '1px solid var(--rpg-accent)88', boxShadow: '0 12px 36px rgba(0,0,0,0.18)', backdropFilter: 'blur(2px)' }}>
-            {presentation === 'dialogue' && <img src={node.npcAvatar || meta.playerAvatar || heroineArt || dicebearAvatar(node.speaker)} alt={node.speaker || 'NPC'} className="rpg-npc-portrait" />}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-2.5 py-1 rounded-full" style={{ background: 'var(--rpg-accent2)22', color: 'var(--rpg-accent2)', border: '1px solid var(--rpg-accent2)66' }}>{node.speaker}</div>
-            </div>
-            <div className="text-base leading-relaxed whitespace-pre-wrap min-h-[80px] max-h-[38vh] sm:max-h-[46vh] overflow-y-auto pr-1 scrollbar-thin" style={{ color: 'var(--rpg-text)' }}>{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
-            {!typingDone && <button onClick={skipTyping} className="self-start text-xs px-2.5 py-1 rounded" style={{ border: '1px solid var(--rpg-border)', color: 'var(--rpg-muted)' }}>Bỏ qua ⏭</button>}
-            <div className="flex flex-col gap-2.5 mt-auto shrink-0">
-              {typingDone && (node.choices || []).map((c, i) => {
-                const st = choiceStatus(c);
-                const lbl = c.label ? CHOICE_LABELS[c.label] : null;
-                return (
-                  <button key={i} disabled={!st.ok} onClick={() => choose(c)} className="rpg-choice-btn text-left rounded-xl px-4 py-3 text-sm flex flex-col gap-1" style={st.ok ? { background: 'var(--rpg-panel-2)', color: 'var(--rpg-text)', border: '1px solid var(--rpg-accent)55' } : { background: 'transparent', color: 'var(--rpg-muted)', border: '2px dashed var(--rpg-border)', opacity: 0.6, cursor: 'not-allowed' }}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {!st.ok && <Lock size={14} className="shrink-0" />}
-                      {lbl && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: lbl.color + '22', color: lbl.color }}>[{lbl.text}]</span>}
-                      {c.diceRoll && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: '#a855f722', color: '#c084fc' }}><Dices size={11} /> {statsConfig.find((s) => s.key === c.diceRoll.stat)?.label || c.diceRoll.stat || 'May rủi'} ≥{c.diceRoll.difficulty}</span>}
-                      <span className="min-w-0 break-words">{c.text}</span>
-                    </div>
-                    {!st.ok && <div className="text-[11px] mt-0.5">🔒 {st.reason}</div>}
-                  </button>
-                );
-              })}
-              {typingDone && (node.choices || []).length === 0 && <p className="text-xs italic" style={{ color: 'var(--rpg-muted)' }}>Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
-            </div>
-          </div>
+          <VNScenePanel
+            node={node} typed={typed} typingDone={typingDone} skipTyping={skipTyping}
+            choiceStatus={choiceStatus} choose={choose} statsConfig={statsConfig}
+            defaultNpcAvatar={meta.defaultNpcAvatar}
+          />
         )}
 
         {/* Game Over */}
@@ -492,13 +485,61 @@ export default function GamePlayer({ gameData }) {
         </div>
       )}
 
-      {/* Event toasts */}
-      <div className="absolute top-3 right-3 z-20 flex flex-col gap-2 pointer-events-none">
+      {/* Event toasts — fixed theo viewport (không theo cuộn trang) để luôn thấy được kể cả khi khung game rất cao trên điện thoại */}
+      <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-[calc(100%-24px)] max-w-sm" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
         {events.map((e) => (
-          <div key={e.id} className="rounded-lg px-3 py-2 text-xs font-medium shadow-lg animate-in slide-in-from-right" style={{ background: 'color-mix(in srgb, var(--rpg-accent) 90%, transparent)', color: 'var(--rpg-panel)', border: '1px solid var(--rpg-border)' }}>
+          <div key={e.id} className="rounded-lg px-3 py-2 text-xs font-medium shadow-lg animate-in slide-in-from-bottom w-full text-center" style={{ background: 'color-mix(in srgb, var(--rpg-accent) 90%, transparent)', color: 'var(--rpg-panel)', border: '1px solid var(--rpg-border)' }}>
             {e.icon} {e.text}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// Khung kiến trúc Visual Novel — 1 khối chia 3 vùng cố định (chân dung / lời
+// thoại / lựa chọn) thay cho kiểu ảnh nền mờ-phủ chữ cũ. Không có ảnh nhân vật
+// (node.npcAvatar) → hiện gradient theo màu theme + chữ cái đầu tên người nói,
+// KHÔNG dùng ảnh stock mặc định — để không phụ thuộc ảnh ngoài khi xuất file.
+export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar }) {
+  const art = node.npcAvatar || defaultNpcAvatar || node.bgImage || '';
+  const hasArt = !!art;
+  const initial = (node.speaker || '?').trim().charAt(0).toUpperCase() || '?';
+  return (
+    <div className="rpg-vn-frame flex flex-col flex-1 rounded-2xl overflow-hidden relative">
+      <div className="rpg-vn-portrait relative shrink-0">
+        {hasArt ? (
+          <img src={art} alt={node.speaker || ''} className="rpg-vn-portrait-img" />
+        ) : (
+          <div className="rpg-vn-portrait-fallback"><span className="rpg-vn-monogram">{initial}</span></div>
+        )}
+        {node.speaker && (
+          <div className="rpg-vn-speaker-scrim">
+            <span className="rpg-vn-speaker-tag">{node.speaker}</span>
+          </div>
+        )}
+      </div>
+      <div className="rpg-vn-dialogue">
+        <div className="rpg-vn-text scrollbar-thin">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
+        {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
+      </div>
+      <div className="rpg-vn-choices">
+        {typingDone && (node.choices || []).map((c, i) => {
+          const st = choiceStatus(c);
+          const lbl = c.label ? CHOICE_LABELS[c.label] : null;
+          return (
+            <button key={i} disabled={!st.ok} onClick={() => choose(c)} className="rpg-vn-choice">
+              <div className="flex items-center gap-2 flex-wrap">
+                {!st.ok && <Lock size={13} className="shrink-0" />}
+                {lbl && <span className="rpg-vn-choice-label" style={{ background: lbl.color + '22', color: lbl.color }}>[{lbl.text}]</span>}
+                {c.diceRoll && <span className="rpg-vn-choice-dice"><Dices size={11} /> {statsConfig.find((s) => s.key === c.diceRoll.stat)?.label || c.diceRoll.stat || 'May rủi'} ≥{c.diceRoll.difficulty}</span>}
+                <span className="min-w-0 break-words">{c.text}</span>
+              </div>
+              {!st.ok && <div className="rpg-vn-choice-reason">🔒 {st.reason}</div>}
+            </button>
+          );
+        })}
+        {typingDone && (node.choices || []).length === 0 && <p className="rpg-vn-empty">Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
       </div>
     </div>
   );

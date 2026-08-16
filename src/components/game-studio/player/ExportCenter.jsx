@@ -25,7 +25,13 @@ export default function ExportCenter({ gameData, setGameData }) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      toast({ title: 'Đã tải file HTML offline', description: 'Engine, dữ liệu và toàn bộ hình ảnh đã được đóng gói trong một file.' });
+      const failCount = offlineGame.meta?.offlineAssetFailures?.length || 0;
+      toast(failCount ? {
+        variant: 'destructive',
+        title: `Đã tải file, nhưng ${failCount} ảnh không đóng gói được`,
+        description: 'Các ảnh này là link ngoài bị chặn hoặc đã hỏng — cảnh liên quan sẽ hiện gradient theo màu theme thay vì ảnh vỡ. Xem console (F12) để biết ảnh nào.',
+      } : { title: 'Đã tải file HTML offline', description: 'Engine, dữ liệu và toàn bộ hình ảnh đã được đóng gói trong một file.' });
+      if (failCount) console.warn('Ảnh không đóng gói được khi xuất HTML:', offlineGame.meta.offlineAssetFailures);
     } catch (err) {
       toast({ variant: 'destructive', title: 'Không thể xuất offline', description: err.message });
     } finally {
@@ -41,7 +47,10 @@ export default function ExportCenter({ gameData, setGameData }) {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-      toast({ title: 'Đã sao chép mã iframe' });
+      const failCount = offlineGame.meta?.offlineAssetFailures?.length || 0;
+      toast(failCount
+        ? { variant: 'destructive', title: `Đã sao chép, nhưng ${failCount} ảnh không đóng gói được`, description: 'Cảnh liên quan sẽ hiện gradient theo màu theme thay vì ảnh vỡ.' }
+        : { title: 'Đã sao chép mã iframe' });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Không thể tạo iframe offline', description: err.message });
     } finally {

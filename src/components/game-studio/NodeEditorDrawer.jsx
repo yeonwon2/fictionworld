@@ -8,8 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Trash2 } from 'lucide-react';
 import { ENDING_TYPES, makeId } from '@/lib/gameStudio/rpgThemes';
+import FileUrlInput from '@/components/FileUrlInput';
 
-export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetype, open, onClose, onChange }) {
+export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetype, defaultNpcAvatar, open, onClose, onChange }) {
   if (!node) return null;
   const arch = archetype || 'none';
 
@@ -126,16 +127,36 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tên người nói (Speaker)</Label>
-              <Input value={node.speaker || ''} onChange={(e) => onChange({ speaker: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ảnh nền (Background URL)</Label>
-              <Input value={node.bgImage || ''} onChange={(e) => onChange({ bgImage: e.target.value })} placeholder="https://images.unsplash.com/..." />
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tên người nói (Speaker)</Label>
+            <Input value={node.speaker || ''} onChange={(e) => onChange({ speaker: e.target.value })} />
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ảnh nhân vật riêng cho cảnh này (tuỳ chọn — để trống nếu dùng ảnh chung)</Label>
+            <FileUrlInput value={node.npcAvatar || ''} onChange={(url) => onChange({ npcAvatar: url })} preview />
+            {node.npcAvatar ? (
+              <p className="text-[10px] text-amber-600">Cảnh này đang dùng ảnh riêng — sẽ ưu tiên hơn "Ảnh nhân vật mặc định" đặt ở Cấu hình chung.</p>
+            ) : defaultNpcAvatar ? (
+              <div className="flex items-center gap-2 text-[10px] text-emerald-600">
+                <img src={defaultNpcAvatar} alt="" className="w-8 h-8 rounded object-cover border border-border" />
+                <span>Đang tự dùng "Ảnh nhân vật mặc định" (đặt ở Cấu hình chung). Tải ảnh riêng ở đây nếu muốn đè lên chỉ cảnh này.</span>
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">
+                Chưa có ảnh — màn hình chơi sẽ hiện gradient theo màu theme (không dùng ảnh mặc định). Đặt "Ảnh nhân vật mặc định" ở Cấu hình chung để áp dụng cho cả game, hoặc tải ảnh riêng ở đây chỉ cho cảnh này.
+              </p>
+            )}
+          </div>
+
+          {node.bgImage && !node.npcAvatar && (
+            <details className="text-xs" open>
+              <summary className="cursor-pointer text-muted-foreground select-none">Ảnh nền cũ (đang dùng tạm làm ảnh nhân vật vì chưa có "Ảnh nhân vật" ở trên)</summary>
+              <div className="mt-1.5">
+                <FileUrlInput value={node.bgImage || ''} onChange={(url) => onChange({ bgImage: url })} preview />
+              </div>
+            </details>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-xs">Lời dẫn truyện (Scene Text)</Label>
@@ -361,6 +382,10 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
                           <div className="space-y-1">
                             <Label className="text-[10px] text-sky-600">Cần Story Flag</Label>
                             <Input value={c.requiresFlag || ''} onChange={(e) => updateChoice(idx, { requiresFlag: e.target.value })} className="h-8 text-xs" placeholder="requiresFlag" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-sky-600">Chỉ khi CHƯA có Flag</Label>
+                            <Input value={c.requiresFlagAbsent || ''} onChange={(e) => updateChoice(idx, { requiresFlagAbsent: e.target.value })} className="h-8 text-xs" placeholder="requiresFlagAbsent" />
                           </div>
                           <div className="space-y-1">
                             <Label className="text-[10px] text-sky-600">Đặt Story Flag</Label>

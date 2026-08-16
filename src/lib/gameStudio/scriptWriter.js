@@ -22,6 +22,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 → <Tên chỉ số> -<số>
 → Cờ: <ten_co_khong_dau_khong_cach>
 → Cần cờ: <ten_co>
+→ Cần không có cờ: <ten_co>
 → Vật phẩm: <tên vật phẩm>
 → Cần vật phẩm: <tên vật phẩm>
 → Cần <Tên chỉ số> >= <số>
@@ -42,6 +43,9 @@ QUY TẮC:
 - Mỗi lựa chọn PHẢI có ít nhất 1 dòng "→ <Tên chỉ số> +N/-N" (trừ khi cố ý là lựa chọn thuần rẽ nhánh không đổi điểm).
 - Nếu lựa chọn không ghi "→ Đến cảnh N" hay "→ Kết thúc nhãn", nó TỰ ĐỘNG dẫn tới cảnh kế tiếp theo thứ tự — chỉ cần ghi rõ khi muốn rẽ nhánh khác thường hoặc dẫn tới kết thúc.
 - PHẢI có ít nhất 1 khối "## KẾT THÚC" ở cuối, được một lựa chọn nào đó trỏ tới bằng "→ Kết thúc <nhãn>".
+- "→ Đến cảnh N" CHỈ được dùng khi "## CẢNH N" THẬT SỰ tồn tại trong chính kịch bản đang viết — TUYỆT ĐỐI không bịa số cảnh chưa viết tới, kể cả khi đó là số cảnh "hợp lý theo mạch truyện". "→ Kết thúc <nhãn>" cũng phải khớp Y HỆT một khối "## KẾT THÚC <nhãn>" có thật.
+- Loại kết thúc trong [ ] CHỈ được là TRUE_END, GOOD_END, NORMAL_END, hoặc BAD_END — không tự đặt loại khác (vd không dùng [SAD_END], [SECRET_END]...).
+- MỖI lựa chọn CHỈ được có ĐÚNG MỘT "→ Đến cảnh"/"→ Kết thúc" — TUYỆT ĐỐI không viết cú pháp điều kiện kiểu "→ Nếu có cờ X: Đến cảnh Y" trong 1 dòng. Muốn rẽ nhánh theo cờ/chỉ số, hãy tách thành 2 lựa chọn RIÊNG (vd cùng câu thoại nhưng 1 khoá bằng "Cần cờ: X", 1 khoá bằng "Cần không có cờ: X"), mỗi lựa chọn tự có "→ Đến cảnh"/"→ Kết thúc" của riêng nó.
 - Tên chỉ số đặt tự do (tiếng Việt hoặc tiếng Anh đều được), hệ thống tự nhận diện.
 - Không dùng markdown khác ngoài **...** cho tiêu đề lựa chọn và # / ## cho tiêu đề.
 `.trim();

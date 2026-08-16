@@ -94,6 +94,7 @@ export default function NodeTreeEditor({ gameData, setGameData }) {
         allNodes={nodes}
         statsConfig={gameData.meta.statsConfig}
         archetype={gameData.meta.archetype}
+        defaultNpcAvatar={gameData.meta.defaultNpcAvatar}
         open={!!editingNode}
         onClose={() => setEditingId(null)}
         onChange={(patch) => updateNode(editingId, patch)}

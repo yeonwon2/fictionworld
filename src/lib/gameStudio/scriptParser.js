@@ -23,11 +23,17 @@
 // → Cờ: đã hứa ở lại           (bật một "cờ truyện" — dùng để nhớ lựa chọn trước đó; đây
 //                                cũng là câu chữ sẽ hiện thẳng cho người chơi xem trong
 //                                thông báo, nên hãy viết bằng tiếng Việt tự nhiên)
-// → Cần cờ: đã hứa ở lại       (khoá lựa chọn nếu cờ chưa bật — gõ đúng y hệt câu ở trên)
+// → Cần cờ: đã hứa ở lại       (khoá lựa chọn nếu cờ CHƯA bật — gõ đúng y hệt câu ở trên)
+// → Cần không có cờ: đã hứa ở lại (khoá lựa chọn nếu cờ ĐÃ bật — dùng để làm nhánh "else"
+//                                đối lập với "Cần cờ" ở một lựa chọn khác)
 // → Vật phẩm: tên vật phẩm     (nhặt vật phẩm)
 // → Cần vật phẩm: tên vật phẩm (khoá lựa chọn nếu chưa có vật phẩm)
-// → Đến cảnh 3                 (chỉ định thẳng cảnh tiếp theo — nếu bỏ qua, mặc định là cảnh liền sau trong văn bản)
-// → Kết thúc true_end          (dẫn thẳng tới một khối KẾT THÚC có cùng nhãn)
+// → Đến cảnh 3                 (chỉ định thẳng cảnh tiếp theo — SỐ 3 PHẢI có một khối
+//                                "## CẢNH 3" thật trong kịch bản, nếu không lựa chọn này sẽ
+//                                báo lỗi rõ ràng và tạm dẫn tới ending "Thiếu cảnh" — nếu bỏ
+//                                qua dòng này hoàn toàn, mặc định là cảnh liền sau trong văn bản)
+// → Kết thúc true_end          (dẫn thẳng tới một khối KẾT THÚC có cùng nhãn — "Đến Kết thúc
+//                                true_end" cũng được, có/không chữ "Đến" đều đọc như nhau)
 //
 // **B — <lời lựa chọn khác>**
 // ...
@@ -39,13 +45,22 @@
 // <văn bản kết thúc>
 //
 // Nhãn kết thúc (true_end ở trên) do người viết tự đặt, chỉ cần khớp với dòng
-// "→ Kết thúc <nhãn>" ở lựa chọn dẫn tới nó. Loại kết thúc trong [ ] là một
-// trong TRUE_END / GOOD_END / NORMAL_END / BAD_END (mặc định NORMAL_END nếu bỏ qua).
+// "→ Kết thúc <nhãn>" ở lựa chọn dẫn tới nó — nhãn phải khớp Y HỆT (không phân
+// biệt hoa/thường), nếu không sẽ bị báo lỗi thay vì âm thầm hỏng. Loại kết thúc
+// trong [ ] CHỈ ĐƯỢC là một trong 4 giá trị: TRUE_END / GOOD_END / NORMAL_END /
+// BAD_END (mặc định NORMAL_END nếu bỏ qua) — các nhãn tự đặt khác (vd [SAD_END],
+// [SECRET_END]) không được hỗ trợ, sẽ bị báo lỗi và tự chuyển thành NORMAL_END.
 //
 // Nếu một lựa chọn không có dòng "→ Đến cảnh"/"→ Kết thúc" nào, nó tự động
 // dẫn tới CẢNH kế tiếp theo đúng thứ tự xuất hiện trong văn bản — nghĩa là một
 // kịch bản hoàn toàn tuyến tính chỉ cần liệt kê cảnh theo thứ tự, không cần
 // khai báo "Đến cảnh" ở mọi lựa chọn.
+//
+// KHÔNG HỖ TRỢ rẽ nhánh có điều kiện kiểu "→ Nếu có cờ X: Đến cảnh Y" trên CÙNG
+// một lựa chọn — mỗi lựa chọn chỉ có ĐÚNG MỘT đích đến. Để rẽ nhánh theo điều
+// kiện, hãy viết thành 2 lựa chọn riêng cùng hiện một nội dung, một cái khoá
+// bằng "Cần cờ: X" (nhánh khi có cờ), cái kia khoá bằng "Cần không có cờ: X"
+// (nhánh khi chưa có cờ) — mỗi cái tự "→ Đến cảnh"/"→ Kết thúc" riêng.
 //
 // Các ký hiệu markdown (#, ##, **) chỉ để DỄ ĐỌC, KHÔNG bắt buộc — hệ thống
 // nhận diện "CẢNH", "KẾT THÚC", "GIỚI THIỆU", lựa chọn (A/B/C...) qua từ khoá,
@@ -84,10 +99,11 @@ const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
 
 const RE_EFF_FLAG = /^Cờ:\s*(.+)$/i;
 const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
+const RE_EFF_REQ_NOT_FLAG = /^Cần không có cờ:\s*(.+)$/i;
 const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
-const RE_EFF_GOTO = /^Đến cảnh\s+(\d+)$/i;
-const RE_EFF_ENDING = /^Kết thúc\s+(\S+)$/i;
+const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
+const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
 
@@ -140,6 +156,7 @@ export function parseScript(scriptText, baseMeta = {}) {
     }
     let m;
     if ((m = raw.match(RE_EFF_FLAG))) { target.grantFlag = m[1].trim(); return; }
+    if ((m = raw.match(RE_EFF_REQ_NOT_FLAG))) { target.requiresFlagAbsent = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_FLAG))) { target.requiresFlag = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_ITEM))) { target.grantItem = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_ITEM))) { target.requiresItem = m[1].trim(); return; }
@@ -189,7 +206,16 @@ export function parseScript(scriptText, baseMeta = {}) {
 
     if ((m = norm.match(RE_ENDING))) {
       const id = "ending_" + slugify(m[1]);
-      const node = { id, speaker: (m[2] || "").trim(), text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
+      let title = (m[2] || "").trim();
+      // Nhãn loại kết thúc ngoài 4 loại hợp lệ (vd [SAD_END], [SECRET_END]) không
+      // khớp regex nên bị nuốt vào tên kết thúc thay vì nhận làm loại — tách ra
+      // và báo rõ thay vì để lộ "[...]" ra màn hình người chơi.
+      const strayType = title.match(/\s*\[([A-Z_]+)\]\s*$/);
+      if (strayType) {
+        title = title.slice(0, strayType.index).trim();
+        warnings.push(`Dòng ${lineNo}: loại kết thúc "[${strayType[1]}]" không hợp lệ — chỉ nhận TRUE_END/GOOD_END/NORMAL_END/BAD_END, đã tự chuyển thành NORMAL_END.`);
+      }
+      const node = { id, speaker: title, text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
       nodesMap[id] = node;
       currentNode = node;
       currentChoice = null;
@@ -276,7 +302,9 @@ export function parseScript(scriptText, baseMeta = {}) {
   const initialStats = {};
   for (const key of statKeys) initialStats[key] = 0;
 
-  const nodes = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false });
+  const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false });
+  const nodes = repaired.nodes;
+  warnings.push(...repaired.warnings);
 
   // Tiêu đề/thể loại ưu tiên do kịch bản tự khai báo; các lựa chọn trình bày
   // (theme/tên nhân vật/avatar) giữ nguyên từ cấu hình "Thiết Lập Game" đã đặt

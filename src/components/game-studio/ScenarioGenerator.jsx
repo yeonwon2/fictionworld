@@ -39,7 +39,11 @@ export default function ScenarioGenerator({ gameData, setGameData, onGenerated }
       });
       setGameData(data);
       onGenerated && onGenerated(data);
-      toast({ title: 'Khởi tạo thành công!', description: `Đã sinh ${Object.keys(data.nodes || {}).length} phân cảnh theo archetype "${gameData.meta.archetype}".` });
+      if (data.warnings?.length) {
+        toast({ variant: 'destructive', title: `Sinh xong nhưng có ${data.warnings.length} liên kết bị lệch`, description: 'AI trỏ sai vài đích đến, đã tự chuyển sang ending "Thiếu cảnh" — xem console (F12) để biết cụ thể.' });
+      } else {
+        toast({ title: 'Khởi tạo thành công!', description: `Đã sinh ${Object.keys(data.nodes || {}).length} phân cảnh theo archetype "${gameData.meta.archetype}".` });
+      }
     } catch (e) {
       toast({ variant: 'destructive', title: 'Lỗi tạo kịch bản', description: e.message || 'Vui lòng thử lại.' });
     } finally {

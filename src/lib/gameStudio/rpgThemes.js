@@ -140,6 +140,69 @@ export const THEMES = {
   },
 };
 
+// ===== Xưởng Theme — bộ tuỳ chọn để tự dựng theme (font/hình dạng/nền) =====
+// Chỉ những font đã kiểm tra có bộ dấu tiếng Việt đầy đủ trên Google Fonts.
+export const FONT_OPTIONS = [
+  { id: 'be-vietnam-pro', label: 'Be Vietnam Pro · Mềm mại hiện đại', family: '"Be Vietnam Pro", system-ui, sans-serif', google: 'Be+Vietnam+Pro:wght@400;500;600;700' },
+  { id: 'inter', label: 'Inter · Tối giản sắc nét', family: '"Inter", system-ui, sans-serif', google: 'Inter:wght@400;500;600;700' },
+  { id: 'fraunces', label: 'Fraunces · Serif sang trọng', family: '"Fraunces", Georgia, serif', google: 'Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700' },
+  { id: 'noto-serif', label: 'Noto Serif · Cổ điển trang trọng', family: '"Noto Serif", Georgia, serif', google: 'Noto+Serif:wght@400;600;700' },
+  { id: 'quicksand', label: 'Quicksand · Tròn trịa dễ thương', family: '"Quicksand", system-ui, sans-serif', google: 'Quicksand:wght@400;500;600;700' },
+  { id: 'playfair', label: 'Playfair Display · Kịch tính bí ẩn', family: '"Playfair Display", Georgia, serif', google: 'Playfair+Display:wght@400;600;700' },
+];
+export function fontFamilyFor(fontId) {
+  return (FONT_OPTIONS.find((f) => f.id === fontId) || FONT_OPTIONS[0]).family;
+}
+
+export const BUTTON_SHAPES = {
+  pill: { label: 'Viên thuốc', radius: '999px' },
+  soft: { label: 'Bo mềm', radius: '16px' },
+  card: { label: 'Thẻ vuông', radius: '10px' },
+  sharp: { label: 'Sắc cạnh', radius: '4px' },
+};
+
+export const PANEL_SHAPES = {
+  bubble: { label: 'Bong bóng nổi', radius: '22px', border: 'none', shadow: '0 18px 40px rgba(0,0,0,.28)' },
+  panel: { label: 'Khung phẳng', radius: '16px', border: '1.5px solid', shadow: '0 16px 44px rgba(0,0,0,.32)' },
+  sharp: { label: 'Sắc cạnh', radius: '4px', border: '1px solid', shadow: '0 8px 24px rgba(0,0,0,.24)' },
+};
+
+export const BG_PATTERNS = {
+  plain: { label: 'Trơn' },
+  dots: { label: 'Chấm bi' },
+  lines: { label: 'Vân chéo' },
+  glow: { label: 'Quầng sáng' },
+};
+
+export function defaultCustomTheme() {
+  return {
+    colors: { bg: '#12090f', panel: '#211019', panel2: '#321725', text: '#f7eee8', muted: '#b99da8', accent: '#d7b078', accent2: '#a95872', border: '#d7b07845' },
+    font: 'be-vietnam-pro',
+    buttonShape: 'soft',
+    panelShape: 'panel',
+    bgPattern: 'glow',
+  };
+}
+
+// Chuyển customVars -> style object gắn CSS var, dùng chung cho preview trong
+// Xưởng Theme lẫn khi áp dụng thật vào GamePlayer (meta.theme === 'custom').
+export function customThemeStyle(customVars) {
+  const v = customVars || defaultCustomTheme();
+  const c = v.colors || {};
+  const btn = BUTTON_SHAPES[v.buttonShape] || BUTTON_SHAPES.soft;
+  const panel = PANEL_SHAPES[v.panelShape] || PANEL_SHAPES.panel;
+  return {
+    '--rpg-bg': c.bg, '--rpg-panel': c.panel, '--rpg-panel-2': c.panel2,
+    '--rpg-text': c.text, '--rpg-muted': c.muted, '--rpg-accent': c.accent,
+    '--rpg-accent2': c.accent2, '--rpg-border': c.border,
+    '--rpg-font': fontFamilyFor(v.font),
+    '--rpg-btn-radius': btn.radius,
+    '--rpg-panel-radius': panel.radius,
+    '--rpg-panel-border': panel.border === 'none' ? 'none' : panel.border + ' color-mix(in srgb, ' + (c.accent || '#d7b078') + ' 70%, transparent)',
+    '--rpg-panel-shadow': panel.shadow,
+  };
+}
+
 export const GENRES = [
   { id: 'tien-hiep', name: 'Tiên Hiệp / Tu Tiên' },
   { id: 'huyen-huyen', name: 'Huyền Huyễn' },
@@ -301,6 +364,7 @@ export function newEmptyGame() {
       archetype: 'none',
       player_name: 'Nhân Vật Chính',
       playerAvatar: PRESENTATION_ART.dialogue,
+      defaultNpcAvatar: '',
       statsConfig,
       initialStats: statsArrayToObject(statsConfig),
       litrpg: { ranks: ['Luyện Khí', 'Trúc Cơ', 'Kim Đan', 'Nguyên Anh', 'Hóa Thần'], expPerRank: 100 },

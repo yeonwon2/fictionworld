@@ -20,15 +20,22 @@ Diễn biến của cảnh.
 **A — Lời lựa chọn**
 → Tên chỉ số +5
 → Cờ: ten_co
+→ Cần cờ: ten_co              (khoá nếu CHƯA có cờ)
+→ Cần không có cờ: ten_co     (khoá nếu ĐÃ có cờ — dùng làm nhánh "else")
 → Cần vật phẩm: tên vật phẩm
-→ Đến cảnh 2
-→ Kết thúc nhan_ket_thuc
+→ Đến cảnh 2                  (số 2 PHẢI có "## CẢNH 2" thật ở dưới, không thì báo lỗi)
+→ Kết thúc nhan_ket_thuc       (nhãn PHẢI khớp y hệt "## KẾT THÚC nhan_ket_thuc" ở dưới)
 
 ## CẢNH 2 — ...
 ...
 
 ## KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]
-Văn bản kết thúc.`;
+Văn bản kết thúc.
+
+Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
+BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu... thì
+Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn riêng,
+mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.`;
 
 export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
   const [script, setScript] = useState("");

@@ -214,6 +214,22 @@ export async function deleteGame(id) {
   return deleteRow("games", id);
 }
 
+// ---------- Xưởng Theme (custom_themes) — mẫu theme tự tạo, dùng lại giữa nhiều game ----------
+export async function listThemes() {
+  const { data, error } = await supabase.from("custom_themes").select("*").order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+export async function createTheme(data) {
+  return createRow("custom_themes", data);
+}
+export async function updateTheme(id, data) {
+  return updateRow("custom_themes", id, data);
+}
+export async function deleteTheme(id) {
+  return deleteRow("custom_themes", id);
+}
+
 // ---------- Tiện ích: tải tệp lên Storage (tự nén ảnh trước khi lưu) ----------
 export async function uploadFile(file) {
   const compressed = await compressImage(file);

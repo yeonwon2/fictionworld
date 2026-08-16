@@ -1,17 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Palette } from 'lucide-react';
 import { GENRES, ARCHETYPES, GAME_PRESENTATIONS, PRESENTATION_ART, PRESET_AVATARS, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
+import FileUrlInput from '@/components/FileUrlInput';
+import { listThemes } from '@/lib/worldcrud';
 
 export default function GameMetaConfig({ gameData, setGameData }) {
   const { meta } = gameData;
+  const [customThemes, setCustomThemes] = useState([]);
+  useEffect(() => { listThemes().then(setCustomThemes).catch(() => {}); }, []);
 
   const updateMeta = (patch) => {
     setGameData({ ...gameData, meta: { ...meta, ...patch } });
+  };
+
+  const onCustomThemeChange = (id) => {
+    if (id === '__none__') {
+      const preset = GAME_PRESENTATIONS[meta.presentation || 'dialogue'];
+      updateMeta({ theme: preset?.theme || 'lily-noir', customTheme: undefined });
+      return;
+    }
+    const picked = customThemes.find((t) => t.id === id);
+    if (picked) updateMeta({ theme: 'custom', customTheme: picked.vars });
   };
 
   const onArchetypeChange = (archetype) => {
@@ -23,7 +37,12 @@ export default function GameMetaConfig({ gameData, setGameData }) {
     const preset = GAME_PRESENTATIONS[presentation];
     if (!preset) return;
     const statsConfig = applyArchetypeStats(meta.statsConfig, preset.archetype);
-    updateMeta({ presentation, theme: preset.theme, archetype: preset.archetype, playerAvatar: PRESENTATION_ART[presentation], statsConfig, initialStats: statsArrayToObject(statsConfig) });
+    // Không ghi đè theme nếu đang dùng theme tự tạo (Xưởng Theme), và không ghi
+    // đè avatar nếu người dùng đã tự đặt — đổi "Theme (giao diện)" không nên
+    // âm thầm xoá màu/ảnh họ đã tự chọn.
+    const themePatch = meta.theme === 'custom' ? {} : { theme: preset.theme };
+    const avatarPatch = meta.playerAvatar ? {} : { playerAvatar: PRESENTATION_ART[presentation] };
+    updateMeta({ presentation, ...themePatch, ...avatarPatch, archetype: preset.archetype, statsConfig, initialStats: statsArrayToObject(statsConfig) });
   };
 
   const updateStat = (idx, patch) => {
@@ -94,6 +113,21 @@ export default function GameMetaConfig({ gameData, setGameData }) {
       </div>
 
       <div className="space-y-1.5">
+        <Label className="text-xs flex items-center gap-1"><Palette size={12} /> Bảng màu (Xưởng Theme — tuỳ chọn)</Label>
+        <Select value={meta.theme === 'custom' ? (customThemes.find((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme))?.id || '__custom_unlisted__') : '__none__'} onValueChange={onCustomThemeChange}>
+          <SelectTrigger><SelectValue placeholder="Dùng bảng màu mặc định của Theme trên" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Dùng bảng màu mặc định của Theme trên</SelectItem>
+            {meta.theme === 'custom' && !customThemes.some((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme)) && (
+              <SelectItem value="__custom_unlisted__">Theme tự tạo (chưa lưu vào Xưởng Theme)</SelectItem>
+            )}
+            {customThemes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">Chọn 1 theme đã lưu ở "Xưởng Theme" (font/màu/hình dạng riêng) để dùng thay cho bảng màu có sẵn của Theme trên.</p>
+      </div>
+
+      <div className="space-y-1.5">
         <Label className="text-xs">🎮 Archetype / Cơ chế gameplay</Label>
         <Select value={meta.archetype || 'none'} onValueChange={onArchetypeChange}>
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -150,8 +184,9 @@ export default function GameMetaConfig({ gameData, setGameData }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs flex items-center gap-1"><ImageIcon size={12} /> Avatar nhân vật (URL hoặc chọn preset)</Label>
-        <Input value={meta.playerAvatar || ''} onChange={(e) => updateMeta({ playerAvatar: e.target.value })} placeholder="https://..." />
+        <Label className="text-xs flex items-center gap-1"><ImageIcon size={12} /> Avatar nhân vật (tải lên, dán URL, hoặc chọn preset)</Label>
+        <FileUrlInput value={meta.playerAvatar || ''} onChange={(url) => updateMeta({ playerAvatar: url })} preview />
+        <p className="text-[10px] text-muted-foreground">Avatar tròn nhỏ hiện ở góc trên khi chơi — khác với "Ảnh nhân vật mặc định" (ảnh lớn ở giữa màn hình) bên dưới.</p>
         <div className="flex gap-2 flex-wrap mt-1">
           {PRESET_AVATARS.map((url) => (
             <button
@@ -164,6 +199,16 @@ export default function GameMetaConfig({ gameData, setGameData }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs flex items-center gap-1"><ImageIcon size={12} /> Ảnh nhân vật mặc định (khung lớn khi chơi)</Label>
+        <FileUrlInput value={meta.defaultNpcAvatar || ''} onChange={(url) => updateMeta({ defaultNpcAvatar: url })} preview />
+        <p className="text-[10px] text-muted-foreground">
+          Dùng chung cho MỌI cảnh trong game — chỉ cần tải 1 lần ở đây. Nếu 1 cảnh cần ảnh riêng (khác cảm xúc, khác nhân vật...),
+          vào sửa cảnh đó trong Xưởng Thiết Kế và đặt ảnh riêng — ảnh riêng sẽ được ưu tiên hơn ảnh mặc định này.
+          Để trống thì màn hình chơi hiện gradient theo màu theme thay vì ảnh.
+        </p>
       </div>
 
       <div className="space-y-2">
