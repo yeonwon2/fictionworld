@@ -209,7 +209,6 @@ const ENGINE_JS = [
   '      if(!st.ok){ s+=\'<div class="rpg-vn-choice-reason">\'+esc(st.reason)+\'</div>\'; }',
   '      s+=\'</span>\';',
   '      s+=\'</button>\'; }',
-  '    if(list.length>0){ s+=\'<div class="rpg-choice-custom">✏️ <input type="text" placeholder="Tự viết hành động của bạn... (sắp ra mắt)" disabled/><span class="rpg-choice-custom-tag">Sắp ra mắt</span></div>\'; }',
   '    }',
   '    if(list.length===0 && !node.isEnding){ s+=\'<p class="rpg-vn-empty">Không có lựa chọn. <button id="btnReset2">Chơi lại</button></p>\'; }',
   '    el.innerHTML=s;',
@@ -361,10 +360,6 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-vn-choice-dice{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:color-mix(in srgb, var(--rpg-accent2) 16%, transparent);color:var(--rpg-accent2);}
 .rpg-vn-choice-reason{font-size:11px;margin-top:4px;color:var(--rpg-muted);}
 .rpg-vn-empty{font-size:12px;font-style:italic;color:var(--rpg-muted);}
-.rpg-choice-custom{display:flex;align-items:center;gap:9px;padding:12px 15px;border-radius:var(--rpg-btn-radius, 16px);border:1.5px dashed var(--rpg-border);color:var(--rpg-muted);font-size:13px;background:transparent;}
-.rpg-choice-custom input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--rpg-text);font-size:13px;font-family:inherit;}
-.rpg-choice-custom input::placeholder{color:var(--rpg-muted);}
-.rpg-choice-custom-tag{flex-shrink:0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent2) 18%, transparent);color:var(--rpg-accent2);}
 body.rpg-adventure .rpg-vn-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.06em;font-size:12px;}
 body.rpg-transmigration .rpg-vn-frame{background-image:linear-gradient(rgba(78,45,58,.1) 1px,transparent 1px);background-size:100% 28px;}
 body.rpg-transmigration .rpg-vn-choice::before{content:'章';margin-right:8px;color:var(--rpg-accent);}

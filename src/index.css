@@ -230,13 +230,6 @@
 .rpg-vn-choice-reason{font-size:11px;margin-top:4px;color:var(--rpg-muted);}
 .rpg-vn-empty{font-size:12px;font-style:italic;color:var(--rpg-muted);}
 
-/* --- Ô tự viết hành động (đặt cạnh danh sách lựa chọn) --- */
-.rpg-choice-custom{display:flex;align-items:center;gap:9px;padding:12px 15px;border-radius:var(--rpg-btn-radius, 16px);border:1.5px dashed var(--rpg-border);color:var(--rpg-muted);font-size:13px;background:transparent;}
-.rpg-choice-custom input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--rpg-text);font-size:13px;font-family:inherit;}
-.rpg-choice-custom input::placeholder{color:var(--rpg-muted);}
-.rpg-choice-custom input:disabled{cursor:not-allowed;}
-.rpg-choice-custom-tag{flex-shrink:0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent2) 18%, transparent);color:var(--rpg-accent2);}
-
 @keyframes rpgFadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 .rpg-vn-choice:nth-child(1){animation-delay:0s;}
 .rpg-vn-choice:nth-child(2){animation-delay:.04s;}

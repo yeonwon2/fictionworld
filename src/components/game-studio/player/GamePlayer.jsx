@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Pencil } from 'lucide-react';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
@@ -540,13 +540,6 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             </button>
           );
         })}
-        {typingDone && choicesOpen && choiceCount > 0 && (
-          <div className="rpg-choice-custom">
-            <Pencil size={14} />
-            <input type="text" placeholder="Tự viết hành động của bạn... (sắp ra mắt)" disabled />
-            <span className="rpg-choice-custom-tag">Sắp ra mắt</span>
-          </div>
-        )}
         {typingDone && choiceCount === 0 && <p className="rpg-vn-empty">Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
       </div>
     </div>
