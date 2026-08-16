@@ -373,7 +373,7 @@ export function newEmptyGame() {
     nodes: {
       start_node: {
         id: 'start_node',
-        speaker: 'Dẫn Truyện',
+        speaker: '',
         text: 'Câu chuyện bắt đầu... Hãy chỉnh sửa phân cảnh này trong Studio.',
         bgImage: '',
         isEnding: false,

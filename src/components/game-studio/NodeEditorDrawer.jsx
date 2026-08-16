@@ -129,7 +129,8 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Tên người nói (Speaker)</Label>
-            <Input value={node.speaker || ''} onChange={(e) => onChange({ speaker: e.target.value })} />
+            <Input value={node.speaker || ''} onChange={(e) => onChange({ speaker: e.target.value })} placeholder="Để trống nếu đây là dẫn truyện, điền tên nếu NPC đang nói" />
+            <p className="text-[10px] text-muted-foreground">Để trống → màn chơi hiện văn xuôi dẫn truyện. Có tên → hiện dưới dạng lời thoại NPC kèm nhãn tên.</p>
           </div>
 
           <div className="space-y-1.5">

@@ -219,7 +219,7 @@ function GameEditor({ gameId, onBack }) {
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4">
         {tab === "play" && (
           <div className="max-w-3xl mx-auto">
-            <GamePlayer key={playKey} gameData={gameData} />
+            <GamePlayer key={playKey} gameData={gameData} onExit={onBack} />
           </div>
         )}
         {tab === "studio" && (
@@ -245,7 +245,7 @@ function GameEditor({ gameId, onBack }) {
         )}
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass-panel border-t">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl" style={{ background: "hsl(var(--background) / 0.72)", borderColor: "hsl(var(--border) / 0.6)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="flex">
           {TABS.map((t) => {
             const Icon = t.icon;
@@ -254,13 +254,14 @@ function GameEditor({ gameId, onBack }) {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
-                  active ? "text-cyan-300" : "text-muted-foreground"
+                className={`relative flex-1 flex flex-col items-center gap-0.5 py-1.5 transition-colors ${
+                  active ? "" : "text-muted-foreground"
                 }`}
+                style={active ? { color: "hsl(var(--primary))" } : undefined}
               >
-                <Icon size={20} className={active ? "text-glow-cyan" : ""} />
-                <span className="text-[10px] font-medium">{t.short}</span>
-                {active && <span className="absolute bottom-0 h-0.5 w-8 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />}
+                <Icon size={17} />
+                <span className="text-[9.5px] font-medium">{t.short}</span>
+                {active && <span className="absolute bottom-0 h-0.5 w-6 rounded-full" style={{ background: "hsl(var(--primary))" }} />}
               </button>
             );
           })}

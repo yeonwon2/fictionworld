@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Info, RotateCcw, Lock, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, ChevronDown, ChevronUp } from 'lucide-react';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 
 const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle };
+const CHOICE_LETTERS = 'ABCDEFGHIJ';
 
-export default function GamePlayer({ gameData }) {
+export default function GamePlayer({ gameData, onExit }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
   const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
@@ -33,8 +34,7 @@ export default function GamePlayer({ gameData }) {
   const [screen, setScreen] = useState('scene');
   const [typed, setTyped] = useState('');
   const [typingDone, setTypingDone] = useState(false);
-  const [activeTab, setActiveTab] = useState('stats');
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [systemPopup, setSystemPopup] = useState(null);
   const [events, setEvents] = useState([]);
   const [forceKey, setForceKey] = useState(0);
@@ -293,141 +293,59 @@ export default function GamePlayer({ gameData }) {
     setScreen('scene');
     setCombatActive(false);
     setDicePending(null);
+    setSheetOpen(false);
   };
   const themeStyle = meta.theme === 'custom' && meta.customTheme
     ? customThemeStyle(meta.customTheme)
     : { ...theme.vars };
+  // Trước đây .rpg-vn-frame là 1 card đặc phủ gần kín khung nên nền của .rpg-root
+  // không cần tô — giờ các vùng con đã tách rời, thoáng hơn, nên khung ngoài phải
+  // tự tô nền theo theme, nếu không chữ màu sáng (dành cho nền tối) sẽ lộ trên nền
+  // trang bên ngoài.
+  const rootStyle = { ...themeStyle, background: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
   const endingMeta = ENDING_TYPES[node?.endingType];
-  const showTabs = archetype !== 'none';
   const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg';
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
 
+  // HUD: chỉ hiện tối đa 2 chỉ số quan trọng — ưu tiên chỉ số isVital.
+  const hudStats = [...statsConfig].sort((a, b) => (b.isVital ? 1 : 0) - (a.isVital ? 1 : 0)).slice(0, 2);
+
   return (
-    <div style={themeStyle} data-presentation={presentation} data-bg-pattern={meta.theme === 'custom' ? (meta.customTheme?.bgPattern || 'plain') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative neon-border${shake ? ' animate-shake' : ''}`}>
+    <div style={rootStyle} data-presentation={presentation} data-bg-pattern={meta.theme === 'custom' ? (meta.customTheme?.bgPattern || 'plain') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
       <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
-        {/* Status bar */}
-        <div className="flex justify-between items-start gap-2 rounded-xl p-2.5 flex-wrap" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 65%, transparent)', border: '1px solid var(--rpg-accent)44', backdropFilter: 'blur(10px)', boxShadow: '0 0 14px var(--rpg-accent)11' }}>
-          <div className="flex items-center gap-2.5">
-            <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" style={{ border: '2px solid var(--rpg-accent)', boxShadow: '0 0 10px var(--rpg-accent)66' }} />
-            <div className="min-w-0">
-              <div className="font-bold text-sm truncate" style={{ color: 'var(--rpg-text)' }}>{meta.player_name || 'Người Chơi'}</div>
-            </div>
+        {/* HUD gọn — avatar, tên, tối đa 2 chip chỉ số, nút menu */}
+        <div className="rpg-hud">
+          <div className="rpg-hud-left">
+            <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-hud-avatar" />
+            <span className="rpg-hud-name">{meta.player_name || 'Người Chơi'}</span>
+            {hudStats.map((sc) => {
+              const st = statStyle(sc.key);
+              const Icon = STAT_ICONS[st.icon] || Circle;
+              return (
+                <span key={sc.key} className="rpg-hud-chip">
+                  <Icon size={11} style={{ color: st.color }} /> {rt.stats[sc.key] || 0}
+                </span>
+              );
+            })}
           </div>
-          <div className="flex gap-1.5 shrink-0">
-            {meta.player_bio && (
-              <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={() => setSystemPopup({ title: meta.player_name || 'Nhân vật', text: meta.player_bio })} title="Thông tin nhân vật"><Info size={13} className="sm:mr-1" /><span className="hidden sm:inline">Nhân vật</span></Button>
-            )}
-            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={reset} title="Chơi lại"><RotateCcw size={13} className="sm:mr-1" /><span className="hidden sm:inline">Chơi lại</span></Button>
-          </div>
+          <button className="rpg-hud-menu-btn" onClick={() => setSheetOpen(true)} title="Menu">
+            <Menu size={16} />
+          </button>
         </div>
 
-        {/* Archetype bars */}
+        {/* Thanh Cảnh giới/EXP — chỉ archetype Hệ Thống */}
         {archetype === 'litrpg' && (
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2 flex-wrap" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 88%, transparent)', border: '1px solid var(--rpg-border)' }}>
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded" style={{ background: 'var(--rpg-accent)', color: 'var(--rpg-panel)' }}><Zap size={11} /> {rankLabel}</span>
+          <div className="flex items-center gap-3 rounded-xl px-3 py-2 flex-wrap" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 55%, transparent)' }}>
+            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><Zap size={11} /> {rankLabel}</span>
             <div className="flex-1 min-w-[120px]">
               <div className="text-[10px] mb-0.5" style={{ color: 'var(--rpg-muted)' }}>EXP: {rt.exp}/{litrpg.expPerRank || 100}</div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)' }}>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--rpg-panel-2)' }}>
                 <div className="h-full rounded-full transition-all" style={{ width: expPct + '%', background: 'var(--rpg-accent2)' }} />
               </div>
             </div>
-            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--rpg-text)' }}><Gem size={12} /> Điểm HT: <b>{rt.systemPoints}</b></span>
-          </div>
-        )}
-
-        {/* Tabs — thu gọn mặc định (đặc biệt trên điện thoại): panel chỉ số/túi
-            đồ/nhiệm vụ nếu luôn mở sẽ đẩy chân dung + lựa chọn xuống rất xa,
-            phải cuộn qua mới thấy. */}
-        {showTabs && (
-          <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--rpg-border)' }}>
-            <div className="flex">
-              <TabBtn active={panelOpen && activeTab === 'stats'} onClick={() => { setActiveTab('stats'); setPanelOpen(true); }} theme={theme}>Chỉ số</TabBtn>
-              {showInventoryTab && <TabBtn active={panelOpen && activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); setPanelOpen(true); }} theme={theme}><Package size={12} className="inline mr-1 -mt-0.5" />Túi đồ ({rt.inventory.length}/{archetype === 'mystery' ? mysterySlots : '∞'})</TabBtn>}
-              {showQuestTab && <TabBtn active={panelOpen && activeTab === 'quests'} onClick={() => { setActiveTab('quests'); setPanelOpen(true); }} theme={theme}><ScrollText size={12} className="inline mr-1 -mt-0.5" />Nhiệm vụ ({Object.values(rt.quests).filter((q) => q.status === 'active').length})</TabBtn>}
-              <button onClick={() => setPanelOpen((o) => !o)} className="px-2.5 flex items-center justify-center shrink-0" style={{ background: 'var(--rpg-panel-2)', color: 'var(--rpg-muted)' }} title={panelOpen ? 'Thu gọn' : 'Mở rộng'}>
-                {panelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-            </div>
-            {panelOpen && (
-            <div className="p-2.5 text-xs" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)', color: 'var(--rpg-text)' }}>
-              {activeTab === 'stats' && (
-                <div className="space-y-1.5">
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {statsConfig.map((sc) => {
-                      const st = statStyle(sc.key);
-                      const Icon = STAT_ICONS[st.icon] || Circle;
-                      return (
-                        <div key={sc.key} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: 'var(--rpg-panel-2)', border: `1px solid ${st.color}33` }}>
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: st.color + '22', color: st.color }}>
-                            <Icon size={12} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[9px] truncate" style={{ color: 'var(--rpg-muted)' }}>{sc.label}</div>
-                            <div className="font-bold text-xs" style={{ color: 'var(--rpg-text)' }}>{rt.stats[sc.key] || 0}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {archetype === 'isekai' && (
-                    <>
-                      {rt.flags.length > 0 && (
-                        <div className="pt-1.5 border-t" style={{ borderColor: 'var(--rpg-border)' }}>
-                          <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: 'var(--rpg-accent2)' }}><GitBranch size={12} /> Story Flags</div>
-                          <div className="flex flex-wrap gap-1">{rt.flags.map((f) => <span key={f} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)' }}>{f}</span>)}</div>
-                        </div>
-                      )}
-                      {Object.keys(rt.npcAffinity).length > 0 && (
-                        <div className="pt-1.5 border-t" style={{ borderColor: 'var(--rpg-border)' }}>
-                          <div className="font-semibold mb-1" style={{ color: 'var(--rpg-accent2)' }}>Độ hảo cảm NPC</div>
-                          {Object.entries(rt.npcAffinity).map(([n, v]) => (
-                            <div key={n} className="flex justify-between"><span>{n}</span><b style={{ color: v >= 0 ? '#39d14a' : '#ff4d4d' }}>{v > 0 ? '+' : ''}{v}</b></div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {archetype === 'litrpg' && rt.skills.length > 0 && (
-                    <div className="pt-1.5 border-t" style={{ borderColor: 'var(--rpg-border)' }}>
-                      <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: 'var(--rpg-accent2)' }}><Sparkles size={12} /> Kỹ năng</div>
-                      <div className="flex flex-wrap gap-1">{rt.skills.map((s) => <span key={s} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)' }}>{s}</span>)}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeTab === 'inventory' && (
-                <div>
-                  {rt.inventory.length === 0 ? <p style={{ color: 'var(--rpg-muted)' }} className="italic">Túi đồ trống.</p> : (
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {rt.inventory.map((it, i) => (
-                        <div key={i} className="px-2 py-1.5 rounded text-center inline-flex items-center justify-center gap-1" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)' }}><Package size={12} /> {it}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeTab === 'quests' && (
-                <div>
-                  {Object.keys(rt.quests).length === 0 ? <p style={{ color: 'var(--rpg-muted)' }} className="italic">Chưa có nhiệm vụ.</p> : (
-                    <div className="space-y-1.5">
-                      {Object.values(rt.quests).map((q) => (
-                        <div key={q.id} className="rounded p-2" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)', opacity: q.status === 'completed' ? 0.6 : 1 }}>
-                          <div className="flex justify-between font-semibold">
-                            <span>{q.status === 'completed' ? '✓' : '•'} {q.title}</span>
-                            <span className="text-[10px]" style={{ color: q.status === 'completed' ? '#39d14a' : 'var(--rpg-accent2)' }}>{q.status === 'completed' ? 'Hoàn thành' : 'Đang làm'}</span>
-                          </div>
-                          {q.desc && <p className="text-[11px] mt-0.5" style={{ color: 'var(--rpg-muted)' }}>{q.desc}</p>}
-                          {q.reward && <p className="text-[11px] mt-0.5 flex items-center gap-1"><Gift size={11} /> {q.reward}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            )}
+            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--rpg-text)' }}><Gem size={12} style={{ color: 'var(--rpg-accent)' }} /> <b>{rt.systemPoints}</b></span>
           </div>
         )}
 
@@ -446,21 +364,21 @@ export default function GamePlayer({ gameData }) {
 
         {/* Game Over */}
         {screen === 'gameover' && (
-          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 92%, transparent)', border: '3px solid var(--rpg-border)' }}>
-            <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ff4d4d', color: '#fff', border: '2px solid var(--rpg-border)' }}><Skull size={22} /> GAME OVER</div>
+          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
+            <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ef4444', color: '#fff' }}><Skull size={22} /> GAME OVER</div>
             <p className="text-base" style={{ color: 'var(--rpg-text)' }}>Bạn đã gục ngã. Số phận đã khép lại quá sớm...</p>
             <Summary statsConfig={statsConfig} rt={rt} />
-            <Button onClick={reset} style={{ background: 'var(--rpg-accent)', color: 'var(--rpg-panel)' }}><RotateCcw size={15} className="mr-1.5" />Bắt đầu lại</Button>
+            <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Bắt đầu lại</Button>
           </div>
         )}
 
         {/* Ending */}
         {screen === 'ending' && node && (
-          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 92%, transparent)', border: '3px solid var(--rpg-border)' }}>
-            <div className="text-xl font-bold px-5 py-2 rounded-full" style={{ background: endingMeta?.color || '#888', color: '#fff', border: '2px solid var(--rpg-border)' }}>{endingMeta?.icon} {endingMeta?.label || 'Kết Thúc'}</div>
+          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
+            <div className="text-xl font-bold px-5 py-2 rounded-full" style={{ background: endingMeta?.color || '#888', color: '#fff' }}>{endingMeta?.icon} {endingMeta?.label || 'Kết Thúc'}</div>
             <p className="text-base leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{node.text}</p>
             <Summary statsConfig={statsConfig} rt={rt} />
-            <Button onClick={reset} style={{ background: 'var(--rpg-accent)', color: 'var(--rpg-panel)' }}><RotateCcw size={15} className="mr-1.5" />Chơi lại từ đầu</Button>
+            <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Chơi lại từ đầu</Button>
           </div>
         )}
       </div>
@@ -473,22 +391,39 @@ export default function GamePlayer({ gameData }) {
       {/* System Popup modal */}
       {systemPopup && (
         <div className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setSystemPopup(null)}>
-          <div className="max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', border: '2px solid var(--rpg-accent)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent) 30%, transparent), inset 0 0 20px color-mix(in srgb, var(--rpg-accent2) 15%, transparent)' }} onClick={(e) => e.stopPropagation()}>
+          <div className="max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent2) 30%, transparent)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-2 mb-2">
               <Sparkles size={18} style={{ color: 'var(--rpg-accent)' }} />
-              <span className="font-bold tracking-widest text-sm uppercase" style={{ color: 'var(--rpg-accent)' }}>{systemPopup.title || 'Hệ Thống'}</span>
+              <span className="font-bold tracking-widest text-sm uppercase" style={{ color: 'var(--rpg-accent2)' }}>{systemPopup.title || 'Hệ Thống'}</span>
             </div>
             <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--rpg-text)' }}>{systemPopup.text}</p>
-            <Button size="sm" onClick={() => setSystemPopup(null)} style={{ background: 'var(--rpg-accent)', color: 'var(--rpg-panel)' }}>Đã hiểu</Button>
-            <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent)' }} onClick={() => setSystemPopup(null)}><X size={16} /></button>
+            <Button size="sm" onClick={() => setSystemPopup(null)} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>Đã hiểu</Button>
+            <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => setSystemPopup(null)}><X size={16} /></button>
           </div>
         </div>
       )}
 
-      {/* Event toasts — fixed theo viewport (không theo cuộn trang) để luôn thấy được kể cả khi khung game rất cao trên điện thoại */}
+      {/* Bottom sheet — nhân vật / chỉ số / túi đồ / nhiệm vụ / quan hệ / lịch sử */}
+      {sheetOpen && (
+        <GameMenuSheet
+          onClose={() => setSheetOpen(false)}
+          meta={meta}
+          rt={rt}
+          gameData={gameData}
+          statsConfig={statsConfig}
+          archetype={archetype}
+          showInventoryTab={showInventoryTab}
+          showQuestTab={showQuestTab}
+          mysterySlots={mysterySlots}
+          onReset={reset}
+          onExit={onExit}
+        />
+      )}
+
+      {/* Event toasts — fixed theo viewport để luôn thấy được kể cả khi khung game rất cao trên điện thoại */}
       <div className="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-[calc(100%-24px)] max-w-sm" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
         {events.map((e) => (
-          <div key={e.id} className="rounded-lg px-3 py-2 text-xs font-medium shadow-lg animate-in slide-in-from-bottom w-full text-center" style={{ background: 'color-mix(in srgb, var(--rpg-accent) 90%, transparent)', color: 'var(--rpg-panel)', border: '1px solid var(--rpg-border)' }}>
+          <div key={e.id} className="rpg-toast animate-in slide-in-from-bottom w-full text-center">
             {e.icon} {e.text}
           </div>
         ))}
@@ -497,45 +432,58 @@ export default function GamePlayer({ gameData }) {
   );
 }
 
-// Khung kiến trúc Visual Novel — 1 khối chia 3 vùng cố định (chân dung / lời
-// thoại / lựa chọn) thay cho kiểu ảnh nền mờ-phủ chữ cũ. Không có ảnh nhân vật
-// (node.npcAvatar) → hiện gradient theo màu theme + chữ cái đầu tên người nói,
-// KHÔNG dùng ảnh stock mặc định — để không phụ thuộc ảnh ngoài khi xuất file.
+// Khung Visual Novel — vùng cảnh (ảnh, chỉ khi có) tách khỏi khối dẫn truyện/thoại,
+// tách khỏi khối lựa chọn — không còn 1 card lớn ôm hết mọi thứ. Dẫn truyện
+// (node.speaker rỗng) hiện như văn xuôi tiểu thuyết; NPC nói (có speaker) hiện
+// nhãn tên + avatar nhỏ (nếu có) trong khung bán trong suốt nhẹ.
 export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar }) {
   const art = node.npcAvatar || defaultNpcAvatar || node.bgImage || '';
   const hasArt = !!art;
-  const initial = (node.speaker || '?').trim().charAt(0).toUpperCase() || '?';
+  const isNarration = !node.speaker || !node.speaker.trim();
   return (
-    <div className="rpg-vn-frame flex flex-col flex-1 rounded-2xl overflow-hidden relative">
-      <div className="rpg-vn-portrait relative shrink-0">
-        {hasArt ? (
-          <img src={art} alt={node.speaker || ''} className="rpg-vn-portrait-img" />
-        ) : (
-          <div className="rpg-vn-portrait-fallback"><span className="rpg-vn-monogram">{initial}</span></div>
-        )}
-        {node.speaker && (
-          <div className="rpg-vn-speaker-scrim">
-            <span className="rpg-vn-speaker-tag">{node.speaker}</span>
+    <div className="rpg-vn-frame flex flex-col flex-1">
+      {hasArt && (
+        <div className="rpg-vn-scene">
+          <img src={art} alt={node.speaker || ''} className="rpg-vn-scene-img" />
+          <div className="rpg-vn-scene-fade" />
+        </div>
+      )}
+
+      {isNarration ? (
+        <div className="rpg-vn-narration">
+          <div className="rpg-vn-text-scroll scrollbar-thin">
+            <p className="rpg-vn-narration-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
-        )}
-      </div>
-      <div className="rpg-vn-dialogue">
-        <div className="rpg-vn-text scrollbar-thin">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
-        {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
-      </div>
+          {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
+        </div>
+      ) : (
+        <div className="rpg-vn-dialogue">
+          <div className="rpg-vn-dialogue-head">
+            {hasArt && <img src={art} alt="" className="rpg-vn-avatar" />}
+            <span className="rpg-vn-name">{node.speaker}</span>
+          </div>
+          <div className="rpg-vn-text-scroll scrollbar-thin">
+            <p className="rpg-vn-dialogue-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
+          </div>
+          {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
+        </div>
+      )}
+
       <div className="rpg-vn-choices">
         {typingDone && (node.choices || []).map((c, i) => {
           const st = choiceStatus(c);
           const lbl = c.label ? CHOICE_LABELS[c.label] : null;
           return (
             <button key={i} disabled={!st.ok} onClick={() => choose(c)} className="rpg-vn-choice">
-              <div className="flex items-center gap-2 flex-wrap">
-                {!st.ok && <Lock size={13} className="shrink-0" />}
-                {lbl && <span className="rpg-vn-choice-label" style={{ background: lbl.color + '22', color: lbl.color }}>[{lbl.text}]</span>}
-                {c.diceRoll && <span className="rpg-vn-choice-dice"><Dices size={11} /> {statsConfig.find((s) => s.key === c.diceRoll.stat)?.label || c.diceRoll.stat || 'May rủi'} ≥{c.diceRoll.difficulty}</span>}
-                <span className="min-w-0 break-words">{c.text}</span>
-              </div>
-              {!st.ok && <div className="rpg-vn-choice-reason">🔒 {st.reason}</div>}
+              <span className="rpg-vn-choice-idx">{st.ok ? CHOICE_LETTERS[i] || (i + 1) : <Lock size={11} />}</span>
+              <span className="rpg-vn-choice-body">
+                <span className="rpg-vn-choice-row">
+                  {lbl && <span className="rpg-vn-choice-label" style={{ background: lbl.color + '22', color: lbl.color }}>{lbl.text}</span>}
+                  {c.diceRoll && <span className="rpg-vn-choice-dice"><Dices size={11} /> {statsConfig.find((s) => s.key === c.diceRoll.stat)?.label || c.diceRoll.stat || 'May rủi'} ≥{c.diceRoll.difficulty}</span>}
+                  <span className="min-w-0 break-words">{c.text}</span>
+                </span>
+                {!st.ok && <div className="rpg-vn-choice-reason">{st.reason}</div>}
+              </span>
             </button>
           );
         })}
@@ -545,17 +493,9 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   );
 }
 
-function TabBtn({ active, onClick, theme, children }) {
-  return (
-    <button onClick={onClick} className="flex-1 px-3 py-1.5 text-xs font-medium transition" style={active ? { background: 'var(--rpg-accent)', color: 'var(--rpg-panel)' } : { background: 'var(--rpg-panel-2)', color: 'var(--rpg-muted)' }}>
-      {children}
-    </button>
-  );
-}
-
 function Summary({ statsConfig, rt }) {
   return (
-    <div className="w-full text-left rounded-lg p-3" style={{ background: 'var(--rpg-panel-2)', border: '1px solid var(--rpg-border)' }}>
+    <div className="w-full text-left rounded-lg p-3" style={{ background: 'var(--rpg-panel-2)' }}>
       <div className="font-bold text-sm mb-2" style={{ color: 'var(--rpg-accent2)' }}>Thành tích</div>
       {statsConfig.map((sc) => (
         <div key={sc.key} className="flex justify-between text-sm py-1" style={{ borderBottom: '1px dashed var(--rpg-border)', color: 'var(--rpg-text)' }}>
@@ -564,5 +504,138 @@ function Summary({ statsConfig, rt }) {
       ))}
       <div className="flex justify-between text-sm py-1" style={{ color: 'var(--rpg-text)' }}><span>Số phân cảnh đã qua</span><b>{rt.history.length}</b></div>
     </div>
+  );
+}
+
+// Menu game — bottom sheet với các mục dựng từ dữ liệu đã có sẵn (không thêm
+// hệ thống lưu tiến trình mới): nhân vật, chỉ số, túi đồ, nhiệm vụ, quan hệ,
+// lịch sử phân cảnh đã qua, chơi lại, thoát.
+function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, showInventoryTab, showQuestTab, mysterySlots, onReset, onExit }) {
+  const affinityEntries = Object.entries(rt.npcAffinity || {});
+  const historyEntries = [...rt.history].slice(-20).reverse().map((id) => {
+    const n = gameData.nodes[id];
+    if (!n) return null;
+    return { id, speaker: n.speaker && n.speaker.trim() ? n.speaker : 'Dẫn truyện', text: (n.text || '').slice(0, 140) };
+  }).filter(Boolean);
+
+  return (
+    <>
+      <div className="rpg-sheet-overlay" onClick={onClose} />
+      <div className="rpg-sheet">
+        <div className="rpg-sheet-handle" />
+        <div className="rpg-sheet-body scrollbar-thin">
+          {meta.player_bio && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><User size={13} /> Nhân vật</div>
+              <div className="flex items-start gap-3">
+                <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                <div>
+                  <div className="font-semibold text-sm" style={{ color: 'var(--rpg-text)' }}>{meta.player_name || 'Người Chơi'}</div>
+                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--rpg-muted)' }}>{meta.player_bio}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {statsConfig.length > 0 && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><Sparkles size={13} /> Chỉ số</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {statsConfig.map((sc) => {
+                  const st = statStyle(sc.key);
+                  const Icon = STAT_ICONS[st.icon] || Circle;
+                  return (
+                    <div key={sc.key} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: 'var(--rpg-panel-2)' }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: st.color + '22', color: st.color }}>
+                        <Icon size={12} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] truncate" style={{ color: 'var(--rpg-muted)' }}>{sc.label}</div>
+                        <div className="font-bold text-xs" style={{ color: 'var(--rpg-text)' }}>{rt.stats[sc.key] || 0}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {archetype === 'litrpg' && rt.skills.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {rt.skills.map((s) => <span key={s} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'var(--rpg-panel-2)', color: 'var(--rpg-text)' }}>{s}</span>)}
+                </div>
+              )}
+              {archetype === 'isekai' && rt.flags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {rt.flags.map((f) => <span key={f} className="px-1.5 py-0.5 rounded text-[10px] inline-flex items-center gap-1" style={{ background: 'var(--rpg-panel-2)', color: 'var(--rpg-text)' }}><GitBranch size={9} />{f}</span>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showInventoryTab && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><Package size={13} /> Túi đồ ({rt.inventory.length}/{archetype === 'mystery' ? mysterySlots : '∞'})</div>
+              {rt.inventory.length === 0 ? <p className="text-xs italic" style={{ color: 'var(--rpg-muted)' }}>Túi đồ trống.</p> : (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {rt.inventory.map((it, i) => (
+                    <div key={i} className="px-2 py-1.5 rounded text-xs text-center inline-flex items-center justify-center gap-1" style={{ background: 'var(--rpg-panel-2)', color: 'var(--rpg-text)' }}><Package size={11} /> {it}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showQuestTab && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><ScrollText size={13} /> Nhiệm vụ ({Object.values(rt.quests).filter((q) => q.status === 'active').length})</div>
+              {Object.keys(rt.quests).length === 0 ? <p className="text-xs italic" style={{ color: 'var(--rpg-muted)' }}>Chưa có nhiệm vụ.</p> : (
+                <div className="space-y-1.5">
+                  {Object.values(rt.quests).map((q) => (
+                    <div key={q.id} className="rounded p-2 text-xs" style={{ background: 'var(--rpg-panel-2)', opacity: q.status === 'completed' ? 0.6 : 1 }}>
+                      <div className="flex justify-between font-semibold">
+                        <span>{q.status === 'completed' ? '✓' : '•'} {q.title}</span>
+                        <span className="text-[10px]" style={{ color: q.status === 'completed' ? '#39d14a' : 'var(--rpg-accent2)' }}>{q.status === 'completed' ? 'Hoàn thành' : 'Đang làm'}</span>
+                      </div>
+                      {q.desc && <p className="mt-0.5" style={{ color: 'var(--rpg-muted)' }}>{q.desc}</p>}
+                      {q.reward && <p className="mt-0.5 flex items-center gap-1"><Gift size={11} /> {q.reward}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {affinityEntries.length > 0 && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><Heart size={13} /> Quan hệ</div>
+              <div className="space-y-1">
+                {affinityEntries.map(([n, v]) => (
+                  <div key={n} className="flex justify-between text-xs" style={{ color: 'var(--rpg-text)' }}>
+                    <span>{n}</span><b style={{ color: v >= 0 ? '#39d14a' : '#ff4d4d' }}>{v > 0 ? '+' : ''}{v}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {historyEntries.length > 0 && (
+            <div className="rpg-sheet-section">
+              <div className="rpg-sheet-section-title"><History size={13} /> Lịch sử</div>
+              <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                {historyEntries.map((h, i) => (
+                  <div key={h.id + i} className="text-xs">
+                    <div className="font-semibold" style={{ color: 'var(--rpg-accent2)' }}>{h.speaker}</div>
+                    <p style={{ color: 'var(--rpg-muted)' }}>{h.text}{h.text.length >= 140 ? '…' : ''}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rpg-sheet-section">
+            <button className="rpg-sheet-item" onClick={onReset}><RotateCcw size={15} /> Chơi lại từ đầu</button>
+            {onExit && <button className="rpg-sheet-item" onClick={onExit}><LogOut size={15} /> Thoát</button>}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
