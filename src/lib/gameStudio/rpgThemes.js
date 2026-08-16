@@ -1,4 +1,15 @@
 export const THEMES = {
+  'lily-noir': {
+    id: 'lily-noir',
+    name: 'Lily Noir · Ngự Tỷ',
+    description: 'Mực đen, rượu vang và champagne — phong cách đặc trưng LilyHub.',
+    vars: {
+      '--rpg-bg': '#12090f', '--rpg-panel': '#211019', '--rpg-panel-2': '#321725',
+      '--rpg-text': '#f7eee8', '--rpg-muted': '#b99da8', '--rpg-accent': '#d7b078',
+      '--rpg-accent2': '#a95872', '--rpg-border': '#d7b07845',
+      '--rpg-font': '"Be Vietnam Pro", system-ui, sans-serif',
+    },
+  },
   'retro-8bit': {
     id: 'retro-8bit',
     name: 'Retro 8-bit',
@@ -146,6 +157,20 @@ export const GENRES = [
   { id: 'drama', name: 'Tâm Lý / Đời Thường' },
 ];
 
+export const GAME_PRESENTATIONS = {
+  adventure: { id: 'adventure', name: 'Phiêu lưu · Chọn hành động', icon: '⚔', description: 'Bố cục điện ảnh, lựa chọn lớn — hợp fantasy, võ hiệp và sinh tồn.', theme: 'emerald-myth', archetype: 'none' },
+  dialogue: { id: 'dialogue', name: 'Visual Novel · Trò chuyện NPC', icon: '❝', description: 'Chân dung nhân vật nổi bật, khung thoại thân mật — hợp bách hợp và tâm lý.', theme: 'lily-noir', archetype: 'isekai' },
+  transmigration: { id: 'transmigration', name: 'Xuyên sách · Sửa kịch bản', icon: '蝶', description: 'Trang sách, cờ cốt truyện và hảo cảm — dành cho xuyên không/xuyên sách.', theme: 'sakura-dream', archetype: 'isekai' },
+  system: { id: 'system', name: 'Hệ thống · Trọng sinh', icon: '◇', description: 'HUD nhiệm vụ, cấp bậc và thông báo hệ thống — hợp LitRPG/trọng sinh.', theme: 'aaa-dark', archetype: 'litrpg' },
+  detective: { id: 'detective', name: 'Hồ sơ · Phá án', icon: '⌕', description: 'Bàn điều tra, chứng cứ và tâm trí — hợp trinh thám, kinh dị, bí ẩn.', theme: 'crimson-empire', archetype: 'mystery' },
+};
+
+export const PRESENTATION_ART = {
+  adventure: '/hero-adventure.png', dialogue: '/lilyhub-muse.png',
+  transmigration: '/hero-transmigration.png', system: '/hero-system.png',
+  detective: '/hero-detective.png',
+};
+
 export const ARCHETYPES = {
   none: {
     id: 'none',
@@ -271,10 +296,11 @@ export function newEmptyGame() {
       title: 'Tựa Game Mới',
       author: '',
       genre: 'fantasy',
-      theme: 'fantasy-parchment',
+      theme: 'lily-noir',
+      presentation: 'dialogue',
       archetype: 'none',
       player_name: 'Nhân Vật Chính',
-      playerAvatar: '',
+      playerAvatar: PRESENTATION_ART.dialogue,
       statsConfig,
       initialStats: statsArrayToObject(statsConfig),
       litrpg: { ranks: ['Luyện Khí', 'Trúc Cơ', 'Kim Đan', 'Nguyên Anh', 'Hóa Thần'], expPerRank: 100 },

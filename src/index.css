@@ -167,3 +167,32 @@
   .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 }
+
+.presentation-card { min-height:104px;display:flex;flex-direction:column;justify-content:space-between;text-align:left;padding:12px;border-radius:14px;border:1px solid hsl(var(--border));background:hsl(var(--background)/.45);color:hsl(var(--muted-foreground));font-size:11px;line-height:1.35;transition:.2s ease; }
+.presentation-card:hover { transform:translateY(-2px);border-color:hsl(var(--primary)/.35); }
+.presentation-card.active { color:hsl(var(--foreground));border-color:hsl(var(--primary)/.55);background:hsl(var(--primary)/.07);box-shadow:0 8px 22px hsl(var(--primary)/.09); }
+.presentation-icon { font-family:var(--font-display);font-size:22px;color:hsl(var(--primary)); }
+.rpg-npc-portrait { display:none; }
+.rpg-cinematic-bg { opacity:1; background-position:right top; background-size:auto 100%!important; background-repeat:no-repeat; filter:saturate(.96) contrast(1.02); }
+.rpg-root::after { content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,color-mix(in srgb,var(--rpg-bg) 46%,transparent) 0%,color-mix(in srgb,var(--rpg-bg) 8%,transparent) 48%,transparent 72%);z-index:0; }
+.rpg-story-panel [class*="whitespace-pre-wrap"] { text-shadow:0 1px 3px rgba(0,0,0,.75); }
+.rpg-story-panel > [class*="whitespace-pre-wrap"], .rpg-story-panel > .rpg-choice-btn, .rpg-story-panel > div:last-child { max-width:62%; position:relative; z-index:2; }
+.rpg-root > .relative { background:transparent!important; }
+.rpg-root > .relative > div[style*="var(--rpg-panel) 70%"] { background:color-mix(in srgb,var(--rpg-panel) 48%,transparent)!important; backdrop-filter:blur(5px)!important; }
+.theme-preview-strip { min-height:132px;border-radius:16px;background-size:cover;background-position:72% 25%;position:relative;overflow:hidden;border:1px solid hsl(var(--primary)/.2); }
+.theme-preview-strip::after { content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(20,8,14,.86),rgba(20,8,14,.12)); }
+.theme-preview-strip > div { position:absolute;z-index:1;left:16px;bottom:14px;color:#fff;display:flex;flex-direction:column;max-width:58%; }
+.theme-preview-strip b { font-family:var(--font-display);font-size:16px; }
+.theme-preview-strip span { font-size:10px;opacity:.75;line-height:1.45;margin-top:3px; }
+.rpg-dialogue .rpg-npc-portrait { display:block;position:absolute;right:0;top:0;bottom:0;width:45%;min-height:100%;object-fit:cover;object-position:60% 20%;opacity:.76;pointer-events:none;mask-image:linear-gradient(to left,black 45%,transparent 100%);-webkit-mask-image:linear-gradient(to left,black 45%,transparent 100%); }
+.rpg-dialogue .rpg-choice-btn { max-width:72%;position:relative;z-index:2; }
+.rpg-dialogue [class*="whitespace-pre-wrap"] { max-width:68%;position:relative;z-index:2;font-family:var(--font-display);font-size:1.08rem; }
+.rpg-adventure .rpg-choice-btn { border-radius:10px!important;border-left:3px solid var(--rpg-accent)!important;text-transform:uppercase;letter-spacing:.08em;font-size:11px; }
+.rpg-transmigration { background-image:linear-gradient(rgba(78,45,58,.14) 1px,transparent 1px);background-size:100% 28px; }
+.rpg-transmigration .rpg-choice-btn::before { content:'章';margin-right:8px;color:var(--rpg-accent); }
+.rpg-system .rpg-choice-btn { border-radius:5px!important;box-shadow:inset 3px 0 var(--rpg-accent); }
+.rpg-system [class*="rounded-2xl"] { border-radius:6px!important; }
+.rpg-detective { background-image:radial-gradient(circle at 20% 20%,color-mix(in srgb,var(--rpg-accent) 10%,transparent),transparent 35%); }
+.rpg-detective .rpg-choice-btn { border-radius:2px!important;border-style:dashed!important;font-family:ui-monospace,monospace; }
+.rpg-detective .rpg-choice-btn::before { content:'EVIDENCE / ';color:var(--rpg-accent);font-size:9px;letter-spacing:.12em; }
+@media(max-width:640px){.rpg-dialogue .rpg-npc-portrait{width:62%;opacity:.32}.rpg-dialogue .rpg-choice-btn,.rpg-dialogue [class*="whitespace-pre-wrap"],.rpg-story-panel > [class*="whitespace-pre-wrap"],.rpg-story-panel > div:last-child{max-width:100%}}

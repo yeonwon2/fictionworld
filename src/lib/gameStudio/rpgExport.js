@@ -1,4 +1,4 @@
-import { THEMES } from './rpgThemes';
+import { THEMES, PRESENTATION_ART } from './rpgThemes';
 
 function escHtml(s) {
   return String(s == null ? '' : s)
@@ -14,18 +14,54 @@ function themesForExport() {
   return out;
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Không đọc được ảnh'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inlineImage(url) {
+  if (!url || String(url).startsWith('data:')) return url || '';
+  const response = await fetch(new URL(url, window.location.origin).href);
+  if (!response.ok) throw new Error(`Không tải được ảnh (${response.status}): ${url}`);
+  const blob = await response.blob();
+  if (!blob.type.startsWith('image/')) throw new Error(`Tài nguyên không phải ảnh: ${url}`);
+  return blobToDataUrl(blob);
+}
+
+export async function prepareOfflineGame(gameData) {
+  const game = structuredClone(gameData);
+  const presentation = game.meta?.presentation || 'dialogue';
+  const defaultArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
+  game.meta.defaultArt = defaultArt;
+  const urls = new Set([defaultArt, game.meta.playerAvatar].filter(Boolean));
+  for (const node of Object.values(game.nodes || {})) {
+    if (node.bgImage) urls.add(node.bgImage);
+    if (node.npcAvatar) urls.add(node.npcAvatar);
+    if (node.combat?.enemy?.avatar) urls.add(node.combat.enemy.avatar);
+  }
+  game.meta.offlineAssets = {};
+  await Promise.all([...urls].map(async (url) => { game.meta.offlineAssets[url] = await inlineImage(url); }));
+  return game;
+}
+
 // Engine JS: NO backticks, NO ${} — uses string concatenation only.
 const ENGINE_JS = [
   '(function(){',
   '  var GAME = GAME_DATA;',
   '  var THEMES = THEMES_MAP;',
   '  var meta = GAME.meta || {};',
+  '  var presentation = meta.presentation || "dialogue";',
   '  var archetype = meta.archetype || "none";',
   '  var themeId = meta.theme || "fantasy-parchment";',
   '  var theme = THEMES[themeId] || THEMES["fantasy-parchment"];',
   '  var root = document.documentElement;',
   '  var vars = (theme && theme.vars) || {};',
   '  for (var vk in vars){ root.style.setProperty(vk, vars[vk]); }',
+  '  document.body.className = "rpg-" + presentation;',
   '',
   '  var statsConfig = meta.statsConfig || [];',
   '  if(!statsConfig.length){ var _is=meta.initialStats||{}; for(var _kk in _is){ statsConfig.push({key:_kk,label:_kk,default:_is[_kk],isVital:(_kk==="hp"||_kk==="san")}); } }',
@@ -39,6 +75,7 @@ const ENGINE_JS = [
   '  function statStyle(k){ return STAT_STYLES[k]||{c:"#94a3b8",i:"⚪"}; }',
   '  var LILYHUB_AVATARS=["https://www.lilyhub.top/avatars/a13.webp","https://www.lilyhub.top/avatars/a14.webp","https://www.lilyhub.top/avatars/a15.webp","https://www.lilyhub.top/avatars/a16.webp","https://www.lilyhub.top/avatars/a17.webp","https://www.lilyhub.top/avatars/a18.webp","https://www.lilyhub.top/avatars/a19.webp","https://www.lilyhub.top/avatars/a20.webp","https://www.lilyhub.top/avatars/a22.webp","https://www.lilyhub.top/avatars/a23.webp","https://www.lilyhub.top/avatars/a24.webp","https://www.lilyhub.top/avatars/a25.webp","https://www.lilyhub.top/avatars/a26.webp","https://www.lilyhub.top/avatars/a27.webp","https://www.lilyhub.top/avatars/a28.webp"];',
   '  function dicebear(seed){ var s=String(seed||"Hero"); var h=0; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return LILYHUB_AVATARS[h%LILYHUB_AVATARS.length]; }',
+  '  function asset(url){ return (meta.offlineAssets&&meta.offlineAssets[url])||url||""; }',
   '',
   '  var SAVE_KEY = "rpg_save_" + (meta.title||"game").replace(/[^a-z0-9]/gi,"_");',
   '  var state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{} };',
@@ -66,7 +103,7 @@ const ENGINE_JS = [
   '',
   '  var combatState=null;',
   '  function startCombat(node){ combatState={ node:node, enemyHp:node.combat.enemy.hp, enemyMaxHp:node.combat.enemy.hp, playerHp:state.stats.hp||100, playerMaxHp:state.stats.hp||100, playerMp:state.stats.mp||state.stats.mana||30, defending:false, turn:"player", over:null, log:[{t:"start",text:(node.combat.enemy.name||"Kẻ thù")+" xuất hiện! "+(node.combat.enemy.intro||"")}] }; renderCombat(); }',
-  '  function renderCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var cb=node.combat; var e=cb.enemy; var s=""; s+=\'<div class="rpg-combat"><div class="rpg-combat-tag">⚔️ Chiến Đấu</div>\'; s+=\'<div class="rpg-combat-enemy"><img class="rpg-combat-avatar" src="\'+esc(e.avatar||dicebear(e.name))+\'"/><div class="rpg-combat-enemyinfo"><div class="rpg-combat-name">\'+esc(e.name||"Kẻ thù")+\'</div><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.enemyHp/cs.enemyMaxHp*100))+\'%"></div></div><div class="rpg-hpnum">\'+cs.enemyHp+\'/\'+cs.enemyMaxHp+\'</div>\'+(e.intro?\'<div class="rpg-combat-intro">\'+esc(e.intro)+\'</div>\':"")+\'</div></div>\'; s+=\'<div class="rpg-combat-player"><div class="rpg-mpbar-wrap"><span>HP</span><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerHp/cs.playerMaxHp*100))+\'%"></div></div><span>\'+cs.playerHp+\'</span></div><div class="rpg-mpbar-wrap"><span>MP</span><div class="rpg-mpbar"><div class="rpg-mpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerMp/30*100))+\'%"></div></div><span>\'+cs.playerMp+\'</span></div></div>\'; s+=\'<div class="rpg-combat-log" id="combatLog">\'; for(var i=0;i<cs.log.length;i++){ var l=cs.log[i]; s+=\'<div class="rpg-clog rpg-clog-\'+l.t+\'">\'+esc(l.text)+\'</div>\'; } s+=\'</div>\'; if(!cs.over){ s+=\'<div class="rpg-combat-actions"><button class="rpg-cbtn red" data-act="atk">⚔️ Tấn công</button><button class="rpg-cbtn sky" data-act="def">🛡 Phòng thủ</button>\'; if(state.skills && state.skills.length){ s+=\'<button class="rpg-cbtn violet" data-act="skill">✨ \'+esc(state.skills[0])+\' (15MP)</button>\'; } s+=\'<button class="rpg-cbtn outline" data-act="flee">🏃 Bỏ chạy</button></div>\'; if(cs.turn==="enemy"){ s+=\'<div class="rpg-clog-hint">Lượt địch hành động...</div>\'; } } else { s+=\'<div class="rpg-combat-over">\'+(cs.over==="win"?"🏆 Chiến thắng!":cs.over==="flee"?"🏃 Đã rút lui":"💀 Thất bại...")+\'<button class="rpg-sys-btn" id="combatDone">Tiếp tục</button></div>\'; } s+=\'</div>\'; var container=document.getElementById("game"); container.innerHTML=renderStatusBar()+renderArchBar()+s; bindStatusBar(); var btns=container.querySelectorAll(".rpg-cbtn"); for(var j=0;j<btns.length;j++){ (function(b){ b.addEventListener("click", function(){ combatAct(b.getAttribute("data-act")); }); })(btns[j]); } var cd=container.querySelector("#combatDone"); if(cd) cd.addEventListener("click", finishCombat); }',
+  '  function renderCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var cb=node.combat; var e=cb.enemy; var s=""; s+=\'<div class="rpg-combat"><div class="rpg-combat-tag">⚔️ Chiến Đấu</div>\'; s+=\'<div class="rpg-combat-enemy"><img class="rpg-combat-avatar" src="\'+esc(asset(e.avatar)||dicebear(e.name))+\'"/><div class="rpg-combat-enemyinfo"><div class="rpg-combat-name">\'+esc(e.name||"Kẻ thù")+\'</div><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.enemyHp/cs.enemyMaxHp*100))+\'%"></div></div><div class="rpg-hpnum">\'+cs.enemyHp+\'/\'+cs.enemyMaxHp+\'</div>\'+(e.intro?\'<div class="rpg-combat-intro">\'+esc(e.intro)+\'</div>\':"")+\'</div></div>\'; s+=\'<div class="rpg-combat-player"><div class="rpg-mpbar-wrap"><span>HP</span><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerHp/cs.playerMaxHp*100))+\'%"></div></div><span>\'+cs.playerHp+\'</span></div><div class="rpg-mpbar-wrap"><span>MP</span><div class="rpg-mpbar"><div class="rpg-mpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerMp/30*100))+\'%"></div></div><span>\'+cs.playerMp+\'</span></div></div>\'; s+=\'<div class="rpg-combat-log" id="combatLog">\'; for(var i=0;i<cs.log.length;i++){ var l=cs.log[i]; s+=\'<div class="rpg-clog rpg-clog-\'+l.t+\'">\'+esc(l.text)+\'</div>\'; } s+=\'</div>\'; if(!cs.over){ s+=\'<div class="rpg-combat-actions"><button class="rpg-cbtn red" data-act="atk">⚔️ Tấn công</button><button class="rpg-cbtn sky" data-act="def">🛡 Phòng thủ</button>\'; if(state.skills && state.skills.length){ s+=\'<button class="rpg-cbtn violet" data-act="skill">✨ \'+esc(state.skills[0])+\' (15MP)</button>\'; } s+=\'<button class="rpg-cbtn outline" data-act="flee">🏃 Bỏ chạy</button></div>\'; if(cs.turn==="enemy"){ s+=\'<div class="rpg-clog-hint">Lượt địch hành động...</div>\'; } } else { s+=\'<div class="rpg-combat-over">\'+(cs.over==="win"?"🏆 Chiến thắng!":cs.over==="flee"?"🏃 Đã rút lui":"💀 Thất bại...")+\'<button class="rpg-sys-btn" id="combatDone">Tiếp tục</button></div>\'; } s+=\'</div>\'; var container=document.getElementById("game"); container.innerHTML=renderStatusBar()+renderArchBar()+s; bindStatusBar(); var btns=container.querySelectorAll(".rpg-cbtn"); for(var j=0;j<btns.length;j++){ (function(b){ b.addEventListener("click", function(){ combatAct(b.getAttribute("data-act")); }); })(btns[j]); } var cd=container.querySelector("#combatDone"); if(cd) cd.addEventListener("click", finishCombat); }',
   '  function combatAct(act){ var cs=combatState; if(!cs||cs.over||cs.turn!=="player") return; var e=cs.node.combat.enemy; var pAtk=12+(state.rankIndex||0)*3+((state.skills||[]).length*2); if(act==="atk"){ var crit=Math.random()<0.15; var dmg=Math.max(1,Math.round((pAtk-e.defense)*(0.85+Math.random()*0.3))); if(crit) dmg=Math.round(dmg*1.6); cs.enemyHp=Math.max(0,cs.enemyHp-dmg); cs.log.push({t:crit?"crit":"player",text:"Bạn tấn công"+(crit?" (CRITICAL!)":"")+" gây "+dmg+" sát thương."}); if(cs.enemyHp<=0){ cs.over="win"; cs.log.push({t:"win",text:"Bạn đã đánh bại "+(e.name||"kẻ thù")+"!"}); } else { cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } if(act==="def"){ cs.defending=true; cs.log.push({t:"defend",text:"Bạn giơ khiên phòng thủ."}); cs.turn="enemy"; renderCombat(); setTimeout(combatEnemyTurn,600); return; } if(act==="skill"){ if(cs.playerMp<15){ cs.log.push({t:"warn",text:"Không đủ MP!"}); renderCombat(); return; } cs.playerMp-=15; var sdmg=Math.max(1,Math.round((pAtk-e.defense)*1.8)+Math.floor(Math.random()*6)); cs.enemyHp=Math.max(0,cs.enemyHp-sdmg); cs.log.push({t:"skill",text:"Kỹ năng bùng nổ! Gây "+sdmg+" sát thương."}); if(cs.enemyHp<=0){ cs.over="win"; cs.log.push({t:"win",text:"Chiến thắng!"}); } else { cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } if(act==="flee"){ var fc=cs.node.combat.fleeChance!=null?cs.node.combat.fleeChance:0.4; if(Math.random()<fc){ cs.over="flee"; cs.log.push({t:"flee",text:"Bỏ chạy thành công!"}); } else { cs.log.push({t:"warn",text:"Bỏ chạy thất bại!"}); cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } }',
   '  function combatEnemyTurn(){ var cs=combatState; if(!cs||cs.over) return; var e=cs.node.combat.enemy; var dmg=Math.max(1,Math.round(e.attack*(0.85+Math.random()*0.3))); if(cs.defending) dmg=Math.max(1,Math.round(dmg*0.4)); cs.defending=false; cs.playerHp=Math.max(0,cs.playerHp-dmg); cs.log.push({t:"enemy",text:(e.name||"Kẻ thù")+" gây "+dmg+" sát thương."}); if(cs.playerHp<=0){ cs.over="lose"; cs.log.push({t:"lose",text:"Bạn đã gục ngã..."}); } else { cs.turn="player"; } renderCombat(); }',
   '  function finishCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var ns=Object.assign({}, state.stats, {hp:cs.playerHp, mp:cs.playerMp}); var inv=state.inventory.slice(); var target=null; if(cs.over==="win"){ var loot=node.combat.loot||{}; if(loot.statModifiers){ for(var k in loot.statModifiers){ ns[k]=(ns[k]||0)+loot.statModifiers[k]; } } if(loot.grantItem && inv.indexOf(loot.grantItem)<0 && inv.length<mysterySlots){ inv.push(loot.grantItem); pushEvent("📦","Nhặt được: "+loot.grantItem); } if(loot.exp){ var exp=state.exp+loot.exp; var ri=state.rankIndex; var ranks=litrpg.ranks||[]; var per=litrpg.expPerRank||100; while(exp>=per && ri<ranks.length-1){ exp-=per; ri++; pushEvent("⚡","Đột phá! Đạt "+ranks[ri]); } ns.exp=exp; ns.rankIndex=ri; } target=node.combat.winTarget; pushEvent("🏆","Chiến thắng "+(node.combat.enemy.name||"kẻ thù")+"!"); } else if(cs.over==="flee"){ target=node.combat.fleeTarget; } else { target=node.combat.loseTarget; } state.stats=ns; state.inventory=inv; var dead=cs.over==="lose"||checkGameOver(ns); combatState=null; if(!dead && target && GAME.nodes[target]){ state.history.push(state.nodeId); state.nodeId=target; } save(); render(); }',
@@ -78,7 +115,7 @@ const ENGINE_JS = [
   '',
   '  function renderStatusBar(){ var s="";',
   '    s+=\'<div class="rpg-player">\';',
-  '    s+=\'<img class="rpg-avatar" src="\'+esc(meta.playerAvatar||dicebear(meta.player_name))+\'"/>\';',
+  '    s+=\'<img class="rpg-avatar" src="\'+esc(asset(meta.playerAvatar)||dicebear(meta.player_name))+\'"/>\';',
   '    s+=\'<div class="rpg-playerinfo"><div class="rpg-playername">\'+esc(meta.player_name||"Người Chơi")+\'</div><div class="rpg-stats">\';',
   '    for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; var st=statStyle(sc.key); s+=\'<span class="rpg-stat" style="color:\'+st.c+\';background:\'+st.c+\'1f;border-color:\'+st.c+\'66;box-shadow:0 0 6px \'+st.c+\'33">\'+st.i+\' \'+(state.stats[sc.key]||0)+\'</span>\'; }',
   '    s+=\'</div></div></div>\';',
@@ -105,8 +142,8 @@ const ENGINE_JS = [
   '    s+=\'<div class="rpg-statusbar">\'+renderStatusBar()+\'</div>\';',
   '    s+=renderArchBar();',
   '    s+=renderTabs();',
-  '    s+=\'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(node.bgImage||"")+\'\\\')"></div>\';',
-  '    s+=\'<div class="rpg-scene"><div class="rpg-scene-head"><div class="rpg-speaker">\'+esc(node.speaker||"")+\'</div></div>\';',
+  '    s+=\'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(asset(node.bgImage)||"")+\'\\\')"></div>\';',
+  '    s+=\'<div class="rpg-scene">\'+(presentation==="dialogue"?\'<img class="rpg-npc-portrait" src="\'+esc(asset(node.npcAvatar||meta.playerAvatar)||dicebear(node.speaker))+\'"/>\':"")+\'<div class="rpg-scene-head"><div class="rpg-speaker">\'+esc(node.speaker||"")+\'</div></div>\';',
   '    s+=\'<div class="rpg-dialogue" id="dialogue"></div>\';',
   '    s+=\'<button class="rpg-skip" id="skipBtn">Bỏ qua</button>\';',
   '    s+=\'<div class="rpg-choices" id="choices"></div></div>\';',
@@ -149,7 +186,7 @@ const ENGINE_JS = [
   '',
   '  function renderGameOver(){ return \'<div class="rpg-bg"></div><div class="rpg-ending"><div class="rpg-ending-badge bad">GAME OVER</div><div class="rpg-ending-text">Bạn đã gục ngã. Số phận đã khép lại quá sớm...</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="goRestart">Bắt đầu lại</button></div>\'; }',
   '',
-  '  function renderEnding(node){ var et=node.endingType||"NORMAL_END"; var em=ENDINGS[et]||{l:"Kết Thúc",i:"T"}; return \'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(node.bgImage||"")+\'\\\')"></div><div class="rpg-ending"><div class="rpg-ending-badge \'+et.toLowerCase()+\'">\'+em.i+" "+em.l+\'</div><div class="rpg-ending-text">\'+esc(node.text||"")+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="endRestart">Chơi lại từ đầu</button></div>\'; }',
+  '  function renderEnding(node){ var et=node.endingType||"NORMAL_END"; var em=ENDINGS[et]||{l:"Kết Thúc",i:"T"}; return \'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(asset(node.bgImage)||"")+\'\\\')"></div><div class="rpg-ending"><div class="rpg-ending-badge \'+et.toLowerCase()+\'">\'+em.i+" "+em.l+\'</div><div class="rpg-ending-text">\'+esc(node.text||"")+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="endRestart">Chơi lại từ đầu</button></div>\'; }',
   '',
   '  function bindStatusBar(){ var bb=document.getElementById("btnBio"); if(bb) bb.addEventListener("click", function(){ showSystemPopup({title:meta.player_name||"Nhân vật", text:meta.player_bio||""}); }); var br=document.getElementById("btnReset"); if(br) br.addEventListener("click", function(){ reset(); render(); }); }',
   '  function bindTabs(){ var tb=document.querySelectorAll(".rpg-tab"); for(var i=0;i<tb.length;i++){ (function(b){ b.addEventListener("click", function(){ activeTab=b.getAttribute("data-tab"); var tw=document.querySelector(".rpg-tabs-wrap"); if(tw){ tw.outerHTML=renderTabs(); bindTabs(); } }); })(tb[i]); } }',
@@ -230,6 +267,16 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-choice:hover{transform:translateY(-2px);box-shadow:0 0 16px var(--rpg-accent);background:color-mix(in srgb,var(--rpg-accent) 18%,var(--rpg-panel-2));color:var(--rpg-text);}
 .rpg-choice-disabled{opacity:0.6;cursor:not-allowed;border-style:dashed;}
 .rpg-choice-disabled:hover{transform:none;background:var(--rpg-panel-2);color:var(--rpg-text);box-shadow:none;}
+.rpg-npc-portrait{display:none;}
+body.rpg-dialogue .rpg-npc-portrait{display:block;position:absolute;right:0;top:0;bottom:0;width:45%;min-height:100%;object-fit:cover;object-position:60% 20%;opacity:.76;pointer-events:none;mask-image:linear-gradient(to left,black 45%,transparent 100%);-webkit-mask-image:linear-gradient(to left,black 45%,transparent 100%);}
+body.rpg-dialogue .rpg-choice,body.rpg-dialogue .rpg-dialogue{max-width:70%;position:relative;z-index:2;}
+body.rpg-adventure .rpg-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.08em;font-size:11px;}
+body.rpg-transmigration{background-image:linear-gradient(rgba(78,45,58,.14) 1px,transparent 1px);background-size:100% 28px;}
+body.rpg-transmigration .rpg-choice:before{content:'章';margin-right:8px;color:var(--rpg-accent);}
+body.rpg-system .rpg-choice{border-radius:5px;box-shadow:inset 3px 0 var(--rpg-accent);}
+body.rpg-system .rpg-scene{border-radius:6px;}
+body.rpg-detective .rpg-choice{border-radius:2px;border-style:dashed;font-family:ui-monospace,monospace;}
+body.rpg-detective .rpg-choice:before{content:'EVIDENCE / ';color:var(--rpg-accent);font-size:9px;letter-spacing:.12em;}
 .rpg-lock{font-size:13px;}
 .rpg-clabel{font-size:10px;font-weight:bold;padding:2px 6px;border-radius:4px;margin-right:4px;}
 .rpg-req{display:block;font-size:12px;color:var(--rpg-muted);margin-top:2px;}
@@ -302,11 +349,11 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-cbtn:hover{filter:brightness(1.15);}
 .rpg-cbtn:disabled{opacity:0.5;cursor:not-allowed;}
 .rpg-combat-over{text-align:center;font-size:18px;font-weight:bold;color:#39d14a;display:flex;flex-direction:column;align-items:center;gap:12px;}
-@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;max-height:38vh;overflow-y:auto;padding-right:4px;} }
+@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;max-height:38vh;overflow-y:auto;padding-right:4px;} body.rpg-dialogue .rpg-npc-portrait{width:62%;opacity:.32} body.rpg-dialogue .rpg-choice,body.rpg-dialogue .rpg-dialogue{max-width:100%} }
 `;
 
 export function generateStandaloneHTML(gameData) {
-  const json = JSON.stringify(gameData);
+  const json = JSON.stringify(gameData).replace(/<\/script/gi, '<\\/script');
   const themesJson = JSON.stringify(themesForExport());
   const title = escHtml((gameData.meta && gameData.meta.title) || 'RPG Game');
   const engine = ENGINE_JS.replace('THEMES_MAP', themesJson);
@@ -334,6 +381,6 @@ ${engine}
 
 export function generateIframeCode(gameData) {
   const html = generateStandaloneHTML(gameData);
-  const blobUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-  return `<iframe src="${blobUrl}" width="100%" height="700px" style="border:0;border-radius:12px;" allowfullscreen></iframe>`;
+  const srcdoc = html.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<iframe srcdoc="${srcdoc}" width="100%" height="700" style="border:0;border-radius:12px;" loading="lazy" allowfullscreen></iframe>`;
 }

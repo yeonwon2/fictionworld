@@ -20,8 +20,10 @@
 // → <Tên chỉ số> +5            (cộng điểm — tự nhận diện & tạo chỉ số mới nếu chưa có)
 // → <Tên chỉ số> -10           (trừ điểm)
 // → Cần <Tên chỉ số> >= 20     (khoá lựa chọn nếu chỉ số chưa đủ)
-// → Cờ: ten_co                 (bật một "cờ truyện" — dùng để nhớ lựa chọn trước đó)
-// → Cần cờ: ten_co             (khoá lựa chọn nếu cờ chưa bật)
+// → Cờ: đã hứa ở lại           (bật một "cờ truyện" — dùng để nhớ lựa chọn trước đó; đây
+//                                cũng là câu chữ sẽ hiện thẳng cho người chơi xem trong
+//                                thông báo, nên hãy viết bằng tiếng Việt tự nhiên)
+// → Cần cờ: đã hứa ở lại       (khoá lựa chọn nếu cờ chưa bật — gõ đúng y hệt câu ở trên)
 // → Vật phẩm: tên vật phẩm     (nhặt vật phẩm)
 // → Cần vật phẩm: tên vật phẩm (khoá lựa chọn nếu chưa có vật phẩm)
 // → Đến cảnh 3                 (chỉ định thẳng cảnh tiếp theo — nếu bỏ qua, mặc định là cảnh liền sau trong văn bản)
@@ -137,8 +139,8 @@ export function parseScript(scriptText, baseMeta = {}) {
       return;
     }
     let m;
-    if ((m = raw.match(RE_EFF_FLAG))) { target.grantFlag = slugify(m[1]); return; }
-    if ((m = raw.match(RE_EFF_REQ_FLAG))) { target.requiresFlag = slugify(m[1]); return; }
+    if ((m = raw.match(RE_EFF_FLAG))) { target.grantFlag = m[1].trim(); return; }
+    if ((m = raw.match(RE_EFF_REQ_FLAG))) { target.requiresFlag = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_ITEM))) { target.grantItem = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_ITEM))) { target.requiresItem = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_GOTO))) { target.__explicitTarget = "scene_" + m[1]; return; }

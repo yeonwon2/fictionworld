@@ -159,6 +159,7 @@ async function fillNodeBatch({ chunkNodes, blueprintNodes, meta, prompt }) {
     '- Khoảng 40% node của bạn nên có "randomEvents" (mảng { chance:0.1-0.4, text, statModifiers, grantItem, icon }).',
     "- Chỉ số khả dụng: " + statKeys.join(", ") + ". Giá trị ban đầu: " + JSON.stringify(stats) + ".",
     "- Toàn bộ tiếng Việt, đậm chất thể loại " + genre + ".",
+    '- QUAN TRỌNG: mọi tên vật phẩm (grantItem), tên "cờ truyện" (setFlags/grantFlag), tên kỹ năng (unlockSkill), tên nhiệm vụ (quest.title) đều HIỆN THẲNG cho người chơi xem trong thông báo trên màn hình — PHẢI là cụm từ tiếng Việt tự nhiên, có dấu, viết hoa đầu câu bình thường (vd "Đã giết người", "Nhẫn bạc của mẹ", "Né đòn thành thạo"). TUYỆT ĐỐI KHÔNG dùng tiếng Anh, snake_case, hay id kỹ thuật (vd "kill_people", "silver_ring" là SAI).',
     archetypeContentRules(archetype, meta.litrpg),
   ].filter(Boolean).join("\n");
 

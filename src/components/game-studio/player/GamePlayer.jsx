@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Save, FolderOpen, RotateCcw, Lock, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices } from 'lucide-react';
-import { THEMES, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar } from '@/lib/gameStudio/rpgThemes';
+import { Info, RotateCcw, Lock, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices } from 'lucide-react';
+import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar } from '@/lib/gameStudio/rpgThemes';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 
@@ -9,6 +9,8 @@ const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, b
 
 export default function GamePlayer({ gameData }) {
   const meta = gameData.meta;
+  const presentation = meta.presentation || 'dialogue';
+  const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
   const archetype = meta.archetype || 'none';
   const statsConfig = meta.statsConfig || [];
   const theme = THEMES[meta.theme] || THEMES['fantasy-parchment'];
@@ -44,7 +46,6 @@ export default function GamePlayer({ gameData }) {
   rtRef.current = rt;
 
   const node = gameData.nodes[rt.nodeId] || gameData.nodes['start_node'];
-  const SAVE_KEY = 'rpg_play_' + (meta.title || 'game').replace(/[^a-z0-9]/gi, '_');
 
   const playTing = useCallback(() => {
     try {
@@ -289,14 +290,6 @@ export default function GamePlayer({ gameData }) {
     setCombatActive(false);
     setDicePending(null);
   };
-  const save = () => localStorage.setItem(SAVE_KEY, JSON.stringify(rt));
-  const load = () => {
-    try {
-      const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (s) { setRt(s); setForceKey((k) => k + 1); }
-    } catch (e) {}
-  };
-
   const themeStyle = {};
   for (const k of Object.keys(theme.vars)) themeStyle[k] = theme.vars[k];
   const endingMeta = ENDING_TYPES[node?.endingType];
@@ -307,9 +300,9 @@ export default function GamePlayer({ gameData }) {
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
 
   return (
-    <div style={themeStyle} className={`rpg-root rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative neon-border${shake ? ' animate-shake' : ''}`}>
-      <div className="absolute inset-0 bg-cover bg-center opacity-25 pointer-events-none" style={{ backgroundImage: `url(${node?.bgImage || ''})` }} />
-      <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 10%, transparent)', backdropFilter: 'blur(2px)' }}>
+    <div style={themeStyle} data-presentation={presentation} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative neon-border${shake ? ' animate-shake' : ''}`}>
+      <div className="rpg-cinematic-bg absolute inset-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: `url(${node?.bgImage || heroineArt})` }} />
+      <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
         {/* Status bar */}
         <div className="flex justify-between items-start gap-2 rounded-xl p-2.5 flex-wrap" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 65%, transparent)', border: '1px solid var(--rpg-accent)44', backdropFilter: 'blur(10px)', boxShadow: '0 0 14px var(--rpg-accent)11' }}>
           <div className="flex items-center gap-2.5">
@@ -330,8 +323,9 @@ export default function GamePlayer({ gameData }) {
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
-            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={save} title="Lưu tiến trình chơi thử này vào trình duyệt (không phải lưu game)"><Save size={13} className="sm:mr-1" /><span className="hidden sm:inline">Lưu tiến trình</span></Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={load} title="Tải lại tiến trình chơi thử đã lưu"><FolderOpen size={13} className="sm:mr-1" /><span className="hidden sm:inline">Tải tiến trình</span></Button>
+            {meta.player_bio && (
+              <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={() => setSystemPopup({ title: meta.player_name || 'Nhân vật', text: meta.player_bio })} title="Thông tin nhân vật"><Info size={13} className="sm:mr-1" /><span className="hidden sm:inline">Nhân vật</span></Button>
+            )}
             <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={reset} title="Chơi lại"><RotateCcw size={13} className="sm:mr-1" /><span className="hidden sm:inline">Chơi lại</span></Button>
           </div>
         </div>
@@ -429,7 +423,8 @@ export default function GamePlayer({ gameData }) {
         )}
         {/* Scene */}
         {screen === 'scene' && node && !combatActive && (
-          <div className="flex flex-col flex-1 gap-3 rounded-2xl p-5 relative" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 70%, transparent)', border: '2px solid var(--rpg-accent)', boxShadow: '0 0 18px var(--rpg-accent)22, inset 0 0 30px rgba(0,0,0,0.3)', backdropFilter: 'blur(10px)' }}>
+          <div className="rpg-story-panel flex flex-col flex-1 gap-3 rounded-2xl p-5 relative" style={{ background: 'linear-gradient(90deg, color-mix(in srgb, var(--rpg-panel) 62%, transparent) 0%, color-mix(in srgb, var(--rpg-panel) 24%, transparent) 58%, color-mix(in srgb, var(--rpg-panel) 8%, transparent) 100%)', border: '1px solid var(--rpg-accent)88', boxShadow: '0 12px 36px rgba(0,0,0,0.18)', backdropFilter: 'blur(2px)' }}>
+            {presentation === 'dialogue' && <img src={node.npcAvatar || meta.playerAvatar || heroineArt || dicebearAvatar(node.speaker)} alt={node.speaker || 'NPC'} className="rpg-npc-portrait" />}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-2.5 py-1 rounded-full" style={{ background: 'var(--rpg-accent2)22', color: 'var(--rpg-accent2)', border: '1px solid var(--rpg-accent2)66' }}>{node.speaker}</div>
             </div>

@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, Image as ImageIcon } from 'lucide-react';
-import { THEMES, GENRES, ARCHETYPES, PRESET_AVATARS, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
+import { GENRES, ARCHETYPES, GAME_PRESENTATIONS, PRESENTATION_ART, PRESET_AVATARS, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
 
 export default function GameMetaConfig({ gameData, setGameData }) {
   const { meta } = gameData;
@@ -17,6 +17,13 @@ export default function GameMetaConfig({ gameData, setGameData }) {
   const onArchetypeChange = (archetype) => {
     const statsConfig = applyArchetypeStats(meta.statsConfig, archetype);
     updateMeta({ archetype, statsConfig, initialStats: statsArrayToObject(statsConfig) });
+  };
+
+  const onPresentationChange = (presentation) => {
+    const preset = GAME_PRESENTATIONS[presentation];
+    if (!preset) return;
+    const statsConfig = applyArchetypeStats(meta.statsConfig, preset.archetype);
+    updateMeta({ presentation, theme: preset.theme, archetype: preset.archetype, playerAvatar: PRESENTATION_ART[presentation], statsConfig, initialStats: statsArrayToObject(statsConfig) });
   };
 
   const updateStat = (idx, patch) => {
@@ -73,16 +80,18 @@ export default function GameMetaConfig({ gameData, setGameData }) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Theme (giao diện)</Label>
-          <Select value={meta.theme} onValueChange={(v) => updateMeta({ theme: v })}>
+          <Label className="text-xs">Theme (giao diện & cách chơi)</Label>
+          <Select value={meta.presentation || 'dialogue'} onValueChange={onPresentationChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Object.values(THEMES).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              {Object.values(GAME_PRESENTATIONS).map((p) => <SelectItem key={p.id} value={p.id}>{p.icon} {p.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
-      <p className="text-xs text-muted-foreground -mt-1">{THEMES[meta.theme]?.description}</p>
+      <div className="theme-preview-strip" style={{ backgroundImage: `url(${PRESENTATION_ART[meta.presentation || 'dialogue']})` }}>
+        <div><b>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.name}</b><span>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.description}</span></div>
+      </div>
 
       <div className="space-y-1.5">
         <Label className="text-xs">🎮 Archetype / Cơ chế gameplay</Label>
