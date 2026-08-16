@@ -84,7 +84,7 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3">
       <h3 className="font-semibold text-sm flex items-center gap-2"><FileText size={16} /> Xưởng Offline — Sản xuất từ kịch bản viết sẵn</h3>
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Dán kịch bản đã viết theo đúng cú pháp bên dưới (hoặc để AI viết giúp), hệ thống sẽ sản xuất game trực tiếp — không cần gọi AI, luôn ra đúng những gì bạn đã viết.
+        Dán kịch bản đã viết theo đúng cú pháp bên dưới (hoặc để AI viết giúp), hệ thống sẽ sản xuất game trực tiếp — không cần gọi AI, luôn ra đúng những gì bạn đã viết. Quên "#" hay "**" cũng không sao — hệ thống nhận diện qua từ khoá ("CẢNH", "KẾT THÚC", "GIỚI THIỆU"...), không bắt buộc phải có ký hiệu markdown.
       </p>
 
       <details className="text-xs rounded-lg border border-border">

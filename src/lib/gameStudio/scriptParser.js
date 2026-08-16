@@ -44,6 +44,11 @@
 // dẫn tới CẢNH kế tiếp theo đúng thứ tự xuất hiện trong văn bản — nghĩa là một
 // kịch bản hoàn toàn tuyến tính chỉ cần liệt kê cảnh theo thứ tự, không cần
 // khai báo "Đến cảnh" ở mọi lựa chọn.
+//
+// Các ký hiệu markdown (#, ##, **) chỉ để DỄ ĐỌC, KHÔNG bắt buộc — hệ thống
+// nhận diện "CẢNH", "KẾT THÚC", "GIỚI THIỆU", lựa chọn (A/B/C...) qua từ khoá,
+// dù có hay thiếu #/##/** đều đọc được như nhau. Mũi tên hiệu ứng "→" có thể
+// gõ thành "->" hoặc "=>" nếu bàn phím không gõ được ký tự →.
 // =============================================================================
 
 import { normalizeAndRepair } from "./postprocess";
@@ -58,14 +63,22 @@ export function slugify(label) {
     .replace(/^_+|_+$/g, "") || "x";
 }
 
-const RE_TITLE = /^#\s+(.+)$/;
-const RE_META_GENRE = /^\*\*Thể loại:\*\*\s*(.+)$/i;
-const RE_META_AUTHOR = /^\*\*Tác giả:\*\*\s*(.+)$/i;
-const RE_INTRO = /^##\s+GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^##\s+CẢNH\s+(\d+)\s*[—-]\s*(.+)$/i;
-const RE_ENDING = /^##\s+KẾT THÚC\s+(\S+)\s*[—-]\s*(.+?)(?:\s*\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
-const RE_CHOICE = /^\*\*([A-ZĐ])\s*[—-]\s*(.+?)\*\*\s*$/;
-const RE_EFFECT = /^→\s*(.+)$/;
+// Các dòng "đề mục" (tiêu đề/cảnh/kết thúc/lựa chọn/meta) được nhận diện qua
+// TỪ KHOÁ, không bắt buộc phải có "#"/"##"/"**" bao quanh — người viết tay
+// rất hay quên các ký hiệu markdown này, nên hệ thống tự bỏ qua chúng khi
+// nhận diện (stripMarkers), chỉ dùng để phân biệt tiêu đề game (không từ
+// khoá, dựa vào việc là dòng nội dung đầu tiên của văn bản).
+function stripMarkers(line) {
+  return line.replace(/^#{1,6}\s*/, "").replace(/^\*{1,3}\s*/, "").replace(/\*{1,3}\s*$/, "").trim();
+}
+
+const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
+const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
+const RE_INTRO = /^GIỚI THIỆU\s*$/i;
+const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
+const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
+const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
 
 const RE_EFF_FLAG = /^Cờ:\s*(.+)$/i;
 const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
@@ -148,23 +161,23 @@ export function parseScript(scriptText, baseMeta = {}) {
     const raw = lines[i];
     const line = raw.trim();
     if (!line) continue;
+    const norm = stripMarkers(line);
 
     let m;
-    if (!title && (m = line.match(RE_TITLE))) { title = m[1].trim(); continue; }
-    if ((m = line.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
-    if ((m = line.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
 
-    if (RE_INTRO.test(line)) {
+    if (RE_INTRO.test(norm)) {
       introNode = { id: "start_node", speaker: "", text: "", bgImage: "", isEnding: false, endingType: null, choices: [] };
       currentNode = introNode;
       currentChoice = null;
       continue;
     }
 
-    if ((m = line.match(RE_SCENE))) {
+    if ((m = norm.match(RE_SCENE))) {
       const n = m[1];
       const id = "scene_" + n;
-      const node = { id, speaker: m[2].trim(), text: "", bgImage: "", isEnding: false, endingType: null, choices: [] };
+      const node = { id, speaker: (m[2] || "").trim(), text: "", bgImage: "", isEnding: false, endingType: null, choices: [] };
       nodesMap[id] = node;
       sceneOrder.push(id);
       currentNode = node;
@@ -172,16 +185,16 @@ export function parseScript(scriptText, baseMeta = {}) {
       continue;
     }
 
-    if ((m = line.match(RE_ENDING))) {
+    if ((m = norm.match(RE_ENDING))) {
       const id = "ending_" + slugify(m[1]);
-      const node = { id, speaker: m[2].trim(), text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
+      const node = { id, speaker: (m[2] || "").trim(), text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
       nodesMap[id] = node;
       currentNode = node;
       currentChoice = null;
       continue;
     }
 
-    if ((m = line.match(RE_CHOICE))) {
+    if ((m = norm.match(RE_CHOICE))) {
       if (!currentNode) { warnings.push(`Dòng ${lineNo}: có lựa chọn nhưng chưa thuộc cảnh nào (bỏ qua).`); continue; }
       const choice = {
         text: stripMarkdown(m[2]),
@@ -193,8 +206,15 @@ export function parseScript(scriptText, baseMeta = {}) {
       continue;
     }
 
-    if ((m = line.match(RE_EFFECT))) {
+    if ((m = norm.match(RE_EFFECT))) {
       applyEffectLine(m[1].trim(), lineNo);
+      continue;
+    }
+
+    // Dòng đầu tiên của cả văn bản, chưa thuộc GIỚI THIỆU/CẢNH/KẾT THÚC nào
+    // → coi là tên game (kể cả khi người viết quên "#" đầu dòng).
+    if (!title && !currentNode) {
+      title = norm;
       continue;
     }
 

@@ -321,18 +321,18 @@ export default function GamePlayer({ gameData }) {
                   const st = statStyle(sc.key);
                   const Icon = STAT_ICONS[st.icon] || Circle;
                   return (
-                    <span key={sc.key} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: st.color + '1f', border: `1px solid ${st.color}66`, color: st.color, boxShadow: `0 0 6px ${st.color}33` }}>
-                      <Icon size={11} /> {rt.stats[sc.key] || 0}
+                    <span key={sc.key} title={sc.label} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: st.color + '1f', border: `1px solid ${st.color}66`, color: st.color, boxShadow: `0 0 6px ${st.color}33` }}>
+                      <Icon size={11} /> <span className="opacity-80 font-normal">{sc.label}</span> {rt.stats[sc.key] || 0}
                     </span>
                   );
                 })}
               </div>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={save} title="Lưu tiến trình chơi thử này vào trình duyệt (không phải lưu game)"><Save size={13} className="mr-1" />Lưu tiến trình</Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={load} title="Tải lại tiến trình chơi thử đã lưu"><FolderOpen size={13} className="mr-1" />Tải tiến trình</Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={reset}><RotateCcw size={13} className="mr-1" />Chơi lại</Button>
+          <div className="flex gap-1.5 shrink-0">
+            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={save} title="Lưu tiến trình chơi thử này vào trình duyệt (không phải lưu game)"><Save size={13} className="sm:mr-1" /><span className="hidden sm:inline">Lưu tiến trình</span></Button>
+            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={load} title="Tải lại tiến trình chơi thử đã lưu"><FolderOpen size={13} className="sm:mr-1" /><span className="hidden sm:inline">Tải tiến trình</span></Button>
+            <Button size="sm" variant="outline" className="h-8 text-xs px-2 sm:px-3" onClick={reset} title="Chơi lại"><RotateCcw size={13} className="sm:mr-1" /><span className="hidden sm:inline">Chơi lại</span></Button>
           </div>
         </div>
 
@@ -433,9 +433,9 @@ export default function GamePlayer({ gameData }) {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-2.5 py-1 rounded-full" style={{ background: 'var(--rpg-accent2)22', color: 'var(--rpg-accent2)', border: '1px solid var(--rpg-accent2)66' }}>{node.speaker}</div>
             </div>
-            <div className="text-base leading-relaxed whitespace-pre-wrap min-h-[80px]" style={{ color: 'var(--rpg-text)' }}>{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
+            <div className="text-base leading-relaxed whitespace-pre-wrap min-h-[80px] max-h-[38vh] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible scrollbar-thin" style={{ color: 'var(--rpg-text)' }}>{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
             {!typingDone && <button onClick={skipTyping} className="self-start text-xs px-2.5 py-1 rounded" style={{ border: '1px solid var(--rpg-border)', color: 'var(--rpg-muted)' }}>Bỏ qua ⏭</button>}
-            <div className="flex flex-col gap-2.5 mt-auto">
+            <div className="flex flex-col gap-2.5 mt-auto shrink-0">
               {typingDone && (node.choices || []).map((c, i) => {
                 const st = choiceStatus(c);
                 const lbl = c.label ? CHOICE_LABELS[c.label] : null;
