@@ -187,9 +187,9 @@ const ENGINE_JS = [
   '    s+=\'<div class="rpg-vn-frame">\';',
   '    if(art){ s+=\'<div class="rpg-vn-scene"><img class="rpg-vn-scene-img" src="\'+esc(asset(art))+\'"/><div class="rpg-vn-scene-fade"></div></div>\'; }',
   '    if(isNarration){',
-  '      s+=\'<div class="rpg-vn-narration">\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll"><p class="rpg-vn-narration-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
+  '      s+=\'<div class="rpg-vn-narration">\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll expanded"><p class="rpg-vn-narration-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
   '    } else {',
-  '      s+=\'<div class="rpg-vn-dialogue"><div class="rpg-vn-dialogue-head">\'+(art?\'<img class="rpg-vn-avatar" src="\'+esc(asset(art))+\'"/>\':"")+\'<span class="rpg-vn-name">\'+esc(node.speaker)+\'</span></div>\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll"><p class="rpg-vn-dialogue-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
+  '      s+=\'<div class="rpg-vn-dialogue"><div class="rpg-vn-dialogue-head">\'+(art?\'<img class="rpg-vn-avatar" src="\'+esc(asset(art))+\'"/>\':"")+\'<span class="rpg-vn-name">\'+esc(node.speaker)+\'</span></div>\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll expanded"><p class="rpg-vn-dialogue-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
   '    }',
   '    s+=\'<div class="rpg-vn-choices" id="choices"></div>\';',
   '    s+=\'</div>\';',
@@ -214,7 +214,9 @@ const ENGINE_JS = [
   '    el.innerHTML=s;',
   '    var btns=el.querySelectorAll(".rpg-vn-choice"); for(var j=0;j<btns.length;j++){ (function(b){ b.addEventListener("click", function(){ choose(node, parseInt(b.getAttribute("data-idx"))); }); })(btns[j]); }',
   '    var r2=el.querySelector("#btnReset2"); if(r2){ r2.addEventListener("click", function(){ reset(); render(); }); }',
-  '    var ct=el.querySelector("#choicesToggle"); if(ct){ ct.addEventListener("click", function(){ choicesOpen=!choicesOpen; renderChoices(node); }); } }',
+  '    var ct=el.querySelector("#choicesToggle"); if(ct){ ct.addEventListener("click", function(){ choicesOpen=!choicesOpen; renderChoices(node); syncTextScrollExpand(node); }); } }',
+  '',
+  '  function syncTextScrollExpand(node){ var el=document.querySelector(".rpg-vn-text-scroll"); if(!el) return; var visible=choicesOpen && (node.choices||[]).length>0; el.classList.toggle("expanded", !visible); }',
   '',
   '  function choose(node, idx){ var c=(node.choices||[])[idx]; if(!c) return; var st=choiceStatus(c); if(!st.ok) return;',
   '    if(c.diceRoll){ showDiceRoll(c); return; }',
@@ -261,8 +263,8 @@ const ENGINE_JS = [
   '    if(node.quest && node.quest.id && !quests[node.quest.id]){ quests[node.quest.id]=Object.assign({}, node.quest, {status:"active"}); pushEvent("📜","Nhiệm vụ mới: "+node.quest.title); }',
   '    state.stats=ns; state.inventory=inv; state.flags=flags; state.quests=quests;',
   '    var skipBtn=document.getElementById("skipBtn"); var dialogue=document.getElementById("dialogue"); var done=false;',
-  '    startTypewriter(node.text||"", dialogue, function(){ done=true; renderChoices(node); });',
-  '    if(skipBtn){ skipBtn.addEventListener("click", function(){ clearTyping(); dialogue.textContent=typingFull; if(!done){ done=true; renderChoices(node); } }); } }',
+  '    startTypewriter(node.text||"", dialogue, function(){ done=true; renderChoices(node); syncTextScrollExpand(node); });',
+  '    if(skipBtn){ skipBtn.addEventListener("click", function(){ clearTyping(); dialogue.textContent=typingFull; if(!done){ done=true; renderChoices(node); syncTextScrollExpand(node); } }); } }',
   '',
   '  load(); render();',
   '})();',
@@ -333,6 +335,7 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-vn-name{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--rpg-accent2);}
 .rpg-vn-dialogue-text{font-family:var(--rpg-font);font-size:1.02rem;line-height:1.7;white-space:pre-wrap;color:var(--rpg-text);}
 .rpg-vn-text-scroll{max-height:32vh;overflow-y:auto;padding-right:2px;}
+.rpg-vn-text-scroll.expanded{max-height:none;overflow-y:visible;}
 .rpg-vn-skip{align-self:flex-start;margin-top:8px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--rpg-border);color:var(--rpg-muted);background:transparent;cursor:pointer;font-family:var(--rpg-font);}
 .rpg-vn-skip:hover{color:var(--rpg-text);}
 .rpg-turn-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
@@ -362,7 +365,6 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-vn-empty{font-size:12px;font-style:italic;color:var(--rpg-muted);}
 body.rpg-adventure .rpg-vn-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.06em;font-size:12px;}
 body.rpg-transmigration .rpg-vn-frame{background-image:linear-gradient(rgba(78,45,58,.1) 1px,transparent 1px);background-size:100% 28px;}
-body.rpg-transmigration .rpg-vn-choice::before{content:'章';margin-right:8px;color:var(--rpg-accent);}
 body.rpg-system .rpg-vn-choice{border-radius:5px;box-shadow:inset 3px 0 var(--rpg-accent);}
 body.rpg-detective .rpg-vn-choice{border-radius:2px;border-style:dashed;font-family:ui-monospace,monospace;}
 body.rpg-detective .rpg-vn-choice::before{content:'EVIDENCE / ';color:var(--rpg-accent);font-size:9px;letter-spacing:.1em;}

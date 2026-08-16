@@ -195,6 +195,7 @@
 .rpg-vn-dialogue-text{font-size:1.02rem;line-height:1.7;white-space:pre-wrap;color:var(--rpg-text);}
 
 .rpg-vn-text-scroll{max-height:32vh;overflow-y:auto;padding-right:2px;}
+.rpg-vn-text-scroll.expanded{max-height:none;overflow-y:visible;}
 .rpg-vn-skip{align-self:flex-start;margin-top:8px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--rpg-border);color:var(--rpg-muted);background:transparent;cursor:pointer;}
 
 /* --- Lượt hiện tại + hiệu ứng chỉ số vừa thay đổi (đầu khối văn bản) --- */
@@ -284,7 +285,6 @@
 /* Cá tính riêng từng "Theme" (= preset trình bày) trên cùng 1 khung kiến trúc */
 .rpg-adventure .rpg-vn-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.06em;font-size:12px;}
 .rpg-transmigration .rpg-vn-frame{background-image:linear-gradient(rgba(78,45,58,.1) 1px,transparent 1px);background-size:100% 28px;}
-.rpg-transmigration .rpg-vn-choice::before{content:'章';margin-right:8px;color:var(--rpg-accent);}
 .rpg-system .rpg-vn-choice{border-radius:5px;box-shadow:inset 3px 0 var(--rpg-accent);}
 .rpg-detective .rpg-vn-choice{border-radius:2px;border-style:dashed;font-family:ui-monospace,monospace;}
 .rpg-detective .rpg-vn-choice::before{content:'EVIDENCE / ';color:var(--rpg-accent);font-size:9px;letter-spacing:.1em;}

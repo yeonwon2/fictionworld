@@ -481,6 +481,10 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   const hasArt = !!art;
   const isNarration = !node.speaker || !node.speaker.trim();
   const choiceCount = (node.choices || []).length;
+  // Khi danh sách lựa chọn không chiếm chỗ (đang gõ chữ, đã bấm "Ẩn", hoặc
+  // không có lựa chọn nào) thì mở rộng khung chữ hết cỡ thay vì cuộn trong ô nhỏ.
+  const choicesVisible = typingDone && choicesOpen && choiceCount > 0;
+  const scrollClass = 'rpg-vn-text-scroll scrollbar-thin' + (choicesVisible ? '' : ' expanded');
   return (
     <div className="rpg-vn-frame flex flex-col flex-1">
       {hasArt && (
@@ -494,7 +498,7 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
         <div className="rpg-vn-narration">
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
           {lastChoiceText && <RecapCard text={lastChoiceText} />}
-          <div className="rpg-vn-text-scroll scrollbar-thin">
+          <div className={scrollClass}>
             <p className="rpg-vn-narration-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
           {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
@@ -507,7 +511,7 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
           </div>
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
           {lastChoiceText && <RecapCard text={lastChoiceText} />}
-          <div className="rpg-vn-text-scroll scrollbar-thin">
+          <div className={scrollClass}>
             <p className="rpg-vn-dialogue-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
           {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
