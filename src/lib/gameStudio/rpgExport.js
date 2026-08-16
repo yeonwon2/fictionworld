@@ -113,7 +113,7 @@ const ENGINE_JS = [
   '',
   '  function renderChoices(node){ var el=document.getElementById("choices"); if(!el) return; var s="";',
   '    for(var i=0;i<(node.choices||[]).length;i++){ var c=node.choices[i]; var st=choiceStatus(c);',
-  '      s+=\'<button class="rpg-choice\'+(st.ok?"":" rpg-choice-disabled")+\'" data-idx="\'+i+\'"\'+(st.ok?"":"disabled")+">\';',
+  '      s+=\'<button class="rpg-choice\'+(st.ok?"":" rpg-choice-disabled")+\'" data-idx="\'+i+\'"\'+(st.ok?"":"disabled")+\'>\';',
   '      if(!st.ok){ s+=\'<span class="rpg-lock">🔒</span> \'; }',
   '      if(c.label && LABELS[c.label]){ s+=\'<span class="rpg-clabel" style="background:\'+LABELS[c.label].c+\'22;color:\'+LABELS[c.label].c+\'">[\'+LABELS[c.label].t+\']</span> \'; }',
   '      if(c.diceRoll){ s+=\'<span class="rpg-clabel" style="background:#a855f722;color:#c084fc">🎲 \'+esc(statLabel(c.diceRoll.stat||""))+\' ≥\'+c.diceRoll.difficulty+\'</span> \'; }',
