@@ -428,7 +428,7 @@ export default function GamePlayer({ gameData }) {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-2.5 py-1 rounded-full" style={{ background: 'var(--rpg-accent2)22', color: 'var(--rpg-accent2)', border: '1px solid var(--rpg-accent2)66' }}>{node.speaker}</div>
             </div>
-            <div className="text-base leading-relaxed whitespace-pre-wrap min-h-[80px] max-h-[38vh] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible scrollbar-thin" style={{ color: 'var(--rpg-text)' }}>{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
+            <div className="text-base leading-relaxed whitespace-pre-wrap min-h-[80px] max-h-[38vh] sm:max-h-[46vh] overflow-y-auto pr-1 scrollbar-thin" style={{ color: 'var(--rpg-text)' }}>{typed}{!typingDone && <span className="animate-pulse">▋</span>}</div>
             {!typingDone && <button onClick={skipTyping} className="self-start text-xs px-2.5 py-1 rounded" style={{ border: '1px solid var(--rpg-border)', color: 'var(--rpg-muted)' }}>Bỏ qua ⏭</button>}
             <div className="flex flex-col gap-2.5 mt-auto shrink-0">
               {typingDone && (node.choices || []).map((c, i) => {

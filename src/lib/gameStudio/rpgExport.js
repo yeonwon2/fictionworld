@@ -259,7 +259,7 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-scene{position:relative;z-index:2;display:flex;flex-direction:column;gap:12px;flex:1;background:color-mix(in srgb,var(--rpg-panel) 70%,transparent);backdrop-filter:blur(10px);border:2px solid var(--rpg-accent);border-radius:16px;padding:22px;box-shadow:0 0 18px var(--rpg-accent)22,0 10px 40px rgba(0,0,0,0.5),inset 0 0 30px rgba(0,0,0,0.3);}
 .rpg-speaker{display:inline-block;align-self:flex-start;font-weight:bold;color:var(--rpg-accent2);font-size:12px;letter-spacing:1px;text-transform:uppercase;background:color-mix(in srgb,var(--rpg-accent2) 18%,transparent);border:1px solid var(--rpg-accent2)66;padding:4px 12px;border-radius:999px;}
 .rpg-scene-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.rpg-dialogue{font-size:16px;line-height:1.7;min-height:80px;white-space:pre-wrap;}
+.rpg-dialogue{font-size:16px;line-height:1.7;min-height:80px;max-height:46vh;overflow-y:auto;padding-right:4px;white-space:pre-wrap;}
 .rpg-skip{align-self:flex-start;background:transparent;border:1px solid var(--rpg-border);color:var(--rpg-muted);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-family:var(--rpg-font);}
 .rpg-skip:hover{color:var(--rpg-text);}
 .rpg-choices{display:flex;flex-direction:column;gap:10px;margin-top:auto;}
@@ -349,7 +349,7 @@ body.rpg-detective .rpg-choice:before{content:'EVIDENCE / ';color:var(--rpg-acce
 .rpg-cbtn:hover{filter:brightness(1.15);}
 .rpg-cbtn:disabled{opacity:0.5;cursor:not-allowed;}
 .rpg-combat-over{text-align:center;font-size:18px;font-weight:bold;color:#39d14a;display:flex;flex-direction:column;align-items:center;gap:12px;}
-@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;max-height:38vh;overflow-y:auto;padding-right:4px;} body.rpg-dialogue .rpg-npc-portrait{width:62%;opacity:.32} body.rpg-dialogue .rpg-choice,body.rpg-dialogue .rpg-dialogue{max-width:100%} }
+@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-dialogue{font-size:15px;max-height:38vh;} body.rpg-dialogue .rpg-npc-portrait{width:62%;opacity:.32} body.rpg-dialogue .rpg-choice,body.rpg-dialogue .rpg-dialogue{max-width:100%} }
 `;
 
 export function generateStandaloneHTML(gameData) {
