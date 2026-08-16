@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -132,6 +133,11 @@ export default function GameMetaConfig({ gameData, setGameData }) {
       <div className="space-y-1.5">
         <Label className="text-xs">Tên nhân vật chính</Label>
         <Input value={meta.player_name || ''} onChange={(e) => updateMeta({ player_name: e.target.value })} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Tiểu sử nhân vật (hiện trong khung thông tin khi chơi)</Label>
+        <Textarea value={meta.player_bio || ''} onChange={(e) => updateMeta({ player_bio: e.target.value })} rows={3} placeholder="Xuất thân, bối cảnh xuyên không, tính cách…" />
       </div>
 
       <div className="space-y-1.5">
