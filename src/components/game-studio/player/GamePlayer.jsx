@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw } from 'lucide-react';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Pencil } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 
-const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle };
-const CHOICE_LETTERS = 'ABCDEFGHIJ';
+const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles };
 
 export default function GamePlayer({ gameData, onExit }) {
   const meta = gameData.meta;
@@ -30,11 +29,15 @@ export default function GamePlayer({ gameData, onExit }) {
     rankIndex: 0,
     systemPoints: 0,
     npcAffinity: {},
+    lastChoiceText: null,
+    lastDeltas: {},
   }));
   const [screen, setScreen] = useState('scene');
   const [typed, setTyped] = useState('');
   const [typingDone, setTypingDone] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [choicesOpen, setChoicesOpen] = useState(true);
+  const [bioOpen, setBioOpen] = useState(false);
   const [systemPopup, setSystemPopup] = useState(null);
   const [events, setEvents] = useState([]);
   const [forceKey, setForceKey] = useState(0);
@@ -147,6 +150,7 @@ export default function GamePlayer({ gameData, onExit }) {
       pushEvent('•', 'Nhiệm vụ mới: ' + n.quest.title);
     }
     setRt((prev) => ({ ...prev, stats: ns, inventory: inv, flags, quests }));
+    setChoicesOpen(true);
     startTypewriter(n.text);
     return () => { if (typingRef.current) clearInterval(typingRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,13 +197,9 @@ export default function GamePlayer({ gameData, onExit }) {
 
     const ns = { ...rt.stats };
     for (const k in (c.statModifiers || {})) ns[k] = (ns[k] || 0) + c.statModifiers[k];
+    // Hệ quả chỉ số hiện qua badge "Lượt N" ở đầu văn bản (rpg-turn-delta), không
+    // cần lặp lại bằng toast nữa — toast chỉ dành cho vật phẩm/cờ truyện/nhiệm vụ.
     const ev = [];
-    // Thông báo hệ quả SAU khi đã chọn — cố ý không hiện trước để không lộ kết quả.
-    for (const k in (c.statModifiers || {})) {
-      const v = c.statModifiers[k];
-      const sc = statsConfig.find((s) => s.key === k);
-      ev.push(['•', `${sc?.label || k} ${v > 0 ? '+' : ''}${v}`]);
-    }
     let exp = rt.exp, rankIndex = rt.rankIndex, systemPoints = rt.systemPoints;
     let inventory = [...rt.inventory], flags = [...rt.flags], skills = [...rt.skills];
     let quests = { ...rt.quests }, npcAffinity = { ...rt.npcAffinity };
@@ -223,7 +223,7 @@ export default function GamePlayer({ gameData, onExit }) {
     if (c.npcAffinity) for (const n in c.npcAffinity) npcAffinity[n] = (npcAffinity[n] || 0) + c.npcAffinity[n];
 
     const dead = checkGameOver(ns);
-    const newRt = { ...rt, stats: ns, exp, rankIndex, systemPoints, inventory, flags, skills, quests, npcAffinity };
+    const newRt = { ...rt, stats: ns, exp, rankIndex, systemPoints, inventory, flags, skills, quests, npcAffinity, lastChoiceText: c.text, lastDeltas: { ...(c.statModifiers || {}) } };
     if (!dead) {
       newRt.history = [...rt.history, rt.nodeId];
       if (c.targetNodeId && gameData.nodes[c.targetNodeId]) newRt.nodeId = c.targetNodeId;
@@ -236,9 +236,9 @@ export default function GamePlayer({ gameData, onExit }) {
 
   const onDiceDone = (result) => {
     const c = dicePending.choice;
-    const { stats: newStats, target } = applyDiceResult(c.diceRoll, result, rt.stats);
+    const { stats: newStats, target, mods } = applyDiceResult(c.diceRoll, result, rt.stats);
     const dead = checkGameOver(newStats);
-    const newRt = { ...rt, stats: newStats };
+    const newRt = { ...rt, stats: newStats, lastChoiceText: c.text, lastDeltas: { ...mods } };
     if (!dead) {
       newRt.history = [...rt.history, rt.nodeId];
       if (target && gameData.nodes[target]) newRt.nodeId = target;
@@ -273,7 +273,7 @@ export default function GamePlayer({ gameData, onExit }) {
       target = n.combat && n.combat.loseTarget;
     }
     const dead = result === 'lose' || checkGameOver(ns);
-    const newRt = { ...rt, stats: ns, inventory: inv };
+    const newRt = { ...rt, stats: ns, inventory: inv, lastChoiceText: null, lastDeltas: {} };
     if (!dead && target && gameData.nodes[target]) {
       newRt.history = [...rt.history, rt.nodeId];
       newRt.nodeId = target;
@@ -288,12 +288,15 @@ export default function GamePlayer({ gameData, onExit }) {
     setRt({
       nodeId: 'start_node', stats: { ...meta.initialStats }, history: [],
       inventory: [], quests: {}, flags: [], skills: [], exp: 0, rankIndex: 0, systemPoints: 0, npcAffinity: {},
+      lastChoiceText: null, lastDeltas: {},
     });
     setForceKey((k) => k + 1);
     setScreen('scene');
     setCombatActive(false);
     setDicePending(null);
     setSheetOpen(false);
+    setChoicesOpen(true);
+    setBioOpen(false);
   };
   const themeStyle = meta.theme === 'custom' && meta.customTheme
     ? customThemeStyle(meta.customTheme)
@@ -308,32 +311,68 @@ export default function GamePlayer({ gameData, onExit }) {
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
-
-  // HUD: chỉ hiện tối đa 2 chỉ số quan trọng — ưu tiên chỉ số isVital.
-  const hudStats = [...statsConfig].sort((a, b) => (b.isVital ? 1 : 0) - (a.isVital ? 1 : 0)).slice(0, 2);
+  const turn = rt.history.length + 1;
 
   return (
     <div style={rootStyle} data-presentation={presentation} data-bg-pattern={meta.theme === 'custom' ? (meta.customTheme?.bgPattern || 'plain') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
       <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
-        {/* HUD gọn — avatar, tên, tối đa 2 chip chỉ số, nút menu */}
-        <div className="rpg-hud">
-          <div className="rpg-hud-left">
-            <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-hud-avatar" />
-            <span className="rpg-hud-name">{meta.player_name || 'Người Chơi'}</span>
-            {hudStats.map((sc) => {
-              const st = statStyle(sc.key);
-              const Icon = STAT_ICONS[st.icon] || Circle;
-              return (
-                <span key={sc.key} className="rpg-hud-chip">
-                  <Icon size={11} style={{ color: st.color }} /> {rt.stats[sc.key] || 0}
-                </span>
-              );
-            })}
+        {/* Thanh trên cùng — nút thoát, avatar, tên game + lượt, điểm hệ thống, menu */}
+        <div className="rpg-topbar">
+          {onExit && (
+            <button className="rpg-topbar-btn" onClick={onExit} title="Quay lại"><ArrowLeft size={16} /></button>
+          )}
+          <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-topbar-avatar" />
+          <div className="rpg-topbar-info">
+            <div className="rpg-topbar-title">{meta.title || 'Trò Chơi'}</div>
+            <div className="rpg-topbar-subtitle">{meta.player_name || 'Người Chơi'} · Lượt {turn}</div>
           </div>
-          <button className="rpg-hud-menu-btn" onClick={() => setSheetOpen(true)} title="Menu">
+          {archetype === 'litrpg' && (
+            <span className="rpg-topbar-points"><Gem size={12} /> {rt.systemPoints}</span>
+          )}
+          <button className="rpg-topbar-btn" onClick={() => setSheetOpen(true)} title="Menu">
             <Menu size={16} />
           </button>
         </div>
+
+        {/* Hàng chỉ số dạng thanh — icon + số + thanh tiến độ cho từng chỉ số */}
+        {statsConfig.length > 0 && (
+          <div className="rpg-stats-row">
+            {statsConfig.map((sc) => {
+              const st = statStyle(sc.key);
+              const Icon = STAT_ICONS[st.icon] || Circle;
+              const val = rt.stats[sc.key] || 0;
+              const max = sc.max || (sc.default > 0 ? sc.default : 100);
+              const pct = Math.max(0, Math.min(100, (val / max) * 100));
+              return (
+                <div key={sc.key} className="rpg-stat-bar">
+                  <div className="rpg-stat-bar-top">
+                    <Icon size={12} style={{ color: st.color }} />
+                    <span className="rpg-stat-bar-label">{sc.label}</span>
+                    <span className="rpg-stat-bar-value">{val}</span>
+                  </div>
+                  <div className="rpg-stat-bar-track">
+                    <div className="rpg-stat-bar-fill" style={{ width: pct + '%', background: st.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Chi tiết nhân vật — thu gọn/mở rộng, chỉ hiện khi có tiểu sử */}
+        {meta.player_bio && (
+          <div>
+            <button className={`rpg-detail-toggle${bioOpen ? ' open' : ''}`} onClick={() => setBioOpen((v) => !v)}>
+              <span>Chi tiết nhân vật</span>
+              <ChevronDown size={14} />
+            </button>
+            {bioOpen && (
+              <div className="rpg-detail-panel">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--rpg-muted)' }}>{meta.player_bio}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Thanh Cảnh giới/EXP — chỉ archetype Hệ Thống */}
         {archetype === 'litrpg' && (
@@ -345,7 +384,6 @@ export default function GamePlayer({ gameData, onExit }) {
                 <div className="h-full rounded-full transition-all" style={{ width: expPct + '%', background: 'var(--rpg-accent2)' }} />
               </div>
             </div>
-            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--rpg-text)' }}><Gem size={12} style={{ color: 'var(--rpg-accent)' }} /> <b>{rt.systemPoints}</b></span>
           </div>
         )}
 
@@ -359,6 +397,8 @@ export default function GamePlayer({ gameData, onExit }) {
             node={node} typed={typed} typingDone={typingDone} skipTyping={skipTyping}
             choiceStatus={choiceStatus} choose={choose} statsConfig={statsConfig}
             defaultNpcAvatar={meta.defaultNpcAvatar}
+            turn={turn} lastChoiceText={rt.lastChoiceText} lastDeltas={rt.lastDeltas}
+            choicesOpen={choicesOpen} setChoicesOpen={setChoicesOpen}
           />
         )}
 
@@ -436,10 +476,11 @@ export default function GamePlayer({ gameData, onExit }) {
 // tách khỏi khối lựa chọn — không còn 1 card lớn ôm hết mọi thứ. Dẫn truyện
 // (node.speaker rỗng) hiện như văn xuôi tiểu thuyết; NPC nói (có speaker) hiện
 // nhãn tên + avatar nhỏ (nếu có) trong khung bán trong suốt nhẹ.
-export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar }) {
+export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar, turn, lastChoiceText, lastDeltas, choicesOpen, setChoicesOpen }) {
   const art = node.npcAvatar || defaultNpcAvatar || node.bgImage || '';
   const hasArt = !!art;
   const isNarration = !node.speaker || !node.speaker.trim();
+  const choiceCount = (node.choices || []).length;
   return (
     <div className="rpg-vn-frame flex flex-col flex-1">
       {hasArt && (
@@ -451,6 +492,8 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
 
       {isNarration ? (
         <div className="rpg-vn-narration">
+          <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
+          {lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className="rpg-vn-text-scroll scrollbar-thin">
             <p className="rpg-vn-narration-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
@@ -462,6 +505,8 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             {hasArt && <img src={art} alt="" className="rpg-vn-avatar" />}
             <span className="rpg-vn-name">{node.speaker}</span>
           </div>
+          <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
+          {lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className="rpg-vn-text-scroll scrollbar-thin">
             <p className="rpg-vn-dialogue-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
@@ -470,12 +515,20 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
       )}
 
       <div className="rpg-vn-choices">
-        {typingDone && (node.choices || []).map((c, i) => {
+        {typingDone && choiceCount > 0 && (
+          <div className="rpg-choices-header">
+            <span className="rpg-choices-title">Bạn sẽ làm gì? <span className="rpg-choices-count">({choiceCount} lựa chọn)</span></span>
+            <button className="rpg-choices-toggle" onClick={() => setChoicesOpen((v) => !v)}>
+              {choicesOpen ? 'Ẩn' : 'Hiện'} <ChevronDown size={12} style={{ transform: choicesOpen ? 'rotate(180deg)' : 'none' }} />
+            </button>
+          </div>
+        )}
+        {typingDone && choicesOpen && (node.choices || []).map((c, i) => {
           const st = choiceStatus(c);
           const lbl = c.label ? CHOICE_LABELS[c.label] : null;
           return (
             <button key={i} disabled={!st.ok} onClick={() => choose(c)} className="rpg-vn-choice">
-              <span className="rpg-vn-choice-idx">{st.ok ? CHOICE_LETTERS[i] || (i + 1) : <Lock size={11} />}</span>
+              <span className="rpg-vn-choice-idx">{st.ok ? i + 1 : <Lock size={11} />}</span>
               <span className="rpg-vn-choice-body">
                 <span className="rpg-vn-choice-row">
                   {lbl && <span className="rpg-vn-choice-label" style={{ background: lbl.color + '22', color: lbl.color }}>{lbl.text}</span>}
@@ -487,8 +540,45 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             </button>
           );
         })}
-        {typingDone && (node.choices || []).length === 0 && <p className="rpg-vn-empty">Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
+        {typingDone && choicesOpen && choiceCount > 0 && (
+          <div className="rpg-choice-custom">
+            <Pencil size={14} />
+            <input type="text" placeholder="Tự viết hành động của bạn... (sắp ra mắt)" disabled />
+            <span className="rpg-choice-custom-tag">Sắp ra mắt</span>
+          </div>
+        )}
+        {typingDone && choiceCount === 0 && <p className="rpg-vn-empty">Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
       </div>
+    </div>
+  );
+}
+
+// Nhãn "Lượt N" + các badge chỉ số vừa thay đổi ở lượt trước — đặt ngay trên
+// đoạn văn bản để người chơi thấy hệ quả lựa chọn của mình mà không cần mở menu.
+function TurnHeader({ turn, lastDeltas, statsConfig }) {
+  const entries = Object.entries(lastDeltas || {}).filter(([, v]) => v);
+  return (
+    <div className="rpg-turn-row">
+      <span className="rpg-turn-label">Lượt {turn}</span>
+      <span className="rpg-turn-divider" />
+      {entries.map(([k, v]) => {
+        const label = statsConfig.find((s) => s.key === k)?.label || k;
+        return (
+          <span key={k} className={`rpg-turn-delta ${v > 0 ? 'pos' : 'neg'}`}>
+            {label} {v > 0 ? '+' : ''}{v}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// Thẻ nhắc lại lựa chọn vừa chọn ở lượt trước, hiện ngay trên đoạn văn bản mới.
+function RecapCard({ text }) {
+  return (
+    <div className="rpg-recap-card">
+      <div className="rpg-recap-label">Bạn đã chọn</div>
+      <div className="rpg-recap-text">{text}</div>
     </div>
   );
 }

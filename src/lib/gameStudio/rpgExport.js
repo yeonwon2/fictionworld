@@ -103,12 +103,14 @@ const ENGINE_JS = [
   '  function asset(url){ return (meta.offlineAssets&&meta.offlineAssets[url])||url||""; }',
   '',
   '  var SAVE_KEY = "rpg_save_" + (meta.title||"game").replace(/[^a-z0-9]/gi,"_");',
-  '  var state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{} };',
-  '  var activeTab = "stats";',
+  '  var state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{}, lastChoiceText:null, lastDeltas:{} };',
+  '  var activeTab = "inventory";',
   '  var panelOpen = false;',
+  '  var choicesOpen = true;',
+  '  var bioOpen = false;',
   '  function load(){ try{ var s=localStorage.getItem(SAVE_KEY); if(s){ var p=JSON.parse(s); if(p&&p.stats){ state=Object.assign({}, state, p); } } }catch(e){} }',
   '  function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){} }',
-  '  function reset(){ state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{} }; }',
+  '  function reset(){ state = { nodeId:"start_node", stats:Object.assign({}, meta.initialStats||{}), history:[], inventory:[], quests:{}, flags:[], skills:[], exp:0, rankIndex:0, systemPoints:0, npcAffinity:{}, lastChoiceText:null, lastDeltas:{} }; choicesOpen=true; }',
   '',
   '  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }',
   '  var typingTimer=null, typingFull="";',
@@ -125,66 +127,80 @@ const ENGINE_JS = [
   '  function rollDice(dr, s){ var stat=dr.stat; var bonus=stat?Math.floor((s[stat]||0)/10):0; var raw=1+Math.floor(Math.random()*20); var total=raw+bonus; var diff=dr.difficulty||10; var margin=total-diff; var out=total>=diff?"success":"fail"; var crit=null; if(raw===20||(out==="success"&&margin>=(dr.critThreshold||5))){out="success";crit="crit_success";}else if(raw===1||(out==="fail"&&margin<=-(dr.critFailThreshold||1))){out="fail";crit="crit_fail";} return {raw:raw,bonus:bonus,total:total,diff:diff,margin:margin,outcome:out,crit:crit}; }',
   '  function applyDice(dr, r, s){ var mods=r.outcome==="success"?(dr.successMods||{}):(dr.failMods||{}); var fm=Object.assign({},mods); if(r.crit==="crit_success"){for(var k in fm){if(fm[k]>0)fm[k]=Math.round(fm[k]*1.8);}}else if(r.crit==="crit_fail"){for(var k2 in fm){if(fm[k2]<0)fm[k2]=Math.round(fm[k2]*1.6);}} var ns=Object.assign({},s); for(var k3 in fm){ns[k3]=(ns[k3]||0)+fm[k3];} var tgt=r.outcome==="success"?(dr.successTarget||dr.targetNodeId):(dr.failTarget||dr.targetNodeId); return {stats:ns,mods:fm,target:tgt}; }',
   '  function showDiceRoll(c){ var c2=document.getElementById("rpg-syspopup"); if(!c2) return; var stat=statLabel(c.diceRoll.stat||""); var bonus=c.diceRoll.stat?Math.floor((state.stats[c.diceRoll.stat]||0)/10):0; c2.innerHTML=\'<div class="rpg-dice-overlay"><div class="rpg-dice-box"><div class="rpg-sys-title">🎲 Quay Xúc Xắc Định Mệnh</div><div class="rpg-dice-stat">Dựa trên \'+esc(stat)+\' (thường +\'+bonus+\')</div><div class="rpg-dice" id="diceFace">?</div><div id="diceHint" class="rpg-dice-hint">Đang quay...</div></div></div>\'; c2.style.display="block"; var face=document.getElementById("diceFace"); var hint=document.getElementById("diceHint"); var ticks=0; var iv=setInterval(function(){ ticks++; if(ticks>14){ clearInterval(iv); var r=rollDice(c.diceRoll, state.stats); face.textContent=r.raw; face.className="rpg-dice "+(r.outcome==="success"?"win":"lose"); hint.innerHTML=""; var s1=document.createElement("div"); s1.innerHTML="<b>"+r.raw+(r.bonus>0?" + "+r.bonus:"")+" = "+r.total+" / "+r.diff+"</b>"; hint.appendChild(s1); var s2=document.createElement("div"); s2.className="rpg-dice-res"; s2.style.color=r.outcome==="success"?"#39d14a":"#ff4d4d"; s2.textContent=r.crit==="crit_success"?"CRITICAL THÀNH CÔNG!":r.crit==="crit_fail"?"CRITICAL THẤT BẠI!":(r.outcome==="success"?"THÀNH CÔNG":"THẤT BẠI"); hint.appendChild(s2); var btn=document.createElement("button"); btn.className="rpg-sys-btn"; btn.textContent="Tiếp tục"; btn.addEventListener("click", function(){ c2.innerHTML=""; c2.style.display="none"; resolveDice(c, r); }); hint.appendChild(btn); } else { face.textContent=1+Math.floor(Math.random()*20); face.style.transform="rotate("+(ticks*24)+"deg)"; } },70); }',
-  '  function resolveDice(c, r){ var res=applyDice(c.diceRoll, r, state.stats); state.stats=res.stats; pushEvent("🎲", r.crit?(r.outcome==="success"?"CRITICAL thành công!":"CRITICAL thất bại!"):(r.outcome==="success"?"Quay trúng!":"Quay trượt...")); var dead=checkGameOver(res.stats); if(!dead){ state.history.push(state.nodeId); if(res.target && GAME.nodes[res.target]) state.nodeId=res.target; } save(); render(); }',
+  '  function resolveDice(c, r){ var res=applyDice(c.diceRoll, r, state.stats); state.stats=res.stats; state.lastChoiceText=c.text||null; state.lastDeltas=res.mods||{}; pushEvent("🎲", r.crit?(r.outcome==="success"?"CRITICAL thành công!":"CRITICAL thất bại!"):(r.outcome==="success"?"Quay trúng!":"Quay trượt...")); var dead=checkGameOver(res.stats); if(!dead){ state.history.push(state.nodeId); if(res.target && GAME.nodes[res.target]) state.nodeId=res.target; } choicesOpen=true; save(); render(); }',
   '',
   '  var combatState=null;',
   '  function startCombat(node){ combatState={ node:node, enemyHp:node.combat.enemy.hp, enemyMaxHp:node.combat.enemy.hp, playerHp:state.stats.hp||100, playerMaxHp:state.stats.hp||100, playerMp:state.stats.mp||state.stats.mana||30, defending:false, turn:"player", over:null, log:[{t:"start",text:(node.combat.enemy.name||"Kẻ thù")+" xuất hiện! "+(node.combat.enemy.intro||"")}] }; renderCombat(); }',
   '  function renderCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var cb=node.combat; var e=cb.enemy; var s=""; s+=\'<div class="rpg-combat"><div class="rpg-combat-tag">⚔️ Chiến Đấu</div>\'; s+=\'<div class="rpg-combat-enemy"><img class="rpg-combat-avatar" src="\'+esc(asset(e.avatar)||dicebear(e.name))+\'"/><div class="rpg-combat-enemyinfo"><div class="rpg-combat-name">\'+esc(e.name||"Kẻ thù")+\'</div><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.enemyHp/cs.enemyMaxHp*100))+\'%"></div></div><div class="rpg-hpnum">\'+cs.enemyHp+\'/\'+cs.enemyMaxHp+\'</div>\'+(e.intro?\'<div class="rpg-combat-intro">\'+esc(e.intro)+\'</div>\':"")+\'</div></div>\'; s+=\'<div class="rpg-combat-player"><div class="rpg-mpbar-wrap"><span>HP</span><div class="rpg-hpbar"><div class="rpg-hpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerHp/cs.playerMaxHp*100))+\'%"></div></div><span>\'+cs.playerHp+\'</span></div><div class="rpg-mpbar-wrap"><span>MP</span><div class="rpg-mpbar"><div class="rpg-mpfill" style="width:\'+Math.max(0,Math.min(100,cs.playerMp/30*100))+\'%"></div></div><span>\'+cs.playerMp+\'</span></div></div>\'; s+=\'<div class="rpg-combat-log" id="combatLog">\'; for(var i=0;i<cs.log.length;i++){ var l=cs.log[i]; s+=\'<div class="rpg-clog rpg-clog-\'+l.t+\'">\'+esc(l.text)+\'</div>\'; } s+=\'</div>\'; if(!cs.over){ s+=\'<div class="rpg-combat-actions"><button class="rpg-cbtn red" data-act="atk">⚔️ Tấn công</button><button class="rpg-cbtn sky" data-act="def">🛡 Phòng thủ</button>\'; if(state.skills && state.skills.length){ s+=\'<button class="rpg-cbtn violet" data-act="skill">✨ \'+esc(state.skills[0])+\' (15MP)</button>\'; } s+=\'<button class="rpg-cbtn outline" data-act="flee">🏃 Bỏ chạy</button></div>\'; if(cs.turn==="enemy"){ s+=\'<div class="rpg-clog-hint">Lượt địch hành động...</div>\'; } } else { s+=\'<div class="rpg-combat-over">\'+(cs.over==="win"?"🏆 Chiến thắng!":cs.over==="flee"?"🏃 Đã rút lui":"💀 Thất bại...")+\'<button class="rpg-sys-btn" id="combatDone">Tiếp tục</button></div>\'; } s+=\'</div>\'; var container=document.getElementById("game"); container.innerHTML=renderStatusBar()+renderArchBar()+s; bindStatusBar(); var btns=container.querySelectorAll(".rpg-cbtn"); for(var j=0;j<btns.length;j++){ (function(b){ b.addEventListener("click", function(){ combatAct(b.getAttribute("data-act")); }); })(btns[j]); } var cd=container.querySelector("#combatDone"); if(cd) cd.addEventListener("click", finishCombat); }',
   '  function combatAct(act){ var cs=combatState; if(!cs||cs.over||cs.turn!=="player") return; var e=cs.node.combat.enemy; var pAtk=12+(state.rankIndex||0)*3+((state.skills||[]).length*2); if(act==="atk"){ var crit=Math.random()<0.15; var dmg=Math.max(1,Math.round((pAtk-e.defense)*(0.85+Math.random()*0.3))); if(crit) dmg=Math.round(dmg*1.6); cs.enemyHp=Math.max(0,cs.enemyHp-dmg); cs.log.push({t:crit?"crit":"player",text:"Bạn tấn công"+(crit?" (CRITICAL!)":"")+" gây "+dmg+" sát thương."}); if(cs.enemyHp<=0){ cs.over="win"; cs.log.push({t:"win",text:"Bạn đã đánh bại "+(e.name||"kẻ thù")+"!"}); } else { cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } if(act==="def"){ cs.defending=true; cs.log.push({t:"defend",text:"Bạn giơ khiên phòng thủ."}); cs.turn="enemy"; renderCombat(); setTimeout(combatEnemyTurn,600); return; } if(act==="skill"){ if(cs.playerMp<15){ cs.log.push({t:"warn",text:"Không đủ MP!"}); renderCombat(); return; } cs.playerMp-=15; var sdmg=Math.max(1,Math.round((pAtk-e.defense)*1.8)+Math.floor(Math.random()*6)); cs.enemyHp=Math.max(0,cs.enemyHp-sdmg); cs.log.push({t:"skill",text:"Kỹ năng bùng nổ! Gây "+sdmg+" sát thương."}); if(cs.enemyHp<=0){ cs.over="win"; cs.log.push({t:"win",text:"Chiến thắng!"}); } else { cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } if(act==="flee"){ var fc=cs.node.combat.fleeChance!=null?cs.node.combat.fleeChance:0.4; if(Math.random()<fc){ cs.over="flee"; cs.log.push({t:"flee",text:"Bỏ chạy thành công!"}); } else { cs.log.push({t:"warn",text:"Bỏ chạy thất bại!"}); cs.turn="enemy"; } renderCombat(); if(cs.turn==="enemy"&&!cs.over) setTimeout(combatEnemyTurn,600); return; } }',
   '  function combatEnemyTurn(){ var cs=combatState; if(!cs||cs.over) return; var e=cs.node.combat.enemy; var dmg=Math.max(1,Math.round(e.attack*(0.85+Math.random()*0.3))); if(cs.defending) dmg=Math.max(1,Math.round(dmg*0.4)); cs.defending=false; cs.playerHp=Math.max(0,cs.playerHp-dmg); cs.log.push({t:"enemy",text:(e.name||"Kẻ thù")+" gây "+dmg+" sát thương."}); if(cs.playerHp<=0){ cs.over="lose"; cs.log.push({t:"lose",text:"Bạn đã gục ngã..."}); } else { cs.turn="player"; } renderCombat(); }',
-  '  function finishCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var ns=Object.assign({}, state.stats, {hp:cs.playerHp, mp:cs.playerMp}); var inv=state.inventory.slice(); var target=null; if(cs.over==="win"){ var loot=node.combat.loot||{}; if(loot.statModifiers){ for(var k in loot.statModifiers){ ns[k]=(ns[k]||0)+loot.statModifiers[k]; } } if(loot.grantItem && inv.indexOf(loot.grantItem)<0 && inv.length<mysterySlots){ inv.push(loot.grantItem); pushEvent("📦","Nhặt được: "+loot.grantItem); } if(loot.exp){ var exp=state.exp+loot.exp; var ri=state.rankIndex; var ranks=litrpg.ranks||[]; var per=litrpg.expPerRank||100; while(exp>=per && ri<ranks.length-1){ exp-=per; ri++; pushEvent("⚡","Đột phá! Đạt "+ranks[ri]); } ns.exp=exp; ns.rankIndex=ri; } target=node.combat.winTarget; pushEvent("🏆","Chiến thắng "+(node.combat.enemy.name||"kẻ thù")+"!"); } else if(cs.over==="flee"){ target=node.combat.fleeTarget; } else { target=node.combat.loseTarget; } state.stats=ns; state.inventory=inv; var dead=cs.over==="lose"||checkGameOver(ns); combatState=null; if(!dead && target && GAME.nodes[target]){ state.history.push(state.nodeId); state.nodeId=target; } save(); render(); }',
+  '  function finishCombat(){ var cs=combatState; if(!cs) return; var node=cs.node; var ns=Object.assign({}, state.stats, {hp:cs.playerHp, mp:cs.playerMp}); var inv=state.inventory.slice(); var target=null; if(cs.over==="win"){ var loot=node.combat.loot||{}; if(loot.statModifiers){ for(var k in loot.statModifiers){ ns[k]=(ns[k]||0)+loot.statModifiers[k]; } } if(loot.grantItem && inv.indexOf(loot.grantItem)<0 && inv.length<mysterySlots){ inv.push(loot.grantItem); pushEvent("📦","Nhặt được: "+loot.grantItem); } if(loot.exp){ var exp=state.exp+loot.exp; var ri=state.rankIndex; var ranks=litrpg.ranks||[]; var per=litrpg.expPerRank||100; while(exp>=per && ri<ranks.length-1){ exp-=per; ri++; pushEvent("⚡","Đột phá! Đạt "+ranks[ri]); } ns.exp=exp; ns.rankIndex=ri; } target=node.combat.winTarget; pushEvent("🏆","Chiến thắng "+(node.combat.enemy.name||"kẻ thù")+"!"); } else if(cs.over==="flee"){ target=node.combat.fleeTarget; } else { target=node.combat.loseTarget; } state.stats=ns; state.inventory=inv; state.lastChoiceText=null; state.lastDeltas={}; var dead=cs.over==="lose"||checkGameOver(ns); combatState=null; if(!dead && target && GAME.nodes[target]){ state.history.push(state.nodeId); state.nodeId=target; } choicesOpen=true; save(); render(); }',
   '',
   '  function meetsStatReq(req, s){ if(!req) return true; for(var k in req){ if((s[k]||0) < req[k]) return false; } return true; }',
   '  function checkGameOver(s){ var vks=vitalKeys(); for(var i=0;i<vks.length;i++){ if((s[vks[i]]||0)<=0) return true; } return false; }',
   '',
   '  function choiceStatus(c){ if(!meetsStatReq(c.statRequirements, state.stats)){ var parts=[]; for(var k in (c.statRequirements||{})){ parts.push(statLabel(k)+" >= "+c.statRequirements[k]+" (cần "+(c.statRequirements[k]-(state.stats[k]||0))+")"); } return {ok:false, reason:parts.join(", ")}; } if(c.requiresItem && state.inventory.indexOf(c.requiresItem)<0){ return {ok:false, reason:"Cần vật phẩm: "+c.requiresItem}; } if(c.requiresFlag && state.flags.indexOf(c.requiresFlag)<0){ return {ok:false, reason:"Cần có: "+c.requiresFlag}; } if(c.requiresFlagAbsent && state.flags.indexOf(c.requiresFlagAbsent)>=0){ return {ok:false, reason:"Chỉ khi chưa có cờ: "+c.requiresFlagAbsent}; } return {ok:true}; }',
   '',
-  '  function renderStatusBar(){ var s="";',
-  '    s+=\'<div class="rpg-player">\';',
+  '  function renderStatusBar(){ var turn=state.history.length+1; var s=\'<div class="rpg-topbar">\';',
   '    s+=\'<img class="rpg-avatar" src="\'+esc(asset(meta.playerAvatar)||dicebear(meta.player_name))+\'"/>\';',
-  '    s+=\'<div class="rpg-playerinfo"><div class="rpg-playername">\'+esc(meta.player_name||"Người Chơi")+\'</div></div></div>\';',
-  '    s+=\'<div class="rpg-savebtns">\'+(meta.player_bio?\'<button id="btnBio">ℹ️ Nhân vật</button>\':"")+\'<button id="btnReset">Chơi lại</button></div>\';',
+  '    s+=\'<div class="rpg-topbar-info"><div class="rpg-playername">\'+esc(meta.title||"Trò Chơi")+\'</div><div class="rpg-topbar-subtitle">\'+esc(meta.player_name||"Người Chơi")+\' · Lượt \'+turn+\'</div></div>\';',
+  '    if(archetype==="litrpg"){ s+=\'<span class="rpg-topbar-points">💎 \'+state.systemPoints+\'</span>\'; }',
+  '    s+=\'<button class="rpg-topbar-btn" id="btnReset" title="Chơi lại">↺</button>\';',
+  '    s+=\'</div>\'; return s; }',
+  '',
+  '  function renderStatsRow(){ if(!statsConfig.length) return ""; var s=\'<div class="rpg-stats-row">\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; var st=statStyle(sc.key); var val=state.stats[sc.key]||0; var max=sc.max||(sc.default>0?sc.default:100); var pct=Math.max(0,Math.min(100,(val/max)*100)); s+=\'<div class="rpg-stat-bar"><div class="rpg-stat-bar-top"><span style="color:\'+st.c+\'">\'+st.i+\'</span><span class="rpg-stat-bar-label">\'+esc(sc.label||sc.key)+\'</span><span class="rpg-stat-bar-value">\'+val+\'</span></div><div class="rpg-stat-bar-track"><div class="rpg-stat-bar-fill" style="width:\'+pct+\'%;background:\'+st.c+\'"></div></div></div>\'; } s+=\'</div>\'; return s; }',
+  '',
+  '  function hasDetailContent(){ if(meta.player_bio) return true; if(archetype==="isekai" && state.flags.length) return true; if(archetype==="litrpg" && state.skills.length) return true; for(var n in state.npcAffinity){ return true; } return false; }',
+  '  function renderDetailToggle(){ if(!hasDetailContent()) return ""; var s=\'<button class="rpg-detail-toggle\'+(bioOpen?" open":"")+\'" id="detailToggle"><span>Chi tiết nhân vật</span><span class="car">▾</span></button>\'; if(bioOpen){ s+=\'<div class="rpg-detail-panel">\'+renderDetailContent()+\'</div>\'; } return s; }',
+  '  function renderDetailContent(){ var s=""; if(meta.player_bio){ s+=\'<p style="margin:0 0 8px">\'+esc(meta.player_bio)+\'</p>\'; }',
+  '    if(archetype==="isekai" && state.flags.length){ s+=\'<div class="rpg-tab-sec">🦋 Story Flags</div><div class="rpg-chips">\'; for(var i=0;i<state.flags.length;i++){ s+=\'<span class="rpg-chip">\'+esc(state.flags[i])+\'</span>\'; } s+=\'</div>\'; }',
+  '    var na=state.npcAffinity; var has=false; for(var n in na){ has=true; } if(has){ s+=\'<div class="rpg-tab-sec">💬 Độ hảo cảm NPC</div>\'; for(var n in na){ s+=\'<div class="rpg-tab-row"><span>\'+esc(n)+\'</span><b style="color:\'+(na[n]>=0?"#39d14a":"#ff4d4d")+\'">\'+(na[n]>0?"+":"")+na[n]+\'</b></div>\'; } }',
+  '    if(archetype==="litrpg" && state.skills.length){ s+=\'<div class="rpg-tab-sec">✨ Kỹ năng</div><div class="rpg-chips">\'; for(var i=0;i<state.skills.length;i++){ s+=\'<span class="rpg-chip">\'+esc(state.skills[i])+\'</span>\'; } s+=\'</div>\'; }',
   '    return s; }',
   '',
-  '  function renderArchBar(){ if(archetype!=="litrpg") return ""; var pct=Math.min(100, (state.exp/(litrpg.expPerRank||100))*100); var rank=(litrpg.ranks||[])[state.rankIndex]||"—"; return \'<div class="rpg-archbar"><span class="rpg-rank">⚡ \'+esc(rank)+\'</span><div class="rpg-expwrap"><div class="rpg-explabel">EXP: \'+state.exp+\'/\'+(litrpg.expPerRank||100)+\'</div><div class="rpg-expbar"><div class="rpg-expfill" style="width:\'+pct+\'%"></div></div></div><span class="rpg-sp">💎 Điểm HT: <b>\'+state.systemPoints+\'</b></span></div>\'; }',
+  '  function renderArchBar(){ if(archetype!=="litrpg") return ""; var pct=Math.min(100, (state.exp/(litrpg.expPerRank||100))*100); var rank=(litrpg.ranks||[])[state.rankIndex]||"—"; return \'<div class="rpg-archbar"><span class="rpg-rank">⚡ \'+esc(rank)+\'</span><div class="rpg-expwrap"><div class="rpg-explabel">EXP: \'+state.exp+\'/\'+(litrpg.expPerRank||100)+\'</div><div class="rpg-expbar"><div class="rpg-expfill" style="width:\'+pct+\'%"></div></div></div></div>\'; }',
   '',
-  '  function renderTabs(){ if(archetype==="none") return ""; var showInv=(archetype==="mystery"||archetype==="litrpg"); var showQuest=(archetype==="litrpg"); var s=\'<div class="rpg-tabs-wrap">\';',
-  '    s+=\'<div class="rpg-tabs"><button class="rpg-tab\'+(panelOpen&&activeTab==="stats"?" active":"")+\'" data-tab="stats">Chỉ số</button>\';',
+  '  function renderTabs(){ var showInv=(archetype==="mystery"||archetype==="litrpg"); var showQuest=(archetype==="litrpg"); if(!showInv && !showQuest) return ""; var s=\'<div class="rpg-tabs-wrap">\';',
+  '    s+=\'<div class="rpg-tabs">\';',
   '    if(showInv){ s+=\'<button class="rpg-tab\'+(panelOpen&&activeTab==="inventory"?" active":"")+\'" data-tab="inventory">🎒 Túi đồ (\'+state.inventory.length+(archetype==="mystery"?"/"+mysterySlots:"")+\')</button>\'; }',
   '    if(showQuest){ var act=0; for(var q in state.quests){ if(state.quests[q].status==="active") act++; } s+=\'<button class="rpg-tab\'+(panelOpen&&activeTab==="quests"?" active":"")+\'" data-tab="quests">📜 Nhiệm vụ (\'+act+\')</button>\'; }',
   '    s+=\'<button class="rpg-tab-toggle" id="tabToggle">\'+(panelOpen?"▲":"▼")+\'</button></div>\';',
   '    if(panelOpen){ s+=\'<div class="rpg-tab-content">\'+renderTabContent()+\'</div>\'; }',
   '    s+=\'</div>\'; return s; }',
   '',
-  '  function renderTabContent(){ if(activeTab==="inventory"){ return renderInventory(); } if(activeTab==="quests"){ return renderQuests(); } return renderStatsTab(); }',
-  '  function renderStatsTab(){ var s=\'<div class="rpg-stat-grid">\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; var st=statStyle(sc.key); s+=\'<div class="rpg-stat-card" style="border-color:\'+st.c+\'33"><span class="rpg-stat-icon" style="background:\'+st.c+\'22;color:\'+st.c+\'">\'+st.i+\'</span><span class="rpg-stat-info"><span class="rpg-stat-label">\'+esc(sc.label||sc.key)+\'</span><span class="rpg-stat-value">\'+(state.stats[sc.key]||0)+\'</span></span></div>\'; } s+=\'</div>\';',
-  '    if(archetype==="isekai"){ if(state.flags.length){ s+=\'<div class="rpg-tab-sec">🦋 Story Flags</div><div class="rpg-chips">\'; for(var i=0;i<state.flags.length;i++){ s+=\'<span class="rpg-chip">\'+esc(state.flags[i])+\'</span>\'; } s+=\'</div>\'; } var na=state.npcAffinity; var has=false; for(var n in na){ has=true; } if(has){ s+=\'<div class="rpg-tab-sec">💬 Độ hảo cảm NPC</div>\'; for(var n in na){ s+=\'<div class="rpg-tab-row"><span>\'+esc(n)+\'</span><b style="color:\'+(na[n]>=0?"#39d14a":"#ff4d4d")+\'">\'+(na[n]>0?"+":"")+na[n]+\'</b></div>\'; } } }',
-  '    if(archetype==="litrpg" && state.skills.length){ s+=\'<div class="rpg-tab-sec">✨ Kỹ năng</div><div class="rpg-chips">\'; for(var i=0;i<state.skills.length;i++){ s+=\'<span class="rpg-chip">\'+esc(state.skills[i])+\'</span>\'; } s+=\'</div>\'; }',
-  '    return s; }',
+  '  function renderTabContent(){ if(activeTab==="quests"){ return renderQuests(); } return renderInventory(); }',
   '  function renderInventory(){ if(!state.inventory.length) return \'<p class="rpg-empty">Túi đồ trống.</p>\'; var s=\'<div class="rpg-inv-grid">\'; for(var i=0;i<state.inventory.length;i++){ s+=\'<div class="rpg-inv-slot">🎒 \'+esc(state.inventory[i])+\'</div>\'; } s+=\'</div>\'; return s; }',
   '  function renderQuests(){ var has=false; for(var q in state.quests){ has=true; } if(!has) return \'<p class="rpg-empty">Chưa có nhiệm vụ.</p>\'; var s=""; for(var q in state.quests){ var qq=state.quests[q]; s+=\'<div class="rpg-quest\'+(qq.status==="completed"?" done":"")+\'"><div class="rpg-quest-head"><span>\'+(qq.status==="completed"?"✅":"📜")+\' \'+esc(qq.title)+\'</span><span class="rpg-quest-st">\'+(qq.status==="completed"?"Hoàn thành":"Đang làm")+\'</span></div>\'; if(qq.desc) s+=\'<div class="rpg-quest-desc">\'+esc(qq.desc)+\'</div>\'; if(qq.reward) s+=\'<div class="rpg-quest-rew">🎁 \'+esc(qq.reward)+\'</div>\'; s+=\'</div>\'; } return s; }',
   '',
+  '  function renderTurnHeader(){ var turn=state.history.length+1; var s=\'<div class="rpg-turn-row"><span class="rpg-turn-label">Lượt \'+turn+\'</span><span class="rpg-turn-divider"></span>\'; var d=state.lastDeltas||{}; for(var k in d){ if(!d[k]) continue; var v=d[k]; s+=\'<span class="rpg-turn-delta \'+(v>0?"pos":"neg")+\'">\'+esc(statLabel(k))+\' \'+(v>0?"+":"")+v+\'</span>\'; } s+=\'</div>\'; return s; }',
+  '  function renderRecapCard(){ if(!state.lastChoiceText) return ""; return \'<div class="rpg-recap-card"><div class="rpg-recap-label">Bạn đã chọn</div><div class="rpg-recap-text">\'+esc(state.lastChoiceText)+\'</div></div>\'; }',
+  '',
   '  function renderScene(node){ var s="";',
-  '    s+=\'<div class="rpg-statusbar">\'+renderStatusBar()+\'</div>\';',
+  '    s+=renderStatusBar();',
+  '    s+=renderStatsRow();',
+  '    s+=\'<div id="detailWrap">\'+renderDetailToggle()+\'</div>\';',
   '    s+=renderArchBar();',
   '    s+=renderTabs();',
   '    var art=node.npcAvatar||meta.defaultNpcAvatar||node.bgImage||"";',
   '    var isNarration=!node.speaker || !String(node.speaker).replace(/^\\s+|\\s+$/g,"");',
+  '    var turnHtml=renderTurnHeader(), recapHtml=renderRecapCard();',
   '    s+=\'<div class="rpg-vn-frame">\';',
   '    if(art){ s+=\'<div class="rpg-vn-scene"><img class="rpg-vn-scene-img" src="\'+esc(asset(art))+\'"/><div class="rpg-vn-scene-fade"></div></div>\'; }',
   '    if(isNarration){',
-  '      s+=\'<div class="rpg-vn-narration"><div class="rpg-vn-text-scroll"><p class="rpg-vn-narration-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
+  '      s+=\'<div class="rpg-vn-narration">\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll"><p class="rpg-vn-narration-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
   '    } else {',
-  '      s+=\'<div class="rpg-vn-dialogue"><div class="rpg-vn-dialogue-head">\'+(art?\'<img class="rpg-vn-avatar" src="\'+esc(asset(art))+\'"/>\':"")+\'<span class="rpg-vn-name">\'+esc(node.speaker)+\'</span></div><div class="rpg-vn-text-scroll"><p class="rpg-vn-dialogue-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
+  '      s+=\'<div class="rpg-vn-dialogue"><div class="rpg-vn-dialogue-head">\'+(art?\'<img class="rpg-vn-avatar" src="\'+esc(asset(art))+\'"/>\':"")+\'<span class="rpg-vn-name">\'+esc(node.speaker)+\'</span></div>\'+turnHtml+recapHtml+\'<div class="rpg-vn-text-scroll"><p class="rpg-vn-dialogue-text" id="dialogue"></p></div><button class="rpg-vn-skip" id="skipBtn">Bỏ qua ⏭</button></div>\';',
   '    }',
   '    s+=\'<div class="rpg-vn-choices" id="choices"></div>\';',
   '    s+=\'</div>\';',
   '    return s; }',
   '',
-  '  function renderChoices(node){ var el=document.getElementById("choices"); if(!el) return; var s=""; var LETTERS="ABCDEFGHIJ";',
-  '    for(var i=0;i<(node.choices||[]).length;i++){ var c=node.choices[i]; var st=choiceStatus(c);',
+  '  function renderChoices(node){ var el=document.getElementById("choices"); if(!el) return; var s=""; var list=node.choices||[];',
+  '    if(list.length>0){ s+=\'<div class="rpg-choices-header"><span class="rpg-choices-title">Bạn sẽ làm gì? <span class="rpg-choices-count">(\'+list.length+\' lựa chọn)</span></span><button class="rpg-choices-toggle" id="choicesToggle">\'+(choicesOpen?"Ẩn ▲":"Hiện ▼")+\'</button></div>\'; }',
+  '    if(choicesOpen){',
+  '    for(var i=0;i<list.length;i++){ var c=list[i]; var st=choiceStatus(c);',
   '      s+=\'<button class="rpg-vn-choice" data-idx="\'+i+\'"\'+(st.ok?"":" disabled")+\'>\';',
-  '      s+=\'<span class="rpg-vn-choice-idx">\'+(st.ok?(LETTERS[i]||(i+1)):"🔒")+\'</span>\';',
+  '      s+=\'<span class="rpg-vn-choice-idx">\'+(st.ok?(i+1):"🔒")+\'</span>\';',
   '      s+=\'<span class="rpg-vn-choice-body"><span class="rpg-vn-choice-row">\';',
   '      if(c.label && LABELS[c.label]){ s+=\'<span class="rpg-vn-choice-label" style="background:\'+LABELS[c.label].c+\'22;color:\'+LABELS[c.label].c+\'">\'+LABELS[c.label].t+\'</span> \'; }',
   '      if(c.diceRoll){ s+=\'<span class="rpg-vn-choice-dice">🎲 \'+esc(statLabel(c.diceRoll.stat||""))+\' ≥\'+c.diceRoll.difficulty+\'</span> \'; }',
@@ -193,10 +209,13 @@ const ENGINE_JS = [
   '      if(!st.ok){ s+=\'<div class="rpg-vn-choice-reason">\'+esc(st.reason)+\'</div>\'; }',
   '      s+=\'</span>\';',
   '      s+=\'</button>\'; }',
-  '    if((node.choices||[]).length===0 && !node.isEnding){ s+=\'<p class="rpg-vn-empty">Không có lựa chọn. <button id="btnReset2">Chơi lại</button></p>\'; }',
+  '    if(list.length>0){ s+=\'<div class="rpg-choice-custom">✏️ <input type="text" placeholder="Tự viết hành động của bạn... (sắp ra mắt)" disabled/><span class="rpg-choice-custom-tag">Sắp ra mắt</span></div>\'; }',
+  '    }',
+  '    if(list.length===0 && !node.isEnding){ s+=\'<p class="rpg-vn-empty">Không có lựa chọn. <button id="btnReset2">Chơi lại</button></p>\'; }',
   '    el.innerHTML=s;',
   '    var btns=el.querySelectorAll(".rpg-vn-choice"); for(var j=0;j<btns.length;j++){ (function(b){ b.addEventListener("click", function(){ choose(node, parseInt(b.getAttribute("data-idx"))); }); })(btns[j]); }',
-  '    var r2=el.querySelector("#btnReset2"); if(r2){ r2.addEventListener("click", function(){ reset(); render(); }); } }',
+  '    var r2=el.querySelector("#btnReset2"); if(r2){ r2.addEventListener("click", function(){ reset(); render(); }); }',
+  '    var ct=el.querySelector("#choicesToggle"); if(ct){ ct.addEventListener("click", function(){ choicesOpen=!choicesOpen; renderChoices(node); }); } }',
   '',
   '  function choose(node, idx){ var c=(node.choices||[])[idx]; if(!c) return; var st=choiceStatus(c); if(!st.ok) return;',
   '    if(c.diceRoll){ showDiceRoll(c); return; }',
@@ -210,11 +229,12 @@ const ENGINE_JS = [
   '    if(c.unlockSkill && skills.indexOf(c.unlockSkill)<0){ skills.push(c.unlockSkill); ev.push(["✨","Mở khóa kỹ năng: "+c.unlockSkill]); }',
   '    if(c.completeQuestId && quests[c.completeQuestId]){ quests[c.completeQuestId]=Object.assign({}, quests[c.completeQuestId], {status:"completed"}); ev.push(["✅","Hoàn thành nhiệm vụ: "+quests[c.completeQuestId].title]); }',
   '    if(c.npcAffinity){ for(var n in c.npcAffinity){ npcAffinity[n]=(npcAffinity[n]||0)+c.npcAffinity[n]; } }',
-  '    state.stats=ns; state.exp=exp; state.rankIndex=rankIndex; state.systemPoints=systemPoints; state.inventory=inv; state.flags=flags; state.skills=skills; state.quests=quests; state.npcAffinity=npcAffinity;',
+  '    state.stats=ns; state.exp=exp; state.rankIndex=rankIndex; state.systemPoints=systemPoints; state.inventory=inv; state.flags=flags; state.skills=skills; state.quests=quests; state.npcAffinity=npcAffinity; state.lastChoiceText=c.text||null; state.lastDeltas=Object.assign({}, c.statModifiers||{});',
   '    for(var i=0;i<ev.length;i++){ pushEvent(ev[i][0], ev[i][1]); }',
   '    if(c.systemPopup && c.systemPopup.title){ showSystemPopup(c.systemPopup); }',
   '    var dead=checkGameOver(ns);',
   '    if(!dead){ state.history.push(state.nodeId); if(c.targetNodeId && GAME.nodes[c.targetNodeId]){ state.nodeId=c.targetNodeId; } }',
+  '    choicesOpen=true;',
   '    save(); render(); }',
   '',
   '  function renderSummary(){ var s=\'<div class="rpg-sum-title">Thành tích</div>\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; s+=\'<div class="rpg-sum-row"><span>\'+esc(sc.label||sc.key)+\'</span><b>\'+(state.stats[sc.key]||0)+\'</b></div>\'; } s+=\'<div class="rpg-sum-row"><span>Số cảnh đã qua</span><b>\'+state.history.length+\'</b></div>\'; return s; }',
@@ -223,15 +243,16 @@ const ENGINE_JS = [
   '',
   '  function renderEnding(node){ var et=node.endingType||"NORMAL_END"; var em=ENDINGS[et]||{l:"Kết Thúc",i:"T"}; return \'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(asset(node.bgImage)||"")+\'\\\')"></div><div class="rpg-ending"><div class="rpg-ending-badge \'+et.toLowerCase()+\'">\'+em.i+" "+em.l+\'</div><div class="rpg-ending-text">\'+esc(node.text||"")+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="endRestart">Chơi lại từ đầu</button></div>\'; }',
   '',
-  '  function bindStatusBar(){ var bb=document.getElementById("btnBio"); if(bb) bb.addEventListener("click", function(){ showSystemPopup({title:meta.player_name||"Nhân vật", text:meta.player_bio||""}); }); var br=document.getElementById("btnReset"); if(br) br.addEventListener("click", function(){ reset(); render(); }); }',
+  '  function bindStatusBar(){ var br=document.getElementById("btnReset"); if(br) br.addEventListener("click", function(){ reset(); render(); }); }',
   '  function bindTabs(){ var tb=document.querySelectorAll(".rpg-tab"); for(var i=0;i<tb.length;i++){ (function(b){ b.addEventListener("click", function(){ activeTab=b.getAttribute("data-tab"); panelOpen=true; var tw=document.querySelector(".rpg-tabs-wrap"); if(tw){ tw.outerHTML=renderTabs(); bindTabs(); } }); })(tb[i]); } var tt=document.getElementById("tabToggle"); if(tt){ tt.addEventListener("click", function(){ panelOpen=!panelOpen; var tw=document.querySelector(".rpg-tabs-wrap"); if(tw){ tw.outerHTML=renderTabs(); bindTabs(); } }); } }',
+  '  function bindDetailToggle(){ var dt=document.getElementById("detailToggle"); if(dt){ dt.addEventListener("click", function(){ bioOpen=!bioOpen; var wrap=document.getElementById("detailWrap"); if(wrap){ wrap.innerHTML=renderDetailToggle(); bindDetailToggle(); } }); } }',
   '',
   '  function render(){ clearTyping(); var node=GAME.nodes[state.nodeId]; if(!node){ state.nodeId="start_node"; node=GAME.nodes["start_node"]; } if(!node){ document.getElementById("game").innerHTML=\'<div class="rpg-error">Không có dữ liệu game.</div>\'; return; }',
   '    var dead=checkGameOver(state.stats); var container=document.getElementById("game");',
   '    if(dead){ container.innerHTML=renderStatusBar()+renderArchBar()+renderTabs()+renderGameOver(); bindStatusBar(); bindTabs(); triggerShake(); var r=document.getElementById("goRestart"); if(r) r.addEventListener("click", function(){ reset(); render(); }); return; }',
   '    if(node.isEnding){ container.innerHTML=renderStatusBar()+renderArchBar()+renderTabs()+renderEnding(node); bindStatusBar(); bindTabs(); if(node.endingType==="BAD_END"){ triggerShake(); } var er=document.getElementById("endRestart"); if(er) er.addEventListener("click", function(){ reset(); render(); }); return; }',
   '    if(node.combat && node.combat.enemy && !node.isEnding){ startCombat(node); return; }',
-  '    container.innerHTML=renderScene(node); bindStatusBar(); bindTabs();',
+  '    container.innerHTML=renderScene(node); bindStatusBar(); bindTabs(); bindDetailToggle();',
   '    // entry processing',
   '    var inv=state.inventory.slice(), flags=state.flags.slice(), quests=Object.assign({}, state.quests); var ns=Object.assign({}, state.stats);',
   '    if(node.randomEvents && node.randomEvents.length){ for(var ei=0;ei<node.randomEvents.length;ei++){ var ev=node.randomEvents[ei]; if(Math.random()<(ev.chance||0.2)){ if(ev.statModifiers){ for(var ek in ev.statModifiers){ ns[ek]=(ns[ek]||0)+ev.statModifiers[ek]; } } if(ev.grantItem && inv.indexOf(ev.grantItem)<0 && inv.length<mysterySlots){ inv.push(ev.grantItem); } pushEvent(ev.icon||"🎲", ev.text||"Sự kiện bất ngờ!"); } } }',
@@ -255,21 +276,32 @@ html,body{margin:0;padding:0;height:100%;}
 body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);min-height:100vh;}
 #game{display:flex;flex-direction:column;position:relative;max-width:900px;margin:0 auto;width:100%;padding:16px;gap:12px;}
 .rpg-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0.3;z-index:0;border-radius:14px;}
-.rpg-statusbar{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:12px;background:color-mix(in srgb,var(--rpg-panel) 55%,transparent);backdrop-filter:blur(10px);border-radius:14px;padding:8px 10px;flex-wrap:wrap;}
-.rpg-player{display:flex;align-items:center;gap:10px;}
-.rpg-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1.5px color-mix(in srgb, var(--rpg-accent2) 60%, transparent);}
-.rpg-playerinfo{display:flex;flex-direction:column;gap:4px;}
-.rpg-playername{font-weight:600;font-size:13px;}
-.rpg-savebtns{display:flex;gap:6px;}
-.rpg-savebtns button{background:color-mix(in srgb, var(--rpg-panel-2) 75%, transparent);color:var(--rpg-text);border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-family:var(--rpg-font);font-size:11px;font-weight:600;}
-.rpg-savebtns button:hover{background:color-mix(in srgb, var(--rpg-accent2) 22%, var(--rpg-panel-2));}
+.rpg-topbar{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:6px 4px;}
+.rpg-topbar-btn{flex-shrink:0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--rpg-panel-2) 75%, transparent);color:var(--rpg-text);border:none;cursor:pointer;font-size:14px;}
+.rpg-topbar-btn:hover{background:color-mix(in srgb, var(--rpg-accent2) 22%, var(--rpg-panel-2));}
+.rpg-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 1.5px color-mix(in srgb, var(--rpg-accent2) 60%, transparent);}
+.rpg-topbar-info{flex:1;min-width:0;}
+.rpg-playername{font-size:14px;font-weight:700;color:var(--rpg-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rpg-topbar-subtitle{font-size:11px;color:var(--rpg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rpg-topbar-points{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent) 18%, var(--rpg-panel-2));color:var(--rpg-accent);}
 .rpg-archbar{position:relative;z-index:2;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:color-mix(in srgb,var(--rpg-panel) 55%,transparent);backdrop-filter:blur(8px);border-radius:12px;padding:8px 12px;}
 .rpg-rank{font-size:11px;font-weight:bold;background:var(--rpg-accent2);color:#fff;padding:3px 10px;border-radius:999px;}
 .rpg-expwrap{flex:1;min-width:120px;}
 .rpg-explabel{font-size:10px;color:var(--rpg-muted);margin-bottom:2px;}
 .rpg-expbar{height:6px;border-radius:999px;overflow:hidden;background:var(--rpg-panel-2);}
 .rpg-expfill{height:100%;background:var(--rpg-accent2);border-radius:999px;transition:width .3s;}
-.rpg-sp{font-size:12px;color:var(--rpg-text);}
+.rpg-stats-row{position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:12px 14px;padding:11px 13px;border-radius:14px;background:color-mix(in srgb, var(--rpg-panel) 45%, transparent);backdrop-filter:blur(8px);}
+.rpg-stat-bar{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.rpg-stat-bar-top{display:flex;align-items:center;gap:5px;}
+.rpg-stat-bar-label{font-size:9px;color:var(--rpg-muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rpg-stat-bar-value{font-size:14px;font-weight:800;color:var(--rpg-text);margin-left:auto;flex-shrink:0;}
+.rpg-stat-bar-track{height:5px;border-radius:999px;overflow:hidden;background:var(--rpg-panel-2);}
+.rpg-stat-bar-fill{height:100%;border-radius:999px;transition:width .35s ease;}
+.rpg-detail-toggle{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 12px;border-radius:12px;background:color-mix(in srgb, var(--rpg-panel) 40%, transparent);color:var(--rpg-muted);font-size:12px;font-weight:600;border:none;cursor:pointer;font-family:var(--rpg-font);}
+.rpg-detail-toggle:hover{color:var(--rpg-text);}
+.rpg-detail-toggle .car{display:inline-block;transition:transform .2s ease;}
+.rpg-detail-toggle.open .car{transform:rotate(180deg);}
+.rpg-detail-panel{position:relative;z-index:2;padding:12px;border-radius:12px;background:color-mix(in srgb, var(--rpg-panel) 35%, transparent);font-size:12px;line-height:1.6;color:var(--rpg-muted);}
 .rpg-tabs-wrap{position:relative;z-index:2;border-radius:12px;overflow:hidden;backdrop-filter:blur(8px);}
 .rpg-tabs{display:flex;}
 .rpg-tab-toggle{padding:7px 10px;font-size:12px;border:none;cursor:pointer;background:var(--rpg-panel-2);color:var(--rpg-muted);flex-shrink:0;}
@@ -277,12 +309,6 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-tab.active{background:var(--rpg-accent2);color:#fff;font-weight:bold;}
 .rpg-tab-content{padding:10px;font-size:12px;background:color-mix(in srgb,var(--rpg-panel) 80%,transparent);color:var(--rpg-text);min-height:40px;}
 .rpg-tab-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--rpg-border);}
-.rpg-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.rpg-stat-card{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:var(--rpg-panel-2);border:1px solid;}
-.rpg-stat-icon{width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
-.rpg-stat-info{display:flex;flex-direction:column;min-width:0;}
-.rpg-stat-label{font-size:9px;color:var(--rpg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.rpg-stat-value{font-size:13px;font-weight:bold;color:var(--rpg-text);}
 .rpg-tab-sec{font-weight:bold;margin:8px 0 4px;color:var(--rpg-accent2);}
 .rpg-chips{display:flex;flex-wrap:wrap;gap:4px;}
 .rpg-chip{padding:2px 8px;border-radius:6px;font-size:10px;background:var(--rpg-panel-2);border:1px solid var(--rpg-border);}
@@ -310,18 +336,35 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-vn-text-scroll{max-height:32vh;overflow-y:auto;padding-right:2px;}
 .rpg-vn-skip{align-self:flex-start;margin-top:8px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--rpg-border);color:var(--rpg-muted);background:transparent;cursor:pointer;font-family:var(--rpg-font);}
 .rpg-vn-skip:hover{color:var(--rpg-text);}
-.rpg-vn-choices{padding-top:22px;display:flex;flex-direction:column;gap:11px;}
+.rpg-turn-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.rpg-turn-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--rpg-muted);flex-shrink:0;}
+.rpg-turn-divider{flex:1;height:1px;min-width:16px;background:var(--rpg-border);}
+.rpg-turn-delta{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap;}
+.rpg-turn-delta.neg{background:#ff4d4d22;color:#ff6b6b;}
+.rpg-turn-delta.pos{background:#39d14a22;color:#4ade80;}
+.rpg-recap-card{border-radius:12px;padding:11px 14px;margin-bottom:14px;background:color-mix(in srgb, var(--rpg-accent2) 10%, var(--rpg-panel));border-left:3px solid var(--rpg-accent2);}
+.rpg-recap-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--rpg-accent2);margin-bottom:4px;}
+.rpg-recap-text{font-size:13px;line-height:1.55;color:var(--rpg-text);opacity:.85;}
+.rpg-choices-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:2px;}
+.rpg-choices-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--rpg-muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.rpg-choices-count{font-weight:400;text-transform:none;letter-spacing:0;color:var(--rpg-muted);}
+.rpg-choices-toggle{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--rpg-accent2);background:none;border:none;cursor:pointer;padding:4px 6px;flex-shrink:0;font-family:var(--rpg-font);}
+.rpg-vn-choices{padding-top:14px;display:flex;flex-direction:column;gap:11px;}
 .rpg-vn-choice{display:flex;align-items:flex-start;gap:11px;text-align:left;min-height:58px;border-radius:var(--rpg-btn-radius, 16px);padding:13px 16px;font-size:15px;background:color-mix(in srgb, var(--rpg-panel-2) 62%, transparent);color:var(--rpg-text);border:1px solid color-mix(in srgb, var(--rpg-accent2) 16%, transparent);cursor:pointer;font-family:var(--rpg-font);transition:transform .18s ease, background .18s ease, box-shadow .18s ease;}
 .rpg-vn-choice:not(:disabled):hover{background:color-mix(in srgb, var(--rpg-accent2) 14%, var(--rpg-panel-2));box-shadow:0 6px 18px rgba(0,0,0,.18);}
 .rpg-vn-choice:not(:disabled):active{transform:scale(.98);}
 .rpg-vn-choice:disabled{opacity:.5;cursor:not-allowed;border-style:dashed;color:var(--rpg-muted);}
-.rpg-vn-choice-idx{flex-shrink:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:color-mix(in srgb, var(--rpg-accent2) 22%, transparent);color:var(--rpg-accent2);margin-top:1px;}
+.rpg-vn-choice-idx{flex-shrink:0;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:color-mix(in srgb, var(--rpg-accent2) 22%, transparent);color:var(--rpg-accent2);margin-top:1px;}
 .rpg-vn-choice-body{flex:1;min-width:0;}
 .rpg-vn-choice-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .rpg-vn-choice-label{font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;}
 .rpg-vn-choice-dice{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:color-mix(in srgb, var(--rpg-accent2) 16%, transparent);color:var(--rpg-accent2);}
 .rpg-vn-choice-reason{font-size:11px;margin-top:4px;color:var(--rpg-muted);}
 .rpg-vn-empty{font-size:12px;font-style:italic;color:var(--rpg-muted);}
+.rpg-choice-custom{display:flex;align-items:center;gap:9px;padding:12px 15px;border-radius:var(--rpg-btn-radius, 16px);border:1.5px dashed var(--rpg-border);color:var(--rpg-muted);font-size:13px;background:transparent;}
+.rpg-choice-custom input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--rpg-text);font-size:13px;font-family:inherit;}
+.rpg-choice-custom input::placeholder{color:var(--rpg-muted);}
+.rpg-choice-custom-tag{flex-shrink:0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent2) 18%, transparent);color:var(--rpg-accent2);}
 body.rpg-adventure .rpg-vn-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.06em;font-size:12px;}
 body.rpg-transmigration .rpg-vn-frame{background-image:linear-gradient(rgba(78,45,58,.1) 1px,transparent 1px);background-size:100% 28px;}
 body.rpg-transmigration .rpg-vn-choice::before{content:'章';margin-right:8px;color:var(--rpg-accent);}
@@ -396,7 +439,7 @@ body.rpg-detective{background-image:radial-gradient(circle at 20% 20%,color-mix(
 .rpg-cbtn:hover{filter:brightness(1.15);}
 .rpg-cbtn:disabled{opacity:0.5;cursor:not-allowed;}
 .rpg-combat-over{text-align:center;font-size:18px;font-weight:bold;color:#39d14a;display:flex;flex-direction:column;align-items:center;gap:12px;}
-@media(max-width:640px){ .rpg-statusbar{flex-direction:column;align-items:stretch;} .rpg-savebtns{justify-content:center;} .rpg-vn-scene{height:clamp(140px, 26vh, 260px);} .rpg-vn-text-scroll{max-height:26vh;} }
+@media(max-width:640px){ .rpg-vn-scene{height:clamp(140px, 26vh, 260px);} .rpg-vn-text-scroll{max-height:26vh;} }
 `;
 
 export function generateStandaloneHTML(gameData) {
