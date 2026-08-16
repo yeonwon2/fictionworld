@@ -69,12 +69,24 @@ export function setAIProvider(provider) {
   lsSet(PROVIDER_STORAGE, provider === "custom" ? "custom" : "gemini");
 }
 
+// Suy luận providerId cho cấu hình LƯU TỪ TRƯỚC khi có lựa chọn Stali/EcoAPI
+// (chỉ có Base URL tự gõ) — nếu không suy luận, cấu hình cũ sẽ bị hiểu nhầm
+// thành "other" và tiếp tục gọi thẳng (lỗi CORS) dù người dùng không đổi gì.
+function inferProviderId(baseUrl) {
+  if (!baseUrl) return "stali";
+  if (baseUrl.includes("api.stali.vn")) return "stali";
+  if (baseUrl.includes("ecoapi.net")) return "ecoapi";
+  return "other";
+}
+
 // ---------- Cổng API tuỳ chỉnh (OpenAI-compatible) ----------
 // providerId: "stali" | "ecoapi" (đi qua relay) hoặc "other" (URL tự do, gọi thẳng).
 export function getCustomProviderConfig() {
+  const baseUrl = lsGet(CUSTOM_BASEURL_STORAGE);
+  const rawProviderId = lsGet(CUSTOM_PROVIDER_ID_STORAGE, "");
   return {
-    providerId: lsGet(CUSTOM_PROVIDER_ID_STORAGE, "other"),
-    baseUrl: lsGet(CUSTOM_BASEURL_STORAGE),
+    providerId: rawProviderId || inferProviderId(baseUrl),
+    baseUrl,
     key: lsGet(CUSTOM_KEY_STORAGE),
     model: lsGet(CUSTOM_MODEL_STORAGE),
   };
