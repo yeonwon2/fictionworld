@@ -80,7 +80,7 @@ export default function GamePlayer({ gameData, onExit }) {
   }, []);
 
   const checkGameOver = useCallback((s) => {
-    for (const sc of statsConfig) if (sc.isVital && (s[sc.key] || 0) <= 0) return true;
+    for (const sc of statsConfig) if (sc.isVital && (s[sc.key] || 0) <= (sc.deathThreshold ?? 0)) return true;
     return false;
   }, [statsConfig]);
 

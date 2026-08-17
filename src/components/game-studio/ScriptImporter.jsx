@@ -10,11 +10,14 @@ import { useToast } from "@/components/ui/use-toast";
 
 const CHEAT_SHEET = `# Tên game
 **Thể loại:** ...
+**Chỉ số sinh tử:** Thiện cảm < 10      (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
 
 ## GIỚI THIỆU
+→ Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! ...   (tuỳ chọn — bảng thông báo bật khi vào game)
 Văn bản mở đầu.
 
 ## CẢNH 1 — Tên cảnh
+→ Hệ thống: NHẮC NHỞ | Nội dung nhắc nhở...   (tuỳ chọn — bảng thông báo bật khi VÀO cảnh này)
 Diễn biến của cảnh.
 
 **A — Lời lựa chọn**
@@ -25,6 +28,13 @@ Diễn biến của cảnh.
 → Cần vật phẩm: tên vật phẩm
 → Đến cảnh 2                  (số 2 PHẢI có "## CẢNH 2" thật ở dưới, không thì báo lỗi)
 → Kết thúc nhan_ket_thuc       (nhãn PHẢI khớp y hệt "## KẾT THÚC nhan_ket_thuc" ở dưới)
+
+**B — Lựa chọn phạm quy (ví dụ phạt)**
+→ Thiện cảm -10
+→ Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện, bị phạt chích điện, trừ 10 thiện cảm!
+     (đặt "→ Hệ thống: ..." NGAY TRONG 1 lựa chọn để bảng thông báo bật lên
+     NGAY SAU KHI chọn — dùng cho phạt/thưởng. Tiêu đề và nội dung cách nhau
+     bằng dấu " | ". Mỗi cảnh/lựa chọn chỉ nên có 1 dòng "→ Hệ thống")
 
 ## CẢNH 2 — ...
 ...

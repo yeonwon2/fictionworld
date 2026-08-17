@@ -66,7 +66,41 @@
 // nhận diện "CẢNH", "KẾT THÚC", "GIỚI THIỆU", lựa chọn (A/B/C...) qua từ khoá,
 // dù có hay thiếu #/##/** đều đọc được như nhau. Mũi tên hiệu ứng "→" có thể
 // gõ thành "->" hoặc "=>" nếu bàn phím không gõ được ký tự →.
-// =============================================================================
+//
+// ======================= HỆ THỐNG: THÔNG BÁO / PHẠT / THƯỞNG =======================
+//
+// Dành cho kịch bản kiểu "Hệ Thống" (trọng sinh/xuyên không có bảng AI dẫn dắt,
+// nhắc nhở, phạt/thưởng theo lựa chọn) — vẫn dùng CHUNG cú pháp CẢNH/lựa chọn ở
+// trên, chỉ thêm 2 kiểu dòng mới, hoàn toàn tuỳ chọn (không dùng cũng không sao):
+//
+// → Hệ thống: <tiêu đề> | <nội dung thông báo>
+//   Đặt dòng này NGAY DƯỚI 1 dòng "## CẢNH N" (trước lựa chọn A đầu tiên) để
+//   bảng thông báo hệ thống tự bật lên khi người chơi VÀO cảnh đó — dùng cho
+//   lời chào ban đầu ("Hệ thống số 01 xin chào ký chủ...") hoặc nhắc nhở giữa
+//   chừng. Đặt dòng này BÊN TRONG một lựa chọn (cùng chỗ với các dòng "→ +N/-N"
+//   khác) để bảng thông báo bật lên NGAY SAU KHI người chơi chọn — dùng cho
+//   phạt/thưởng ("Ký chủ đã làm lệch cốt truyện, bị phạt chích điện, trừ 10
+//   thiện cảm!"). Mỗi cảnh/lựa chọn chỉ được có TỐI ĐA 1 dòng "→ Hệ thống",
+//   thừa sẽ bị ghi đè bởi dòng sau cùng. Nếu bỏ "<tiêu đề> |" (không có dấu |),
+//   tiêu đề mặc định là "Hệ Thống".
+//   Ví dụ nhắc nhở đầu game (đặt trong GIỚI THIỆU hoặc CẢNH 1):
+//     → Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Nhiệm vụ của ngươi là...
+//   Ví dụ hình phạt (đặt trong 1 lựa chọn, cùng lựa chọn có thể vừa trừ điểm
+//   vừa hiện thông báo):
+//     **C — Tiết lộ bí mật cho kẻ địch**
+//     → Thiện cảm -10
+//     → Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện! Bị phạt chích điện, trừ 10 thiện cảm.
+//
+// **Chỉ số sinh tử:** <Tên chỉ số>[ < <ngưỡng>][, <Tên chỉ số 2>...]
+//   Khai báo Ở ĐẦU kịch bản (cùng chỗ với "Thể loại:"/"Tác giả:", trước
+//   GIỚI THIỆU/CẢNH 1) — chỉ số nào được liệt kê ở đây, khi tụt xuống bằng
+//   hoặc dưới ngưỡng sẽ lập tức kết thúc game (màn hình Game Over, không cần
+//   viết thêm gì khác). Không ghi "< ngưỡng" thì mặc định ngưỡng là 0 (chết
+//   khi về đúng 0 trở xuống). Có thể khai báo nhiều chỉ số, cách nhau bằng dấu
+//   phẩy, mỗi chỉ số có ngưỡng riêng.
+//   Ví dụ: "Thiện cảm dưới 10 là chết" (không phải về 0 mới chết):
+//     **Chỉ số sinh tử:** Thiện cảm < 10
+// =====================================================================================
 
 import { normalizeAndRepair } from "./postprocess";
 
@@ -86,11 +120,19 @@ export function slugify(label) {
 // nhận diện (stripMarkers), chỉ dùng để phân biệt tiêu đề game (không từ
 // khoá, dựa vào việc là dòng nội dung đầu tiên của văn bản).
 function stripMarkers(line) {
-  return line.replace(/^#{1,6}\s*/, "").replace(/^\*{1,3}\s*/, "").replace(/\*{1,3}\s*$/, "").trim();
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    // Nhãn kiểu "**Chỉ số sinh tử:** giá trị" — cặp ** đóng nằm giữa dòng (ngay
+    // sau nhãn), không phải cuối dòng, nên phải gỡ theo CẶP chứ không chỉ gỡ
+    // riêng đầu/cuối (2 dòng replace dưới sẽ bỏ sót ** ở giữa nếu tách riêng).
+    .replace(/^\*{1,3}([^*]*)\*{1,3}\s*/, "$1")
+    .replace(/\*{1,3}\s*$/, "")
+    .trim();
 }
 
 const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
+const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
@@ -106,6 +148,14 @@ const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
+const RE_EFF_SYSPOPUP = /^Hệ thống\s*:\s*(.+)$/i;
+const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
+
+function parseSystemPopup(raw) {
+  const idx = raw.indexOf("|");
+  if (idx < 0) return { title: "Hệ Thống", text: raw.trim() };
+  return { title: raw.slice(0, idx).trim() || "Hệ Thống", text: raw.slice(idx + 1).trim() };
+}
 
 function stripMarkdown(line) {
   return line
@@ -135,6 +185,7 @@ export function parseScript(scriptText, baseMeta = {}) {
   let title = "";
   let genre = "";
   let author = "";
+  const vitalDeclarations = []; // [{ key, deathThreshold }] — từ "**Chỉ số sinh tử:**"
 
   const sceneOrder = []; // ["scene_1", "scene_2", ...] theo đúng thứ tự xuất hiện
   const nodesMap = {};
@@ -149,12 +200,22 @@ export function parseScript(scriptText, baseMeta = {}) {
   }
 
   function applyEffectLine(raw, lineNo) {
-    const target = currentChoice; // hiệu ứng luôn gắn vào lựa chọn hiện tại
+    let m;
+    // "→ Hệ thống: ..." không cần đang ở trong lựa chọn — gắn vào cảnh hiện tại
+    // (bật khi VÀO cảnh) nếu đứng ngoài lựa chọn, hoặc vào lựa chọn hiện tại
+    // (bật NGAY SAU KHI chọn — dùng cho phạt/thưởng) nếu đứng trong lựa chọn.
+    if ((m = raw.match(RE_EFF_SYSPOPUP))) {
+      const popup = parseSystemPopup(m[1]);
+      if (currentChoice) currentChoice.systemPopup = popup;
+      else if (currentNode) currentNode.systemPopup = popup;
+      else warnings.push(`Dòng ${lineNo}: có "→ Hệ thống: ..." nhưng chưa thuộc cảnh nào (bỏ qua).`);
+      return;
+    }
+    const target = currentChoice; // các hiệu ứng còn lại luôn gắn vào lựa chọn hiện tại
     if (!target) {
       warnings.push(`Dòng ${lineNo}: có "→ ${raw}" nhưng chưa ở trong lựa chọn nào (bỏ qua).`);
       return;
     }
-    let m;
     if ((m = raw.match(RE_EFF_FLAG))) { target.grantFlag = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_NOT_FLAG))) { target.requiresFlagAbsent = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_FLAG))) { target.requiresFlag = m[1].trim(); return; }
@@ -185,6 +246,18 @@ export function parseScript(scriptText, baseMeta = {}) {
     let m;
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_VITAL))) {
+      for (const part of m[1].split(",")) {
+        const vm = part.trim().match(RE_VITAL_ITEM);
+        if (!vm || !vm[1].trim()) continue;
+        const key = registerStat(vm[1]);
+        const op = vm[2];
+        const num = vm[3] !== undefined ? Number(vm[3]) : null;
+        const deathThreshold = num === null ? 0 : (op === "<" ? num - 1 : num);
+        vitalDeclarations.push({ key, deathThreshold });
+      }
+      continue;
+    }
 
     if (RE_INTRO.test(norm)) {
       introNode = { id: "start_node", speaker: "", text: "", bgImage: "", isEnding: false, endingType: null, choices: [] };
@@ -298,7 +371,12 @@ export function parseScript(scriptText, baseMeta = {}) {
   }
 
   const statKeys = Array.from(statKeysSeen.keys());
-  const statsConfig = statKeys.map((key) => ({ key, label: statKeysSeen.get(key), default: 0, isVital: false }));
+  const statsConfig = statKeys.map((key) => {
+    const vital = vitalDeclarations.find((v) => v.key === key);
+    return vital
+      ? { key, label: statKeysSeen.get(key), default: 0, isVital: true, deathThreshold: vital.deathThreshold }
+      : { key, label: statKeysSeen.get(key), default: 0, isVital: false };
+  });
   const initialStats = {};
   for (const key of statKeys) initialStats[key] = 0;
 
