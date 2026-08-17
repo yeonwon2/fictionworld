@@ -137,10 +137,28 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
     if (n.endingType === "null" || n.endingType === "") n.endingType = null;
     for (const c of (n.choices || [])) {
       if (c.targetNodeId && !ids.has(c.targetNodeId)) {
-        const refLabel = c.targetNodeId.startsWith("scene_") ? ("cảnh " + c.targetNodeId.slice(6))
-          : c.targetNodeId.startsWith("ending_") ? ('kết thúc "' + c.targetNodeId.slice(7) + '"')
-          : ('"' + c.targetNodeId + '"');
-        warnings.push('Cảnh "' + n.id + '" — lựa chọn "' + (c.text || "(không có chữ)") + '": trỏ tới ' + refLabel + ' nhưng không tồn tại trong kịch bản. Đã tạm dẫn tới ending "Thiếu cảnh" — kiểm tra lại số cảnh/nhãn kết thúc trong bản gốc.');
+        // Tìm điểm mốc "scene_"/"ending_" CUỐI CÙNG trong id (không phải đầu
+        // tiên) — id ở Xưởng NPC có dạng "npc_<slug>_scene_1", nếu bắt từ đầu
+        // sẽ cắt nhầm ngay giữa slug nhân vật (vd slug chứa chữ "end").
+        const sceneMarker = c.targetNodeId.lastIndexOf("scene_");
+        const endingMarker = c.targetNodeId.lastIndexOf("ending_");
+        let refLabel, suggestion = "";
+        if (sceneMarker !== -1 && sceneMarker >= endingMarker) {
+          const prefix = c.targetNodeId.slice(0, sceneMarker + 6);
+          const missing = c.targetNodeId.slice(prefix.length);
+          refLabel = "cảnh " + missing;
+          const valid = Array.from(ids).filter((id) => id.startsWith(prefix) && id !== c.targetNodeId).map((id) => id.slice(prefix.length));
+          if (valid.length) suggestion = " Các cảnh có thật (cùng phạm vi): " + valid.join(", ") + ".";
+        } else if (endingMarker !== -1) {
+          const prefix = c.targetNodeId.slice(0, endingMarker + 7);
+          const missing = c.targetNodeId.slice(prefix.length);
+          refLabel = 'kết thúc "' + missing + '"';
+          const valid = Array.from(ids).filter((id) => id.startsWith(prefix) && id !== c.targetNodeId).map((id) => id.slice(prefix.length));
+          if (valid.length) suggestion = ' Các kết thúc có thật (cùng phạm vi): "' + valid.join('", "') + '".';
+        } else {
+          refLabel = '"' + c.targetNodeId + '"';
+        }
+        warnings.push('Cảnh "' + n.id + '" — lựa chọn "' + (c.text || "(không có chữ)") + '": trỏ tới ' + refLabel + ' nhưng không tồn tại trong kịch bản.' + suggestion + ' Đã tạm dẫn tới ending "Thiếu cảnh" — sửa lại đúng số/nhãn rồi sản xuất lại.');
         if (!ids.has("broken_link_end")) {
           nodesMap["broken_link_end"] = { id: "broken_link_end", speaker: "", text: "(Đường dẫn bị thiếu trong kịch bản gốc — cảnh hoặc kết thúc được trỏ tới chưa được viết. Hãy kiểm tra lại số cảnh/nhãn kết thúc rồi sản xuất lại.)", bgImage: "", isEnding: true, endingType: "NORMAL_END", choices: [] };
           ids.add("broken_link_end");

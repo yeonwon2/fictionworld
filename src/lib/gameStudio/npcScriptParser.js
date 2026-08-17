@@ -105,6 +105,33 @@ export function slugifyNpc(label) {
     .replace(/^_+|_+$/g, "") || "x";
 }
 
+function normalizeLoose(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+// Dò các lỗi "gõ gần đúng" phổ biến nhất cho 1 dòng "→ ..." không khớp cú
+// pháp nào cả — trả về 1 câu gợi ý sửa cụ thể, hoặc "" nếu không đoán được.
+// Chỉ dùng để LÀM RÕ cảnh báo có sẵn, không thay đổi kết quả sản xuất.
+function suggestEffectFix(raw) {
+  const norm = normalizeLoose(raw);
+  if (/^he\s*thong\b/.test(norm)) return ' Xưởng NPC không hỗ trợ "→ Hệ thống: ..." — bảng thông báo hệ thống chỉ có ở Xưởng Hệ Thống.';
+  if (/^den\s+canh\b/.test(norm)) return ' Có phải bạn định viết "→ Đến cảnh <số/nhãn cảnh>"? Kiểm tra lại dấu tiếng Việt và khoảng trắng.';
+  if (/^(den\s+)?ket\s*thuc\b/.test(norm)) return ' Có phải bạn định viết "→ Kết thúc <nhãn>"? Nhãn phải khớp Y HỆT với 1 khối "KẾT THÚC ..." có thật, TRONG CÙNG khối NHÂN VẬT này.';
+  if (/^can\s+co\b/.test(norm) && !raw.includes(":")) return ' Có phải bạn định viết "→ Cần cờ: <tên cờ>"? Thiếu dấu ":".';
+  if (/^co\b/.test(norm) && !raw.includes(":")) return ' Có phải bạn định viết "→ Cờ: <tên cờ>"? Thiếu dấu ":".';
+  if (/^anh\b/.test(norm) && !raw.includes(":")) return ' Có phải bạn định viết "→ Ảnh: <URL>"? Thiếu dấu ":" — và nhớ đặt ngay dưới dòng "NHÂN VẬT ...", trước cảnh đầu tiên.';
+  if (/^vat\s*pham\b/.test(norm) && !raw.includes(":")) return ' Có phải bạn định viết "→ Vật phẩm: <tên vật phẩm>"? Thiếu dấu ":".';
+  if (/^can\s+vat\s*pham\b/.test(norm) && !raw.includes(":")) return ' Có phải bạn định viết "→ Cần vật phẩm: <tên vật phẩm>"? Thiếu dấu ":".';
+  if (/^can\b/.test(norm) && !/>=|≥/.test(raw)) return ' Có phải bạn định viết "→ Cần <tên chỉ số> >= <số>"? Thiếu dấu ">=".';
+  if (/\d\s*$/.test(raw) && !/[+-]\d+\s*$/.test(raw)) return ' Có phải đây là hiệu ứng chỉ số? Nhớ thêm dấu "+" hoặc "-" trước số, vd "→ Thiện cảm +10".';
+  return '';
+}
+
 function stripMarkers(line) {
   return line
     .replace(/^#{1,6}\s*/, "")
@@ -214,7 +241,7 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
           return;
         }
       }
-      warnings.push(`Dòng ${lineNo}: có "→ ${raw}" nhưng chưa ở trong lựa chọn nào (bỏ qua).`);
+      warnings.push(`Dòng ${lineNo}: có "→ ${raw}" nhưng chưa ở trong lựa chọn nào (bỏ qua).${suggestEffectFix(raw)}`);
       return;
     }
     if (!currentNpc) { warnings.push(`Dòng ${lineNo}: lựa chọn chưa thuộc nhân vật nào (bỏ qua).`); return; }
@@ -236,7 +263,7 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
       target.statModifiers[key] = Number(m[2]);
       return;
     }
-    warnings.push(`Dòng ${lineNo}: không hiểu hiệu ứng "→ ${raw}" (bỏ qua).`);
+    warnings.push(`Dòng ${lineNo}: không hiểu hiệu ứng "→ ${raw}" (bỏ qua).${suggestEffectFix(raw)}`);
   }
 
   for (let i = 0; i < lines.length; i++) {

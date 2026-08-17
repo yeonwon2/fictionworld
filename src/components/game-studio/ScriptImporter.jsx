@@ -1,12 +1,41 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Wand2, Loader2, AlertTriangle } from "lucide-react";
+import { FileText, Wand2, Loader2, AlertTriangle, ListPlus, GitBranchPlus, FlagTriangleRight } from "lucide-react";
 import { parseScript } from "@/lib/gameStudio/scriptParser";
 import { generateScriptFromPrompt } from "@/lib/gameStudio/scriptWriter";
 import { useToast } from "@/components/ui/use-toast";
+
+// Chèn 1 đoạn cú pháp mẫu ngay tại vị trí con trỏ trong ô kịch bản — dùng cho
+// các nút "+ Thêm ..." bên dưới. Nếu snippet có 1 đoạn trùng "placeholder",
+// đoạn đó được BÔI ĐEN sẵn sau khi chèn để gõ đè lên ngay, không cần tự chọn.
+function insertSnippetAtCursor({ textareaRef, script, setScript, snippet, placeholder }) {
+  const el = textareaRef.current;
+  // Luôn chèn tại VỊ TRÍ CUỐI của vùng chọn hiện tại — không đè lên phần đang
+  // được bôi đen. Nếu chèn đè theo (start, end) như con trỏ chuột thật, bấm 2
+  // nút chèn liên tiếp (chưa gõ gì) sẽ vô tình XÓA MẤT snippet vừa chèn trước
+  // đó, vì placeholder của nó vẫn đang được tự động bôi đen chờ gõ đè.
+  const pos = el ? el.selectionEnd : script.length;
+  const before = script.slice(0, pos);
+  const after = script.slice(pos);
+  const leadingNl = before.length === 0 ? "" : before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+  const trailingNl = after.length === 0 ? "" : after.startsWith("\n\n") ? "" : after.startsWith("\n") ? "\n" : "\n\n";
+  const insertion = leadingNl + snippet + trailingNl;
+  setScript(before + insertion + after);
+  requestAnimationFrame(() => {
+    if (!el) return;
+    el.focus();
+    const idx = placeholder ? insertion.indexOf(placeholder) : -1;
+    if (idx !== -1) {
+      el.setSelectionRange(before.length + idx, before.length + idx + placeholder.length);
+    } else {
+      const pos = before.length + insertion.length;
+      el.setSelectionRange(pos, pos);
+    }
+  });
+}
 
 const CHEAT_SHEET = `# Tên game
 **Thể loại:** ...
@@ -50,7 +79,16 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [producing, setProducing] = useState(false);
+  const textareaRef = useRef(null);
   const { toast } = useToast();
+
+  const insertSnippet = (snippet, placeholder) => insertSnippetAtCursor({ textareaRef, script, setScript, snippet, placeholder });
+
+  const SNIPPETS = [
+    { label: "Cảnh mới", icon: ListPlus, snippet: "CẢNH X — Tên cảnh\nDiễn biến của cảnh.", placeholder: "X" },
+    { label: "Lựa chọn", icon: GitBranchPlus, snippet: "A — Lời lựa chọn\n→ Tên chỉ số +5\n→ Đến cảnh X", placeholder: "Lời lựa chọn" },
+    { label: "Kết thúc", icon: FlagTriangleRight, snippet: "KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]\nVăn bản kết thúc.", placeholder: "nhan_ket_thuc" },
+  ];
 
   const handleAIWrite = async () => {
     if (!aiInput.trim()) {
@@ -152,8 +190,25 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Kịch bản</Label>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <Label className="text-xs">Kịch bản</Label>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {SNIPPETS.map(({ label, icon: Icon, snippet, placeholder }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => insertSnippet(snippet, placeholder)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition"
+                title={`Chèn "${label}" vào vị trí con trỏ`}
+              >
+                <Icon size={12} /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground">Đặt con trỏ vào chỗ muốn chèn trong kịch bản rồi bấm nút tương ứng ở trên — phần cần điền sẽ được bôi đen sẵn để gõ đè lên.</p>
         <Textarea
+          ref={textareaRef}
           value={script}
           onChange={(e) => setScript(e.target.value)}
           rows={12}
