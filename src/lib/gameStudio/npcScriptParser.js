@@ -189,7 +189,7 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
       // thúc X" ngay dưới lời dẫn — coi đây là cảnh chuyển tiếp thẳng, tự tạo
       // 1 lựa chọn "Tiếp tục" ẩn danh thay vì bỏ qua (rất nhiều kịch bản thật
       // viết theo kiểu này khi 1 cảnh không cần rẽ nhánh).
-      if (currentNode && currentNpc) {
+      if (currentNode && currentNpc && !currentNode.isEnding) {
         let mm;
         if ((mm = raw.match(RE_EFF_GOTO))) {
           currentNode.choices.push({ text: "Tiếp tục", statRequirements: {}, statModifiers: {}, __explicitTarget: "npc_" + currentNpc.slug + "_scene_" + mm[1] });
