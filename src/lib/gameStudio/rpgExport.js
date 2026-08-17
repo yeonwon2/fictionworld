@@ -484,5 +484,9 @@ ${engine}
 export function generateIframeCode(gameData) {
   const html = generateStandaloneHTML(gameData);
   const srcdoc = html.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  return `<iframe srcdoc="${srcdoc}" width="100%" height="700" style="border:0;border-radius:12px;" loading="lazy" allowfullscreen></iframe>`;
+  // "autoplay" PHẢI có trong allow="..." — thiếu nó, trình duyệt chặn hẳn
+  // Web Audio bên trong khung nhúng (kể cả sau khi người chơi đã bấm chọn gì
+  // đó bên trong iframe) vì khung nhúng khác domain mặc định không được cấp
+  // quyền autoplay, khiến tiếng "ting" của bảng thông báo hệ thống bị câm.
+  return `<iframe srcdoc="${srcdoc}" width="100%" height="700" style="border:0;border-radius:12px;" loading="lazy" allow="autoplay" allowfullscreen></iframe>`;
 }
