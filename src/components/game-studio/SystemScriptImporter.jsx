@@ -3,28 +3,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Wand2, Loader2, AlertTriangle } from "lucide-react";
-import { parseScript } from "@/lib/gameStudio/scriptParser";
-import { generateScriptFromPrompt } from "@/lib/gameStudio/scriptWriter";
+import { Bot, Wand2, Loader2, AlertTriangle } from "lucide-react";
+import { parseSystemScript } from "@/lib/gameStudio/systemScriptParser";
+import { generateSystemScriptFromPrompt } from "@/lib/gameStudio/systemScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
 
+// Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/scriptParser.js
+// của "Xưởng Offline", sửa file này không ảnh hưởng gì tới xưởng đó.
 const CHEAT_SHEET = `# Tên game
 **Thể loại:** ...
+**Chỉ số sinh tử:** Thiện cảm < 10        (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
 
 ## GIỚI THIỆU
+→ Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Chào mừng ký chủ đến với thế giới này...
 Văn bản mở đầu.
 
 ## CẢNH 1 — Tên cảnh
+→ Hệ thống: NHẮC NHỞ | Ký chủ hãy cẩn thận, tránh làm lệch cốt truyện.
 Diễn biến của cảnh.
 
-**A — Lời lựa chọn**
-→ Tên chỉ số +5
-→ Cờ: ten_co
-→ Cần cờ: ten_co              (khoá nếu CHƯA có cờ)
-→ Cần không có cờ: ten_co     (khoá nếu ĐÃ có cờ — dùng làm nhánh "else")
-→ Cần vật phẩm: tên vật phẩm
+**A — Lựa chọn phạm luật hệ thống**
+→ Thiện cảm -10
+→ Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện, bị phạt chích điện, trừ 10 thiện cảm!
+
+**B — Lựa chọn đúng cốt truyện**
+→ Thiện cảm +15
+→ Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện! Thưởng 15 điểm thiện cảm.
 → Đến cảnh 2                  (số 2 PHẢI có "## CẢNH 2" thật ở dưới, không thì báo lỗi)
-→ Kết thúc nhan_ket_thuc       (nhãn PHẢI khớp y hệt "## KẾT THÚC nhan_ket_thuc" ở dưới)
 
 ## CẢNH 2 — ...
 ...
@@ -32,12 +37,17 @@ Diễn biến của cảnh.
 ## KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]
 Văn bản kết thúc.
 
-Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
-BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu... thì
-Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn riêng,
-mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.`;
+Ghi chú:
+- "→ Hệ thống: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI "## CẢNH N" (trước lựa
+  chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì
+  bật NGAY SAU KHI chọn (dùng cho phạt/thưởng). Mỗi cảnh/lựa chọn tối đa 1
+  dòng này. Tiêu đề và nội dung cách nhau bằng dấu "|".
+- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
+  BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu...
+  thì Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn
+  riêng, mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.`;
 
-export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
+export default function SystemScriptImporter({ gameData, setGameData, onGenerated }) {
   const [script, setScript] = useState("");
   const [warnings, setWarnings] = useState([]);
   const [aiOpen, setAiOpen] = useState(false);
@@ -55,7 +65,7 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
     }
     setAiLoading(true);
     try {
-      const text = await generateScriptFromPrompt({ mode: aiMode, input: aiInput, length: aiLength });
+      const text = await generateSystemScriptFromPrompt({ mode: aiMode, input: aiInput, length: aiLength });
       setScript(text);
       toast({ title: "AI đã viết xong kịch bản", description: "Kiểm tra/sửa lại bên dưới rồi bấm Sản Xuất Game." });
     } catch (e) {
@@ -72,7 +82,7 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
     }
     setProducing(true);
     try {
-      const result = parseScript(script, gameData.meta);
+      const result = parseSystemScript(script, gameData.meta);
       setGameData(result);
       setWarnings(result.warnings || []);
       onGenerated && onGenerated(result);
@@ -88,10 +98,12 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
   };
 
   return (
-    <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3">
-      <h3 className="font-semibold text-sm flex items-center gap-2"><FileText size={16} /> Xưởng Offline — Sản xuất từ kịch bản viết sẵn</h3>
+    <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-violet-500/20">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <Bot size={16} className="text-violet-500" /> Xưởng Hệ Thống — Bảng thông báo, phạt &amp; thưởng
+      </h3>
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Dán kịch bản đã viết theo đúng cú pháp bên dưới (hoặc để AI viết giúp), hệ thống sẽ sản xuất game trực tiếp — không cần gọi AI, luôn ra đúng những gì bạn đã viết. Quên "#" hay "**" cũng không sao — hệ thống nhận diện qua từ khoá ("CẢNH", "KẾT THÚC", "GIỚI THIỆU"...), không bắt buộc phải có ký hiệu markdown.
+        Xưởng riêng dành cho thể loại "Hệ Thống" (trọng sinh/xuyên không có hệ thống dẫn dắt) — dán kịch bản theo cú pháp bên dưới (hoặc để AI viết giúp) để game tự bật bảng thông báo chào mừng, nhắc nhở giữa chừng, và phạt/thưởng ngay sau khi người chơi chọn. Hoàn toàn tách biệt với "Xưởng Thiết Kế" — dùng xưởng nào cũng không ảnh hưởng xưởng kia.
       </p>
 
       <details className="text-xs rounded-lg border border-border">
@@ -158,9 +170,9 @@ export default function ScriptImporter({ gameData, setGameData, onGenerated }) {
         />
       </div>
 
-      <Button onClick={handleProduce} disabled={producing} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700">
-        {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <FileText size={16} className="mr-2" />}
-        {producing ? "Đang sản xuất..." : "Sản Xuất Game (Offline)"}
+      <Button onClick={handleProduce} disabled={producing} className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
+        {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Bot size={16} className="mr-2" />}
+        {producing ? "Đang sản xuất..." : "Sản Xuất Game (Hệ Thống)"}
       </Button>
 
       {warnings.length > 0 && (

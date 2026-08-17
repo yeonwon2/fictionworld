@@ -48,18 +48,6 @@ QUY TẮC:
 - MỖI lựa chọn CHỈ được có ĐÚNG MỘT "→ Đến cảnh"/"→ Kết thúc" — TUYỆT ĐỐI không viết cú pháp điều kiện kiểu "→ Nếu có cờ X: Đến cảnh Y" trong 1 dòng. Muốn rẽ nhánh theo cờ/chỉ số, hãy tách thành 2 lựa chọn RIÊNG (vd cùng câu thoại nhưng 1 khoá bằng "Cần cờ: X", 1 khoá bằng "Cần không có cờ: X"), mỗi lựa chọn tự có "→ Đến cảnh"/"→ Kết thúc" của riêng nó.
 - Tên chỉ số đặt tự do (tiếng Việt hoặc tiếng Anh đều được), hệ thống tự nhận diện.
 - Không dùng markdown khác ngoài **...** cho tiêu đề lựa chọn và # / ## cho tiêu đề.
-
-CHỈ KHI câu chuyện thuộc thể loại "Hệ Thống" (trọng sinh/xuyên không có một hệ
-thống/AI dẫn dắt, nhắc nhở, phạt/thưởng ký chủ) — dùng thêm 2 cú pháp sau, HOÀN
-TOÀN KHÔNG dùng nếu câu chuyện không có yếu tố "hệ thống" kiểu này:
-- "**Chỉ số sinh tử:** <Tên chỉ số> < <ngưỡng>" đặt ngay dưới "**Thể loại:**" —
-  khai báo 1 chỉ số (vd "Thiện cảm") mà khi tụt dưới ngưỡng sẽ Game Over ngay.
-- "→ Hệ thống: <tiêu đề> | <nội dung thông báo>" — đặt ngay dưới 1 dòng
-  "## CẢNH N" (trước lựa chọn A) để bật bảng thông báo khi VÀO cảnh (dùng cho
-  lời chào ban đầu/nhắc nhở); hoặc đặt BÊN TRONG 1 lựa chọn (cùng chỗ với
-  "→ <chỉ số> +N/-N") để bật bảng thông báo NGAY SAU KHI chọn (dùng cho
-  phạt/thưởng, ví dụ "→ Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện,
-  bị phạt chích điện, trừ 10 thiện cảm!"). Mỗi cảnh/lựa chọn tối đa 1 dòng này.
 `.trim();
 
 function lengthToSceneCount(length) {
