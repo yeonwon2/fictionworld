@@ -43,6 +43,8 @@
 //
 // ### CẢNH 1 — <Tên cảnh, chỉ để tham khảo khi viết>
 // <văn bản diễn biến>
+// (Nhãn cảnh không bắt buộc là số thuần — có thể đặt "CẢNH 1_A", "CẢNH 2b"...
+//  để dễ phân biệt các nhánh rẽ, miễn khớp đúng với "→ Đến cảnh <nhãn>" ở dưới.)
 //
 // **A — <lời lựa chọn>**
 // → Thiện cảm +5                              (cộng/trừ điểm — tên chỉ số tự
@@ -110,7 +112,7 @@ const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
 const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_NPC = /^NHÂN\s+VẬT\s+(.+?)\s*(?:[—\-:]\s*(.+))?$/i;
-const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -121,7 +123,7 @@ const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
 const RE_EFF_REQ_NOT_FLAG = /^Cần không có cờ:\s*(.+)$/i;
 const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
-const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
+const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_GOTO_BARE = /^Đến\s+(?!cảnh\b)(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
