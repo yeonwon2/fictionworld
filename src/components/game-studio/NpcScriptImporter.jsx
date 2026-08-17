@@ -3,10 +3,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Heart, Wand2, Loader2, AlertTriangle, Copy, Check } from "lucide-react";
+import { Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ImageIcon } from "lucide-react";
 import { parseNpcScript } from "@/lib/gameStudio/npcScriptParser";
 import { generateNpcScriptFromPrompt } from "@/lib/gameStudio/npcScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
+import FileUrlInput from "@/components/FileUrlInput";
 
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/SystemScriptImporter.jsx
 // hay parser của 2 xưởng đó, sửa file này không ảnh hưởng gì tới 2 xưởng kia.
@@ -90,6 +91,19 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
   const [cheatSheetCopied, setCheatSheetCopied] = useState(false);
   const { toast } = useToast();
 
+  // Danh sách nhân vật đã sản xuất — đọc thẳng từ lựa chọn trên start_node
+  // (mỗi nhân vật = 1 lựa chọn kèm npcCard). Đổi ảnh ở đây ghi thẳng vào
+  // gameData, không cần sửa lại kịch bản mỗi lần muốn đổi ảnh.
+  const npcChoices = (gameData?.nodes?.start_node?.choices || [])
+    .map((c, idx) => ({ idx, npcCard: c.npcCard }))
+    .filter((c) => c.npcCard);
+
+  const updateNpcImage = (idx, url) => {
+    const startNode = gameData.nodes.start_node;
+    const choices = startNode.choices.map((c, i) => (i === idx ? { ...c, npcCard: { ...c.npcCard, image: url } } : c));
+    setGameData({ ...gameData, nodes: { ...gameData.nodes, start_node: { ...startNode, choices } } });
+  };
+
   const copyCheatSheet = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -150,6 +164,26 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
       <p className="text-xs text-muted-foreground leading-relaxed">
         Xưởng riêng dành cho thể loại "Công Lược" (otome/dating sim) — khai nhiều khối "NHÂN VẬT" trong CÙNG 1 kịch bản, mỗi nhân vật là 1 tuyến truyện độc lập. Người chơi thấy màn hình thẻ bài "Bạn muốn theo đuổi ai?" ở đầu game, chọn ai thì chỉ tuyến của người đó chạy tiếp. Hoàn toàn tách biệt với "Xưởng Thiết Kế"/"Xưởng Hệ Thống" — dùng xưởng nào cũng không ảnh hưởng xưởng kia.
       </p>
+
+      {npcChoices.length > 0 && (
+        <section className="rounded-lg border border-pink-500/30 bg-pink-500/5 p-3 space-y-3">
+          <Label className="text-xs font-semibold flex items-center gap-1.5"><ImageIcon size={13} className="text-pink-500" /> Ảnh đại diện từng nhân vật</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Đổi ảnh trực tiếp ở đây (tải lên hoặc dán URL) — không cần sửa lại kịch bản mỗi lần muốn đổi ảnh.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {npcChoices.map(({ idx, npcCard }) => (
+              <div key={idx} className="rounded-lg border border-border bg-background/50 p-2.5 space-y-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium truncate">{npcCard.name}</div>
+                  {npcCard.tagline && <div className="text-[11px] text-muted-foreground truncate">{npcCard.tagline}</div>}
+                </div>
+                <FileUrlInput value={npcCard.image || ""} onChange={(url) => updateNpcImage(idx, url)} preview />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <details className="text-xs rounded-lg border border-border">
         <summary className="cursor-pointer px-3 py-2 font-medium select-none flex items-center justify-between gap-2">
