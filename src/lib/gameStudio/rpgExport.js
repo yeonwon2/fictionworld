@@ -208,7 +208,7 @@ const ENGINE_JS = [
   '        if(c.npcCard.image){ s+=\'<img class="rpg-npc-card-img" src="\'+esc(asset(c.npcCard.image))+\'"/>\'; }',
   '        s+=\'<span class="rpg-npc-card-body"><span class="rpg-npc-card-name">\'+esc(c.npcCard.name||"")+\'</span>\';',
   '        if(c.npcCard.tagline){ s+=\'<span class="rpg-npc-card-tagline">\'+esc(c.npcCard.tagline)+\'</span>\'; }',
-  '        s+=\'<span class="rpg-npc-card-btn">\'+esc(c.text||"")+\'</span></span></button>\';',
+  '        s+=\'<span class="rpg-npc-card-btn">Theo đuổi</span></span></button>\';',
   '      }',
   '      s+=\'</div>\';',
   '      el.innerHTML=s;',

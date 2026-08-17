@@ -542,7 +542,7 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
                 <span className="rpg-npc-card-body">
                   <span className="rpg-npc-card-name">{c.npcCard.name}</span>
                   {c.npcCard.tagline && <span className="rpg-npc-card-tagline">{c.npcCard.tagline}</span>}
-                  <span className="rpg-npc-card-btn">{c.text}</span>
+                  <span className="rpg-npc-card-btn">Theo đuổi</span>
                 </span>
               </button>
             ))}
