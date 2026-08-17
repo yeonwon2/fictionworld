@@ -10,6 +10,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 # <Tên game>
 **Thể loại:** <thể loại>
 **Chỉ số sinh tử:** <Tên chỉ số> < <ngưỡng>
+**Chỉ số khởi đầu:** <Tên chỉ số (CÙNG TÊN với "Chỉ số sinh tử" ở trên)> = <giá trị cao hơn ngưỡng chết>
 
 ## GIỚI THIỆU
 → Hệ thống: <tiêu đề> | <lời chào của hệ thống, mời người chơi xác nhận để bắt đầu>
@@ -35,6 +36,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 
 QUY TẮC:
 - Chỉ số khai ở "Chỉ số sinh tử" PHẢI xuất hiện ở ít nhất 1 dòng "→ <chỉ số> +N/-N" nào đó trong kịch bản.
+- BẮT BUỘC: nếu có khai "Chỉ số sinh tử", PHẢI khai kèm "Chỉ số khởi đầu" cho đúng chỉ số đó với giá trị RÕ RÀNG CAO HƠN ngưỡng chết — mọi chỉ số không được khai "Chỉ số khởi đầu" sẽ tự động bắt đầu ở 0, nếu 0 đã thấp hơn/bằng ngưỡng chết thì nhân vật sẽ bị coi là chết NGAY KHI VỪA VÀO GAME.
 - Dòng "→ Hệ thống: ..." đặt NGAY DƯỚI "## CẢNH N" (trước lựa chọn A) thì bật khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì bật NGAY SAU KHI chọn. Mỗi cảnh/lựa chọn tối đa 1 dòng này — CHỈ dùng khi thật sự cần thông báo, không phải cảnh/lựa chọn nào cũng cần.
 - Tiêu đề và nội dung của "→ Hệ thống: ..." cách nhau bằng dấu " | " (có khoảng trắng 2 bên).
 - Mỗi cảnh (trừ kết thúc) PHẢI có 2-4 lựa chọn.

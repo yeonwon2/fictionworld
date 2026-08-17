@@ -24,6 +24,16 @@
 //                                               Vd: "Thiện cảm < 10" nghĩa là
 //                                               dưới 10 (tức còn 9 trở xuống)
 //                                               là chết, KHÔNG PHẢI về đúng 0.)
+// **Chỉ số khởi đầu:** <Tên chỉ số> = <giá trị> (tuỳ chọn, có thể khai nhiều,
+//                                               cách nhau dấu phẩy — đặt điểm
+//                                               XUẤT PHÁT cho 1 chỉ số. QUAN
+//                                               TRỌNG: nếu có khai "Chỉ số
+//                                               sinh tử", NHỚ khai luôn điểm
+//                                               khởi đầu cao hơn ngưỡng chết,
+//                                               nếu không nhân vật sẽ "chết"
+//                                               ngay khi vừa vào game vì mọi
+//                                               chỉ số mặc định bắt đầu ở 0.
+//                                               Vd: "Thiện cảm = 20")
 //
 // ## GIỚI THIỆU
 // → Hệ thống: <tiêu đề> | <nội dung>          (tuỳ chọn — bảng thông báo hệ
@@ -62,7 +72,10 @@
 //                                               không sẽ báo lỗi rõ ràng; bỏ
 //                                               qua dòng này thì mặc định là
 //                                               cảnh liền sau trong văn bản)
-// → Kết thúc true_end                          (dẫn tới khối KẾT THÚC cùng nhãn)
+// → Kết thúc true_end                          (dẫn tới khối KẾT THÚC cùng nhãn
+//                                               — viết tắt "→ Đến true_end"
+//                                               cũng được, miễn KHÔNG PHẢI
+//                                               "Đến cảnh N")
 //
 // **B — <lời lựa chọn khác>**
 // ...
@@ -108,6 +121,7 @@ function stripMarkers(line) {
 const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
+const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
@@ -121,10 +135,15 @@ const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
 const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
+// Cho phép viết tắt "→ Đến <nhãn>" (không cần chữ "kết thúc") để trỏ tới 1
+// kết thúc — miễn KHÔNG PHẢI dạng "Đến cảnh N" (đã xử lý riêng ở trên). Nhiều
+// người quen tay gõ giống "Đến cảnh N" nên hay quên chữ "kết thúc".
+const RE_EFF_GOTO_BARE = /^Đến\s+(?!cảnh\b)(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
 const RE_EFF_SYSPOPUP = /^Hệ thống\s*:\s*(.+)$/i;
 const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
+const RE_INITIAL_ITEM = /^(.+?)\s*=\s*(-?\d+)$/;
 
 function parseSystemPopup(raw) {
   const idx = raw.indexOf("|");
@@ -161,6 +180,7 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
   let genre = "";
   let author = "";
   const vitalDeclarations = []; // [{ key, deathThreshold }] — từ "**Chỉ số sinh tử:**"
+  const initialDeclarations = []; // [{ key, value }] — từ "**Chỉ số khởi đầu:**"
 
   const sceneOrder = []; // ["scene_1", "scene_2", ...] theo đúng thứ tự xuất hiện
   const nodesMap = {};
@@ -198,6 +218,7 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
     if ((m = raw.match(RE_EFF_REQ_ITEM))) { target.requiresItem = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_GOTO))) { target.__explicitTarget = "scene_" + m[1]; return; }
     if ((m = raw.match(RE_EFF_ENDING))) { target.__explicitTarget = "ending_" + slugifySystem(m[1]); return; }
+    if ((m = raw.match(RE_EFF_GOTO_BARE))) { target.__explicitTarget = "ending_" + slugifySystem(m[1]); return; }
     if ((m = raw.match(RE_EFF_REQ_STAT))) {
       const key = registerStat(m[1]);
       target.statRequirements[key] = Number(m[3]);
@@ -230,6 +251,15 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
         const num = vm[3] !== undefined ? Number(vm[3]) : null;
         const deathThreshold = num === null ? 0 : (op === "<" ? num - 1 : num);
         vitalDeclarations.push({ key, deathThreshold });
+      }
+      continue;
+    }
+    if ((m = norm.match(RE_META_INITIAL))) {
+      for (const part of m[1].split(",")) {
+        const im = part.trim().match(RE_INITIAL_ITEM);
+        if (!im || !im[1].trim()) { warnings.push(`Dòng ${lineNo}: "Chỉ số khởi đầu" cần đúng dạng "<Tên chỉ số> = <số>" (bỏ qua "${part.trim()}").`); continue; }
+        const key = registerStat(im[1]);
+        initialDeclarations.push({ key, value: Number(im[2]) });
       }
       continue;
     }
@@ -333,12 +363,15 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
   const statKeys = Array.from(statKeysSeen.keys());
   const statsConfig = statKeys.map((key) => {
     const vital = vitalDeclarations.find((v) => v.key === key);
-    return vital
-      ? { key, label: statKeysSeen.get(key), default: 0, isVital: true, deathThreshold: vital.deathThreshold }
-      : { key, label: statKeysSeen.get(key), default: 0, isVital: false };
+    const initial = initialDeclarations.find((v) => v.key === key);
+    const base = { key, label: statKeysSeen.get(key), default: initial ? initial.value : 0, isVital: false };
+    return vital ? { ...base, isVital: true, deathThreshold: vital.deathThreshold } : base;
   });
+  // initialStats lấy từ statsConfig[].default (nguồn xác thực duy nhất — nếu
+  // sau này người dùng sửa lại chỉ số trong "Cấu hình chung" bằng tay, giá
+  // trị khởi đầu vẫn nhất quán với những gì hiện trên form).
   const initialStats = {};
-  for (const key of statKeys) initialStats[key] = 0;
+  for (const sc of statsConfig) initialStats[sc.key] = sc.default;
 
   const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false });
   const nodes = repaired.nodes;

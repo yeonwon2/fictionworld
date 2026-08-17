@@ -17,6 +17,9 @@ KẾT THÚC, GIỚI THIỆU, chữ cái A/B/C...), có hay không có mấy dấ
 Tên game
 Thể loại: ...
 Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
+Chỉ số khởi đầu: Thiện cảm = 20       (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
+                                       không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
+                                       tính là "chết" ngay từ đầu game!)
 
 GIỚI THIỆU
 → Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Chào mừng ký chủ đến với thế giới này...
@@ -50,6 +53,9 @@ Ghi chú:
   BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu...
   thì Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn
   riêng, mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
+- "→ Đến <nhãn kết thúc>" (không cần gõ chữ "Kết thúc") cũng được, vd
+  "→ Đến true_end" — miễn nhãn đó KHÔNG bắt đầu bằng "cảnh " (để không nhầm
+  với "→ Đến cảnh N").
 - Vẫn có thể gõ #, ##, ** như trước nếu bạn thích đọc có màu mè hơn — có hay
   không có đều được, tuỳ bạn.`;
 
