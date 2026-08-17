@@ -108,7 +108,9 @@ A — Lựa chọn phạm luật hệ thống
 
 B — Lựa chọn đúng cốt truyện
 → Thiện cảm +15
-→ Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện! Thưởng 15 điểm thiện cảm.
+→ Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện!\nThưởng 15 điểm thiện cảm.
+                               (muốn xuống dòng trong nội dung thì gõ "\n" như trên,
+                                KHÔNG bấm Enter thật vì cả dòng phải nằm trên 1 dòng)
 → Đến cảnh 2                  (số 2 PHẢI có cảnh "CẢNH 2" thật ở dưới, không thì báo lỗi)
 
 CẢNH 2 — ...
@@ -121,7 +123,8 @@ Ghi chú:
 - "→ Hệ thống: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng "CẢNH N" (trước lựa
   chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì
   bật NGAY SAU KHI chọn (dùng cho phạt/thưởng). Mỗi cảnh/lựa chọn tối đa 1
-  dòng này. Tiêu đề và nội dung cách nhau bằng dấu "|".
+  dòng này. Tiêu đề và nội dung cách nhau bằng dấu "|". Muốn xuống dòng
+  trong nội dung thì gõ "\n" ngay trong câu (không bấm Enter thật).
 - Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
   BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu...
   thì Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn

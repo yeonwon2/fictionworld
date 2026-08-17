@@ -438,7 +438,7 @@ export default function GamePlayer({ gameData, onExit }) {
               <Sparkles size={18} style={{ color: 'var(--rpg-accent)' }} />
               <span className="font-bold tracking-widest text-sm uppercase" style={{ color: 'var(--rpg-accent2)' }}>{systemPopup.title || 'Hệ Thống'}</span>
             </div>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--rpg-text)' }}>{systemPopup.text}</p>
+            <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{systemPopup.text}</p>
             <Button size="sm" onClick={() => setSystemPopup(null)} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>Đã hiểu</Button>
             <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => setSystemPopup(null)}><X size={16} /></button>
           </div>

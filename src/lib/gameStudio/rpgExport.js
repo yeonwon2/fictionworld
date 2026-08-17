@@ -425,7 +425,7 @@ body.rpg-detective{background-image:radial-gradient(circle at 20% 20%,color-mix(
 .rpg-sys-box{max-width:360px;width:100%;border-radius:14px;padding:22px;text-align:center;background:var(--rpg-panel);box-shadow:0 0 24px color-mix(in srgb,var(--rpg-accent2) 30%,transparent);position:relative;}
 .rpg-sys-title{color:var(--rpg-accent2);font-weight:bold;letter-spacing:2px;font-size:13px;text-transform:uppercase;margin-bottom:10px;}
 .rpg-sys-icon{color:var(--rpg-accent);}
-.rpg-sys-text{color:var(--rpg-text);font-size:14px;line-height:1.6;margin-bottom:18px;}
+.rpg-sys-text{color:var(--rpg-text);font-size:14px;line-height:1.6;margin-bottom:18px;white-space:pre-wrap;}
 .rpg-sys-btn{background:var(--rpg-accent2);color:#fff;border:none;border-radius:999px;padding:8px 20px;font-weight:bold;cursor:pointer;}
 .rpg-sys-btn:hover{filter:brightness(1.1);}
 .rpg-dice-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.78);display:flex;align-items:center;justify-content:center;padding:16px;}

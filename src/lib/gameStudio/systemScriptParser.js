@@ -49,7 +49,14 @@
 //                                               vd lời chào "Hệ thống số 01
 //                                               xin chào ký chủ..."; người
 //                                               chơi bấm "Đã hiểu" để đóng rồi
-//                                               mới thấy được nội dung mở đầu)
+//                                               mới thấy được nội dung mở đầu.
+//                                               MUỐN XUỐNG DÒNG trong <nội
+//                                               dung>: gõ "\n" (gạch chéo
+//                                               ngược + chữ n liền nhau) ở chỗ
+//                                               muốn ngắt dòng — KHÔNG được
+//                                               nhấn Enter thật vì mỗi hiệu
+//                                               ứng chỉ được nằm trên ĐÚNG 1
+//                                               dòng văn bản.)
 // <văn bản mở đầu, có thể nhiều đoạn>
 //
 // ## CẢNH 1 — <Tên cảnh, chỉ để tham khảo khi viết>
@@ -157,9 +164,12 @@ const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
 const RE_INITIAL_ITEM = /^(.+?)\s*=\s*(-?\d+)$/;
 
 function parseSystemPopup(raw) {
+  // Kịch bản là văn bản 1 dòng/hiệu ứng nên không gõ Enter thật được — gõ
+  // "\n" (gạch chéo ngược + chữ n) ngay trong nội dung để xuống dòng, hệ
+  // thống tự đổi thành dòng mới thật khi hiển thị bảng thông báo.
   const idx = raw.indexOf("|");
-  if (idx < 0) return { title: "Hệ Thống", text: raw.trim() };
-  return { title: raw.slice(0, idx).trim() || "Hệ Thống", text: raw.slice(idx + 1).trim() };
+  if (idx < 0) return { title: "Hệ Thống", text: raw.trim().replace(/\\n/g, "\n") };
+  return { title: raw.slice(0, idx).trim() || "Hệ Thống", text: raw.slice(idx + 1).trim().replace(/\\n/g, "\n") };
 }
 
 function normalizeLoose(s) {

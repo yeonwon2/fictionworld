@@ -39,7 +39,7 @@ QUY TẮC:
 - Chỉ số khai ở "Chỉ số sinh tử" PHẢI xuất hiện ở ít nhất 1 dòng "→ <chỉ số> +N/-N" nào đó trong kịch bản.
 - BẮT BUỘC: nếu có khai "Chỉ số sinh tử", PHẢI khai kèm "Chỉ số khởi đầu" cho đúng chỉ số đó với giá trị RÕ RÀNG CAO HƠN ngưỡng chết — mọi chỉ số không được khai "Chỉ số khởi đầu" sẽ tự động bắt đầu ở 0, nếu 0 đã thấp hơn/bằng ngưỡng chết thì nhân vật sẽ bị coi là chết NGAY KHI VỪA VÀO GAME.
 - Dòng "→ Hệ thống: ..." đặt NGAY DƯỚI "## CẢNH N" (trước lựa chọn A) thì bật khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì bật NGAY SAU KHI chọn. Mỗi cảnh/lựa chọn tối đa 1 dòng này — CHỈ dùng khi thật sự cần thông báo, không phải cảnh/lựa chọn nào cũng cần.
-- Tiêu đề và nội dung của "→ Hệ thống: ..." cách nhau bằng dấu " | " (có khoảng trắng 2 bên).
+- Tiêu đề và nội dung của "→ Hệ thống: ..." cách nhau bằng dấu " | " (có khoảng trắng 2 bên). Muốn xuống dòng trong nội dung thì gõ "\n" (gạch chéo ngược + n), KHÔNG được xuống dòng thật vì cả hiệu ứng phải nằm trên đúng 1 dòng.
 - Mỗi cảnh (trừ kết thúc) PHẢI có 2-4 lựa chọn.
 - Nếu lựa chọn không ghi "→ Đến cảnh N" hay "→ Kết thúc nhãn", nó TỰ ĐỘNG dẫn tới cảnh kế tiếp theo thứ tự.
 - PHẢI có ít nhất 1 khối "## KẾT THÚC" ở cuối, được một lựa chọn nào đó trỏ tới bằng "→ Kết thúc <nhãn>".
