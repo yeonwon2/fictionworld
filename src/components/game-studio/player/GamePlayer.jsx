@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
@@ -16,6 +16,18 @@ export default function GamePlayer({ gameData, onExit }) {
   const theme = THEMES[meta.theme] || THEMES['fantasy-parchment'];
   const litrpg = meta.litrpg || { ranks: ['Luyện Khí', 'Trúc Cơ', 'Kim Đan', 'Nguyên Anh'], expPerRank: 100 };
   const mysterySlots = (meta.mystery && meta.mystery.inventorySlots) || 4;
+  // Túi đồ chỉ giới hạn số ô cho archetype "mystery" (cơ chế giải đố cố ý
+  // giới hạn) — mọi archetype khác (tức mọi game từ Xưởng Offline/Hệ Thống/
+  // NPC, archetype luôn là "none"/"romance") phải nhặt được KHÔNG GIỚI HẠN
+  // vật phẩm, đúng như nhãn "∞" đã hiện sẵn trong menu túi đồ.
+  const canCarryMore = useCallback((invLen) => archetype !== 'mystery' || invLen < mysterySlots, [archetype, mysterySlots]);
+  // Tab "Túi đồ" trước đây chỉ hiện cho archetype "mystery"/"litrpg" — nhưng
+  // cả 3 xưởng (Offline/Hệ Thống/NPC) đều có cú pháp "→ Vật phẩm:"/"→ Cần vật
+  // phẩm:" mà archetype luôn là "none"/"romance", nên tab bị ẩn dù game có
+  // dùng vật phẩm thật, khiến người chơi không thấy mình đang có/thiếu gì.
+  const hasItemMechanic = useMemo(() => (
+    Object.values(gameData.nodes || {}).some((n) => n.grantItem || (n.choices || []).some((c) => c.grantItem || c.requiresItem))
+  ), [gameData.nodes]);
 
   const [rt, setRt] = useState(() => ({
     nodeId: 'start_node',
@@ -130,13 +142,13 @@ export default function GamePlayer({ gameData, onExit }) {
       for (const ev of n.randomEvents) {
         if (Math.random() < (ev.chance || 0.2)) {
           if (ev.statModifiers) for (const k in ev.statModifiers) ns[k] = (ns[k] || 0) + ev.statModifiers[k];
-          if (ev.grantItem && !inv.includes(ev.grantItem) && inv.length < mysterySlots) { inv.push(ev.grantItem); }
+          if (ev.grantItem && !inv.includes(ev.grantItem) && canCarryMore(inv.length)) { inv.push(ev.grantItem); }
           pushEvent(ev.icon || '•', ev.text || 'Sự kiện bất ngờ!');
         }
       }
     }
     if (n.systemPopup && n.systemPopup.title) { setSystemPopup(n.systemPopup); playTing(); }
-    if (n.grantItem && !inv.includes(n.grantItem) && inv.length < mysterySlots) {
+    if (n.grantItem && !inv.includes(n.grantItem) && canCarryMore(inv.length)) {
       inv.push(n.grantItem);
       pushEvent('•', 'Nhặt được: ' + n.grantItem);
     }
@@ -216,7 +228,7 @@ export default function GamePlayer({ gameData, onExit }) {
     }
     if (c.systemPoints) systemPoints = rt.systemPoints + c.systemPoints;
     if (c.grantFlag && !flags.includes(c.grantFlag)) { flags.push(c.grantFlag); ev.push(['•', 'Kích hoạt hiệu ứng Cánh bướm: ' + c.grantFlag]); }
-    if (c.grantItem && !inventory.includes(c.grantItem) && inventory.length < mysterySlots) { inventory.push(c.grantItem); ev.push(['•', 'Nhặt được: ' + c.grantItem]); }
+    if (c.grantItem && !inventory.includes(c.grantItem) && canCarryMore(inventory.length)) { inventory.push(c.grantItem); ev.push(['•', 'Nhặt được: ' + c.grantItem]); }
     if (c.removeItem) inventory = inventory.filter((x) => x !== c.removeItem);
     if (c.unlockSkill && !skills.includes(c.unlockSkill)) { skills.push(c.unlockSkill); ev.push(['•', 'Mở khóa kỹ năng: ' + c.unlockSkill]); }
     if (c.completeQuestId && quests[c.completeQuestId]) { quests[c.completeQuestId] = { ...quests[c.completeQuestId], status: 'completed' }; ev.push(['•', 'Hoàn thành nhiệm vụ: ' + quests[c.completeQuestId].title]); }
@@ -258,7 +270,7 @@ export default function GamePlayer({ gameData, onExit }) {
     if (result === 'win') {
       const loot = (n.combat && n.combat.loot) || {};
       if (loot.statModifiers) for (const k in loot.statModifiers) ns[k] = (ns[k] || 0) + loot.statModifiers[k];
-      if (loot.grantItem && !inv.includes(loot.grantItem) && inv.length < mysterySlots) { inv.push(loot.grantItem); ev.push(['•', 'Nhặt được: ' + loot.grantItem]); }
+      if (loot.grantItem && !inv.includes(loot.grantItem) && canCarryMore(inv.length)) { inv.push(loot.grantItem); ev.push(['•', 'Nhặt được: ' + loot.grantItem]); }
       if (loot.exp) {
         let exp = rt.exp + loot.exp; let rankIndex = rt.rankIndex;
         const ranks = litrpg.ranks || []; const per = litrpg.expPerRank || 100;
@@ -308,7 +320,7 @@ export default function GamePlayer({ gameData, onExit }) {
   // không đè mất --rpg-bg-image (theme gradient) hay data-bg-pattern đặt qua CSS.
   const rootStyle = { ...themeStyle, backgroundColor: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
   const endingMeta = ENDING_TYPES[node?.endingType];
-  const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg';
+  const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg' || hasItemMechanic;
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
