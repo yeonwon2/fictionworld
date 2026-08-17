@@ -15,6 +15,8 @@
 //
 // ## CẢNH 1 — <Tên cảnh, chỉ để tham khảo khi viết>
 // <văn bản diễn biến của cảnh, có thể nhiều đoạn>
+// (Nhãn cảnh không bắt buộc là số thuần — có thể đặt "CẢNH 1A", "CẢNH 2b"...
+//  để dễ phân biệt các nhánh rẽ, miễn khớp đúng với "→ Đến cảnh <nhãn>" ở dưới.)
 //
 // **A — <lời lựa chọn>**
 // → <Tên chỉ số> +5            (cộng điểm — tự nhận diện & tạo chỉ số mới nếu chưa có)
@@ -92,7 +94,7 @@ function stripMarkers(line) {
 const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -102,7 +104,7 @@ const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
 const RE_EFF_REQ_NOT_FLAG = /^Cần không có cờ:\s*(.+)$/i;
 const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
-const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
+const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;

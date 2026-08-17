@@ -45,6 +45,8 @@
 // <văn bản mở đầu, có thể nhiều đoạn>
 //
 // ## CẢNH 1 — <Tên cảnh, chỉ để tham khảo khi viết>
+// (Nhãn cảnh không bắt buộc là số thuần — có thể đặt "CẢNH 1A", "CẢNH 2b"...
+//  để dễ phân biệt các nhánh rẽ, miễn khớp đúng với "→ Đến cảnh <nhãn>" ở dưới.)
 // → Hệ thống: <tiêu đề> | <nội dung>          (tuỳ chọn — bảng thông báo bật
 //                                               khi VÀO cảnh này, dùng để nhắc
 //                                               nhở giữa chừng. Tối đa 1 dòng
@@ -123,7 +125,7 @@ const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
 const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^CẢNH\s+(\d+)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -133,7 +135,7 @@ const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
 const RE_EFF_REQ_NOT_FLAG = /^Cần không có cờ:\s*(.+)$/i;
 const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
-const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\d+)$/i;
+const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 // Cho phép viết tắt "→ Đến <nhãn>" (không cần chữ "kết thúc") để trỏ tới 1
 // kết thúc — miễn KHÔNG PHẢI dạng "Đến cảnh N" (đã xử lý riêng ở trên). Nhiều
