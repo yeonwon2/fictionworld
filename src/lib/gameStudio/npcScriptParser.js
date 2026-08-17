@@ -185,6 +185,25 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
     }
     const target = currentChoice;
     if (!target) {
+      // Cảnh không có lựa chọn A/B nào, chỉ có 1 dòng "→ Đến cảnh N"/"→ Kết
+      // thúc X" ngay dưới lời dẫn — coi đây là cảnh chuyển tiếp thẳng, tự tạo
+      // 1 lựa chọn "Tiếp tục" ẩn danh thay vì bỏ qua (rất nhiều kịch bản thật
+      // viết theo kiểu này khi 1 cảnh không cần rẽ nhánh).
+      if (currentNode && currentNpc) {
+        let mm;
+        if ((mm = raw.match(RE_EFF_GOTO))) {
+          currentNode.choices.push({ text: "Tiếp tục", statRequirements: {}, statModifiers: {}, __explicitTarget: "npc_" + currentNpc.slug + "_scene_" + mm[1] });
+          return;
+        }
+        if ((mm = raw.match(RE_EFF_ENDING))) {
+          currentNode.choices.push({ text: "Tiếp tục", statRequirements: {}, statModifiers: {}, __explicitTarget: "npc_" + currentNpc.slug + "_ending_" + slugifyNpc(mm[1]) });
+          return;
+        }
+        if ((mm = raw.match(RE_EFF_GOTO_BARE))) {
+          currentNode.choices.push({ text: "Tiếp tục", statRequirements: {}, statModifiers: {}, __explicitTarget: "npc_" + currentNpc.slug + "_ending_" + slugifyNpc(mm[1]) });
+          return;
+        }
+      }
       warnings.push(`Dòng ${lineNo}: có "→ ${raw}" nhưng chưa ở trong lựa chọn nào (bỏ qua).`);
       return;
     }
