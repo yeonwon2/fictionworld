@@ -134,12 +134,22 @@ const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
 const RE_EFF_FLAG = /^Cờ:\s*(.+)$/i;
 const RE_EFF_REQ_FLAG = /^Cần cờ:\s*(.+)$/i;
 const RE_EFF_REQ_NOT_FLAG = /^Cần không có cờ:\s*(.+)$/i;
-const RE_EFF_ITEM = /^Vật phẩm:\s*(.+)$/i;
+const RE_EFF_ITEM = /^(?:Nhận\s+)?Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
 const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
+const RE_EFFECT_DASH = /^-\s+(.+)$/;
+
+// Nhiều người quen gõ "-" thay cho "→" (nhất là gõ trên điện thoại, bàn phím
+// không gõ được dấu mũi tên) — chỉ chấp nhận nếu phần sau dấu "-" khớp Y HỆT
+// 1 hiệu ứng THẬT SỰ, để không hiểu nhầm 1 câu văn xuôi tình cờ có gạch đầu dòng.
+function looksLikeEffect(text) {
+  return RE_EFF_FLAG.test(text) || RE_EFF_REQ_FLAG.test(text) || RE_EFF_REQ_NOT_FLAG.test(text)
+    || RE_EFF_ITEM.test(text) || RE_EFF_REQ_ITEM.test(text) || RE_EFF_GOTO.test(text)
+    || RE_EFF_ENDING.test(text) || RE_EFF_REQ_STAT.test(text) || RE_EFF_STAT.test(text);
+}
 
 function stripMarkdown(line) {
   return line
@@ -292,6 +302,12 @@ export function parseScript(scriptText, baseMeta = {}) {
     }
 
     if ((m = norm.match(RE_EFFECT))) {
+      applyEffectLine(m[1].trim(), lineNo);
+      continue;
+    }
+
+    if (currentNode && (m = norm.match(RE_EFFECT_DASH)) && looksLikeEffect(m[1].trim())) {
+      warnings.push(`Dòng ${lineNo}: dòng "${line}" dùng "-" thay vì "→" — đã tạm hiểu như hiệu ứng, nhưng hãy đổi lại đúng dấu mũi tên "→" (hoặc "->"/"=>") để chắc chắn không bị lỗi về sau.`);
       applyEffectLine(m[1].trim(), lineNo);
       continue;
     }
