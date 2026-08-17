@@ -3,7 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Wand2, Loader2, AlertTriangle } from "lucide-react";
+import { Bot, Wand2, Loader2, AlertTriangle, Copy, Check } from "lucide-react";
 import { parseSystemScript } from "@/lib/gameStudio/systemScriptParser";
 import { generateSystemScriptFromPrompt } from "@/lib/gameStudio/systemScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
@@ -68,7 +68,21 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [producing, setProducing] = useState(false);
+  const [cheatSheetCopied, setCheatSheetCopied] = useState(false);
   const { toast } = useToast();
+
+  const copyCheatSheet = async (e) => {
+    e.preventDefault(); // không cho bung/thu gọn <details> khi bấm nút này
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(CHEAT_SHEET);
+      setCheatSheetCopied(true);
+      setTimeout(() => setCheatSheetCopied(false), 1500);
+      toast({ title: "Đã sao chép cú pháp mẫu" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Không sao chép được", description: err.message });
+    }
+  };
 
   const handleAIWrite = async () => {
     if (!aiInput.trim()) {
@@ -119,7 +133,18 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
       </p>
 
       <details className="text-xs rounded-lg border border-border">
-        <summary className="cursor-pointer px-3 py-2 font-medium select-none">Xem cú pháp mẫu</summary>
+        <summary className="cursor-pointer px-3 py-2 font-medium select-none flex items-center justify-between gap-2">
+          <span>Xem cú pháp mẫu</span>
+          <button
+            type="button"
+            onClick={copyCheatSheet}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-normal text-muted-foreground hover:text-foreground hover:bg-accent transition shrink-0"
+            title="Sao chép cú pháp mẫu để gửi cho AI"
+          >
+            {cheatSheetCopied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+            {cheatSheetCopied ? "Đã sao chép" : "Sao chép"}
+          </button>
+        </summary>
         <pre className="px-3 pb-3 whitespace-pre-wrap font-mono text-[11px] text-muted-foreground">{CHEAT_SHEET}</pre>
       </details>
 
