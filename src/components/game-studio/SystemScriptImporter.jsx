@@ -10,42 +10,48 @@ import { useToast } from "@/components/ui/use-toast";
 
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/scriptParser.js
 // của "Xưởng Offline", sửa file này không ảnh hưởng gì tới xưởng đó.
-const CHEAT_SHEET = `# Tên game
-**Thể loại:** ...
-**Chỉ số sinh tử:** Thiện cảm < 10        (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
+const CHEAT_SHEET = `KHÔNG CẦN gõ dấu #, ##, ** gì cả — hệ thống nhận diện qua TỪ KHOÁ (CẢNH,
+KẾT THÚC, GIỚI THIỆU, chữ cái A/B/C...), có hay không có mấy dấu đó đều đọc
+đúng như nhau. Ví dụ dưới đây viết hoàn toàn không dấu, dán y vậy vẫn chạy:
 
-## GIỚI THIỆU
+Tên game
+Thể loại: ...
+Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
+
+GIỚI THIỆU
 → Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Chào mừng ký chủ đến với thế giới này...
 Văn bản mở đầu.
 
-## CẢNH 1 — Tên cảnh
+CẢNH 1 — Tên cảnh
 → Hệ thống: NHẮC NHỞ | Ký chủ hãy cẩn thận, tránh làm lệch cốt truyện.
 Diễn biến của cảnh.
 
-**A — Lựa chọn phạm luật hệ thống**
+A — Lựa chọn phạm luật hệ thống
 → Thiện cảm -10
 → Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện, bị phạt chích điện, trừ 10 thiện cảm!
 
-**B — Lựa chọn đúng cốt truyện**
+B — Lựa chọn đúng cốt truyện
 → Thiện cảm +15
 → Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện! Thưởng 15 điểm thiện cảm.
-→ Đến cảnh 2                  (số 2 PHẢI có "## CẢNH 2" thật ở dưới, không thì báo lỗi)
+→ Đến cảnh 2                  (số 2 PHẢI có cảnh "CẢNH 2" thật ở dưới, không thì báo lỗi)
 
-## CẢNH 2 — ...
+CẢNH 2 — ...
 ...
 
-## KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]
+KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]
 Văn bản kết thúc.
 
 Ghi chú:
-- "→ Hệ thống: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI "## CẢNH N" (trước lựa
+- "→ Hệ thống: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng "CẢNH N" (trước lựa
   chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì
   bật NGAY SAU KHI chọn (dùng cho phạt/thưởng). Mỗi cảnh/lựa chọn tối đa 1
   dòng này. Tiêu đề và nội dung cách nhau bằng dấu "|".
 - Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
   BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu...
   thì Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn
-  riêng, mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.`;
+  riêng, mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
+- Vẫn có thể gõ #, ##, ** như trước nếu bạn thích đọc có màu mè hơn — có hay
+  không có đều được, tuỳ bạn.`;
 
 export default function SystemScriptImporter({ gameData, setGameData, onGenerated }) {
   const [script, setScript] = useState("");
