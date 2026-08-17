@@ -81,6 +81,7 @@ const ENGINE_JS = [
   '    var ct = meta.customTheme, cc = ct.colors || {}; var btn = BTN_SHAPES[ct.buttonShape] || BTN_SHAPES.soft; var pnl = PANEL_SHAPES[ct.panelShape] || PANEL_SHAPES.panel;',
   '    vars = { "--rpg-bg": cc.bg, "--rpg-panel": cc.panel, "--rpg-panel-2": cc.panel2, "--rpg-text": cc.text, "--rpg-muted": cc.muted, "--rpg-accent": cc.accent, "--rpg-accent2": cc.accent2, "--rpg-border": cc.border, "--rpg-font": FONT_FAMILIES[ct.font] || FONT_FAMILIES["be-vietnam-pro"], "--rpg-btn-radius": btn.radius, "--rpg-panel-radius": pnl.radius, "--rpg-panel-border": pnl.border === "none" ? "none" : (pnl.border + " color-mix(in srgb, " + (cc.accent || "#d7b078") + " 70%, transparent)"), "--rpg-panel-shadow": pnl.shadow };',
   '    document.documentElement.setAttribute("data-bg-pattern", ct.bgPattern || "plain");',
+  '    document.documentElement.setAttribute("data-panel-shape", ct.panelShape || "panel");',
   '  } else {',
   '    var theme = THEMES[themeId] || THEMES["fantasy-parchment"];',
   '    vars = (theme && theme.vars) || {};',
@@ -274,7 +275,10 @@ const ENGINE_CSS = `
 :root{--rpg-bg:#0F172A;--rpg-panel:#1E293B;--rpg-panel-2:#334155;--rpg-text:#f1f5f9;--rpg-muted:#94a3b8;--rpg-accent:#22d3ee;--rpg-accent2:#a855f7;--rpg-border:#22d3ee55;--rpg-font:Inter,system-ui,sans-serif;}
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;height:100%;}
-body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);min-height:100vh;}
+body{background-color:var(--rpg-bg);background-image:var(--rpg-bg-image);color:var(--rpg-text);font-family:var(--rpg-font);min-height:100vh;}
+html[data-bg-pattern="dots"] body{background-image:radial-gradient(circle, color-mix(in srgb, var(--rpg-text) 16%, transparent) 1.5px, transparent 1.8px);background-size:20px 20px;}
+html[data-bg-pattern="lines"] body{background-image:repeating-linear-gradient(135deg, color-mix(in srgb, var(--rpg-text) 8%, transparent) 0 1px, transparent 1px 16px);}
+html[data-bg-pattern="glow"] body{background-image:radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--rpg-accent) 24%, transparent), transparent 45%), radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--rpg-accent2) 20%, transparent), transparent 50%);}
 #game{display:flex;flex-direction:column;position:relative;max-width:900px;margin:0 auto;width:100%;padding:16px;gap:12px;}
 .rpg-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0.3;z-index:0;border-radius:14px;}
 .rpg-topbar{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:6px 4px;}
@@ -329,7 +333,9 @@ body{background:var(--rpg-bg);color:var(--rpg-text);font-family:var(--rpg-font);
 .rpg-vn-scene-fade{position:absolute;inset:0;background:linear-gradient(to top, color-mix(in srgb, var(--rpg-bg) 70%, transparent) 0%, transparent 45%);pointer-events:none;}
 .rpg-vn-narration{padding:2px 2px 6px;}
 .rpg-vn-narration-text{font-family:var(--rpg-font);font-size:1.05rem;line-height:1.75;white-space:pre-wrap;color:var(--rpg-text);}
-.rpg-vn-dialogue{padding:14px 16px;border-radius:16px;background:color-mix(in srgb, var(--rpg-panel) 55%, transparent);backdrop-filter:blur(6px);}
+.rpg-vn-dialogue{position:relative;padding:14px 16px;border-radius:var(--rpg-panel-radius, 16px);border:var(--rpg-panel-border, none);box-shadow:var(--rpg-panel-shadow, none);background:color-mix(in srgb, var(--rpg-panel) 55%, transparent);backdrop-filter:blur(6px);}
+[data-panel-shape="tail"] .rpg-vn-dialogue::after{content:'';position:absolute;left:26px;bottom:-9px;width:16px;height:16px;background:var(--rpg-panel);clip-path:polygon(0 0, 100% 0, 0 100%);border-radius:0 0 0 3px;}
+[data-panel-shape="glass"] .rpg-vn-dialogue{background:color-mix(in srgb, var(--rpg-panel) 28%, transparent);backdrop-filter:blur(16px) saturate(160%);border:1px solid color-mix(in srgb, var(--rpg-text) 16%, transparent);}
 .rpg-vn-dialogue-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .rpg-vn-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 1.5px color-mix(in srgb, var(--rpg-accent2) 55%, transparent);}
 .rpg-vn-name{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--rpg-accent2);}
@@ -446,7 +452,6 @@ export function generateStandaloneHTML(gameData) {
   const btnShapesJson = JSON.stringify(BUTTON_SHAPES);
   const panelShapesJson = JSON.stringify(PANEL_SHAPES);
   const title = escHtml((gameData.meta && gameData.meta.title) || 'RPG Game');
-  const usesCustomTheme = gameData.meta && gameData.meta.theme === 'custom';
   const engine = ENGINE_JS
     .replace('THEMES_MAP', themesJson)
     .replace('FONT_FAMILIES_MAP', fontFamiliesJson)
@@ -458,7 +463,8 @@ export function generateStandaloneHTML(gameData) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
-${usesCustomTheme ? '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Noto+Serif:wght@400;600;700&family=Quicksand:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap">' : ''}
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Noto+Serif:wght@400;600;700&family=Quicksand:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Lora:wght@400;500;600;700&family=Baloo+2:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap">
 <style>
 ${ENGINE_CSS}
 </style>

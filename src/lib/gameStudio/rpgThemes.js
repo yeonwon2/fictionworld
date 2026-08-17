@@ -138,6 +138,103 @@ export const THEMES = {
       '--rpg-font': '"Segoe UI", system-ui, sans-serif',
     },
   },
+  'aurora-gradient': {
+    id: 'aurora-gradient',
+    name: 'Aurora Gradient',
+    description: 'Nền chuyển sắc xanh đêm — cực quang, cyberpunk mềm, sci-fi lãng mạn',
+    vars: {
+      '--rpg-bg': '#0a1128',
+      '--rpg-bg-image': 'linear-gradient(160deg, #050814 0%, #0d1b3d 45%, #12294f 75%, #1c3a6b 100%)',
+      '--rpg-panel': '#101c3d',
+      '--rpg-panel-2': '#16264f',
+      '--rpg-text': '#eaf2ff',
+      '--rpg-muted': '#93a8cf',
+      '--rpg-accent': '#5eead4',
+      '--rpg-accent2': '#a78bfa',
+      '--rpg-border': '#5eead455',
+      '--rpg-font': 'Inter, system-ui, sans-serif',
+    },
+  },
+  'royal-amethyst': {
+    id: 'royal-amethyst',
+    name: 'Royal Amethyst',
+    description: 'Tím hoàng gia, ánh vàng — cho cung đấu, quý tộc, huyền huyễn xa hoa',
+    vars: {
+      '--rpg-bg': '#140a24',
+      '--rpg-panel': '#1f1035',
+      '--rpg-panel-2': '#2c1650',
+      '--rpg-text': '#f3e8ff',
+      '--rpg-muted': '#b9a2d9',
+      '--rpg-accent': '#c084fc',
+      '--rpg-accent2': '#eab308',
+      '--rpg-border': '#c084fc55',
+      '--rpg-font': '"Playfair Display", Georgia, serif',
+    },
+  },
+  'jade-forest': {
+    id: 'jade-forest',
+    name: 'Jade Forest',
+    description: 'Xanh ngọc bích trầm, đồng cổ — cho tu tiên rừng sâu, sinh tồn hoang dã',
+    vars: {
+      '--rpg-bg': '#0d1912',
+      '--rpg-panel': '#152a1e',
+      '--rpg-panel-2': '#1e3a29',
+      '--rpg-text': '#eef7ee',
+      '--rpg-muted': '#9dbfa9',
+      '--rpg-accent': '#7fd9ae',
+      '--rpg-accent2': '#c2703d',
+      '--rpg-border': '#7fd9ae55',
+      '--rpg-font': '"Lora", Georgia, serif',
+    },
+  },
+  'onyx-mono': {
+    id: 'onyx-mono',
+    name: 'Onyx Mono',
+    description: 'Đen tuyền tối giản, chữ trắng bạc — cho phong cách lạnh, hiện đại, tối thượng',
+    vars: {
+      '--rpg-bg': '#000000',
+      '--rpg-panel': '#121212',
+      '--rpg-panel-2': '#1e1e1e',
+      '--rpg-text': '#f2f2f2',
+      '--rpg-muted': '#8f8f8f',
+      '--rpg-accent': '#e4e4e7',
+      '--rpg-accent2': '#71717a',
+      '--rpg-border': '#ffffff22',
+      '--rpg-font': 'Inter, system-ui, sans-serif',
+    },
+  },
+  'moonlight-ivory': {
+    id: 'moonlight-ivory',
+    name: 'Moonlight Ivory',
+    description: 'Trắng ngà sáng, vàng và xanh khói — nền sáng thanh lịch cho đời thường, tâm lý',
+    vars: {
+      '--rpg-bg': '#faf8f5',
+      '--rpg-panel': '#ffffff',
+      '--rpg-panel-2': '#f1ede6',
+      '--rpg-text': '#2b2620',
+      '--rpg-muted': '#8b8378',
+      '--rpg-accent': '#c9a15a',
+      '--rpg-accent2': '#5b6f8c',
+      '--rpg-border': '#c9a15a55',
+      '--rpg-font': '"Fraunces", Georgia, serif',
+    },
+  },
+  'pastel-blossom': {
+    id: 'pastel-blossom',
+    name: 'Pastel Blossom',
+    description: 'Hồng pastel nhẹ nhàng, nền sáng — cho ngôn tình học đường, đời thường dễ thương',
+    vars: {
+      '--rpg-bg': '#fff3f7',
+      '--rpg-panel': '#ffffff',
+      '--rpg-panel-2': '#ffe4ee',
+      '--rpg-text': '#4a2b3a',
+      '--rpg-muted': '#a67c8f',
+      '--rpg-accent': '#f9a8d4',
+      '--rpg-accent2': '#b23478',
+      '--rpg-border': '#f9a8d455',
+      '--rpg-font': '"Quicksand", system-ui, sans-serif',
+    },
+  },
 };
 
 // ===== Xưởng Theme — bộ tuỳ chọn để tự dựng theme (font/hình dạng/nền) =====
@@ -149,6 +246,9 @@ export const FONT_OPTIONS = [
   { id: 'noto-serif', label: 'Noto Serif · Cổ điển trang trọng', family: '"Noto Serif", Georgia, serif', google: 'Noto+Serif:wght@400;600;700' },
   { id: 'quicksand', label: 'Quicksand · Tròn trịa dễ thương', family: '"Quicksand", system-ui, sans-serif', google: 'Quicksand:wght@400;500;600;700' },
   { id: 'playfair', label: 'Playfair Display · Kịch tính bí ẩn', family: '"Playfair Display", Georgia, serif', google: 'Playfair+Display:wght@400;600;700' },
+  { id: 'lora', label: 'Lora · Serif ấm áp văn học', family: '"Lora", Georgia, serif', google: 'Lora:wght@400;500;600;700' },
+  { id: 'baloo-2', label: 'Baloo 2 · Tròn trịa vui tươi', family: '"Baloo 2", system-ui, sans-serif', google: 'Baloo+2:wght@400;500;600;700' },
+  { id: 'cormorant', label: 'Cormorant Garamond · Thanh mảnh cổ điển', family: '"Cormorant Garamond", Georgia, serif', google: 'Cormorant+Garamond:wght@400;500;600;700' },
 ];
 export function fontFamilyFor(fontId) {
   return (FONT_OPTIONS.find((f) => f.id === fontId) || FONT_OPTIONS[0]).family;
@@ -165,6 +265,8 @@ export const PANEL_SHAPES = {
   bubble: { label: 'Bong bóng nổi', radius: '22px', border: 'none', shadow: '0 18px 40px rgba(0,0,0,.28)' },
   panel: { label: 'Khung phẳng', radius: '16px', border: '1.5px solid', shadow: '0 16px 44px rgba(0,0,0,.32)' },
   sharp: { label: 'Sắc cạnh', radius: '4px', border: '1px solid', shadow: '0 8px 24px rgba(0,0,0,.24)' },
+  tail: { label: 'Bong bóng chat', radius: '20px', border: 'none', shadow: '0 14px 34px rgba(0,0,0,.26)' },
+  glass: { label: 'Kính mờ', radius: '18px', border: '1px solid', shadow: '0 8px 30px rgba(0,0,0,.2)' },
 };
 
 export const BG_PATTERNS = {

@@ -31,11 +31,23 @@ const DEMO_NODE = {
 };
 const okStatus = () => ({ ok: true });
 const noop = () => {};
+// Demo cho khối "Lượt N" + thẻ "Bạn đã chọn" trong preview — không có ý nghĩa
+// gameplay thật, chỉ để người dùng thấy rõ 2 khối UI này lên màu/font ra sao.
+const DEMO_DELTAS = { 'Tâm cảnh': 5, 'Trí nhớ': -2 };
+const DEMO_LAST_CHOICE = '"Ta sẽ tự cứu mình."';
+
+// Input type=color không hiểu hex 8 ký tự (có kênh alpha) — cắt về 6 ký tự chỉ
+// để hiển thị đúng màu trên nút chọn màu; ô nhập chữ bên cạnh vẫn giữ nguyên
+// giá trị đầy đủ (kể cả alpha) để chỉnh tay.
+function swatchHex(value) {
+  if (!value) return '#000000';
+  return /^#[0-9a-fA-F]{6}/.test(value) ? value.slice(0, 7) : '#000000';
+}
 
 function ColorField({ label, value, onChange }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="color" value={value || '#000000'} onChange={(e) => onChange(e.target.value)} className="w-9 h-9 rounded-lg border border-border cursor-pointer shrink-0 bg-transparent" />
+      <input type="color" value={swatchHex(value)} onChange={(e) => onChange(e.target.value)} className="w-9 h-9 rounded-lg border border-border cursor-pointer shrink-0 bg-transparent" />
       <div className="min-w-0 flex-1">
         <div className="text-[11px] text-muted-foreground truncate">{label}</div>
         <Input value={value || ''} onChange={(e) => onChange(e.target.value)} className="h-7 text-xs font-mono" />
@@ -61,6 +73,7 @@ export default function ThemeWorkshop({ onBack }) {
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('Theme mới');
   const [vars, setVars] = useState(defaultCustomTheme());
+  const [choicesOpen, setChoicesOpen] = useState(true);
 
   function load() {
     setLoading(true);
@@ -139,7 +152,7 @@ export default function ThemeWorkshop({ onBack }) {
             <Label className="text-xs">Tên theme</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="vd: Ấm áp cổ điển" />
           </div>
-          <div style={previewStyle} data-bg-pattern={vars.bgPattern} className="rpg-root rounded-2xl overflow-hidden p-4" >
+          <div style={previewStyle} data-bg-pattern={vars.bgPattern} data-panel-shape={vars.panelShape} className="rpg-root rounded-2xl overflow-hidden p-4" >
             <div className="rounded-xl p-2.5 mb-3 flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 65%, transparent)', border: '1px solid var(--rpg-accent)44' }}>
               <div className="w-11 h-11 rounded-full shrink-0" style={{ background: 'var(--rpg-accent2)', border: '2px solid var(--rpg-accent)' }} />
               <div>
@@ -151,7 +164,11 @@ export default function ThemeWorkshop({ onBack }) {
                 </div>
               </div>
             </div>
-            <VNScenePanel node={DEMO_NODE} typed={DEMO_NODE.text} typingDone skipTyping={noop} choiceStatus={okStatus} choose={noop} statsConfig={[]} />
+            <VNScenePanel
+              node={DEMO_NODE} typed={DEMO_NODE.text} typingDone skipTyping={noop} choiceStatus={okStatus} choose={noop} statsConfig={[]}
+              turn={2} lastChoiceText={DEMO_LAST_CHOICE} lastDeltas={DEMO_DELTAS}
+              choicesOpen={choicesOpen} setChoicesOpen={setChoicesOpen}
+            />
           </div>
         </div>
 

@@ -304,17 +304,19 @@ export default function GamePlayer({ gameData, onExit }) {
   // Trước đây .rpg-vn-frame là 1 card đặc phủ gần kín khung nên nền của .rpg-root
   // không cần tô — giờ các vùng con đã tách rời, thoáng hơn, nên khung ngoài phải
   // tự tô nền theo theme, nếu không chữ màu sáng (dành cho nền tối) sẽ lộ trên nền
-  // trang bên ngoài.
-  const rootStyle = { ...themeStyle, background: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
+  // trang bên ngoài. Dùng backgroundColor (không phải shorthand background) để
+  // không đè mất --rpg-bg-image (theme gradient) hay data-bg-pattern đặt qua CSS.
+  const rootStyle = { ...themeStyle, backgroundColor: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
   const endingMeta = ENDING_TYPES[node?.endingType];
   const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg';
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
   const turn = rt.history.length + 1;
+  const isCustomTheme = meta.theme === 'custom';
 
   return (
-    <div style={rootStyle} data-presentation={presentation} data-bg-pattern={meta.theme === 'custom' ? (meta.customTheme?.bgPattern || 'plain') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+    <div style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
       <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
         {/* Thanh trên cùng — nút thoát, avatar, tên game + lượt, điểm hệ thống, menu */}
         <div className="rpg-topbar">

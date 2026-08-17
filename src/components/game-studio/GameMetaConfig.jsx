@@ -3,11 +3,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
 import { Plus, Trash2, Image as ImageIcon, Palette } from 'lucide-react';
-import { GENRES, ARCHETYPES, GAME_PRESENTATIONS, PRESENTATION_ART, PRESET_AVATARS, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
+import { GENRES, ARCHETYPES, GAME_PRESENTATIONS, PRESENTATION_ART, PRESET_AVATARS, THEMES, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
 import FileUrlInput from '@/components/FileUrlInput';
 import { listThemes } from '@/lib/worldcrud';
+
+const BUILTIN_PREFIX = '__builtin__:';
 
 export default function GameMetaConfig({ gameData, setGameData }) {
   const { meta } = gameData;
@@ -18,15 +20,26 @@ export default function GameMetaConfig({ gameData, setGameData }) {
     setGameData({ ...gameData, meta: { ...meta, ...patch } });
   };
 
+  // Bảng màu có 3 nhóm: (1) mặc định theo Phong cách đang chọn, (2) mọi Theme
+  // màu có sẵn (trước đây chỉ gán cứng 1-1 theo Phong cách, không chọn tay
+  // được), (3) Theme tự dựng đã lưu ở Xưởng Theme.
   const onCustomThemeChange = (id) => {
     if (id === '__none__') {
       const preset = GAME_PRESENTATIONS[meta.presentation || 'dialogue'];
       updateMeta({ theme: preset?.theme || 'lily-noir', customTheme: undefined });
       return;
     }
+    if (id.startsWith(BUILTIN_PREFIX)) {
+      const themeId = id.slice(BUILTIN_PREFIX.length);
+      if (THEMES[themeId]) updateMeta({ theme: themeId, customTheme: undefined });
+      return;
+    }
     const picked = customThemes.find((t) => t.id === id);
     if (picked) updateMeta({ theme: 'custom', customTheme: picked.vars });
   };
+  const paletteValue = meta.theme === 'custom'
+    ? (customThemes.find((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme))?.id || '__custom_unlisted__')
+    : (THEMES[meta.theme] && meta.theme !== (GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.theme) ? BUILTIN_PREFIX + meta.theme : '__none__');
 
   const onArchetypeChange = (archetype) => {
     const statsConfig = applyArchetypeStats(meta.statsConfig, archetype);
@@ -37,10 +50,13 @@ export default function GameMetaConfig({ gameData, setGameData }) {
     const preset = GAME_PRESENTATIONS[presentation];
     if (!preset) return;
     const statsConfig = applyArchetypeStats(meta.statsConfig, preset.archetype);
-    // Không ghi đè theme nếu đang dùng theme tự tạo (Xưởng Theme), và không ghi
-    // đè avatar nếu người dùng đã tự đặt — đổi "Theme (giao diện)" không nên
-    // âm thầm xoá màu/ảnh họ đã tự chọn.
-    const themePatch = meta.theme === 'custom' ? {} : { theme: preset.theme };
+    // Không ghi đè theme nếu người dùng đã tự chọn riêng (theme tự tạo, hoặc 1
+    // Theme màu có sẵn khác với mặc định của Phong cách cũ) — và không ghi đè
+    // avatar nếu người dùng đã tự đặt — đổi "Phong cách" không nên âm thầm xoá
+    // màu/ảnh họ đã tự chọn.
+    const oldPreset = GAME_PRESENTATIONS[meta.presentation || 'dialogue'];
+    const themeWasCustomized = meta.theme === 'custom' || meta.theme !== (oldPreset?.theme || 'lily-noir');
+    const themePatch = themeWasCustomized ? {} : { theme: preset.theme };
     const avatarPatch = meta.playerAvatar ? {} : { playerAvatar: PRESENTATION_ART[presentation] };
     updateMeta({ presentation, ...themePatch, ...avatarPatch, archetype: preset.archetype, statsConfig, initialStats: statsArrayToObject(statsConfig) });
   };
@@ -113,18 +129,31 @@ export default function GameMetaConfig({ gameData, setGameData }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs flex items-center gap-1"><Palette size={12} /> Bảng màu (Xưởng Theme — tuỳ chọn)</Label>
-        <Select value={meta.theme === 'custom' ? (customThemes.find((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme))?.id || '__custom_unlisted__') : '__none__'} onValueChange={onCustomThemeChange}>
+        <Label className="text-xs flex items-center gap-1"><Palette size={12} /> Bảng màu</Label>
+        <Select value={paletteValue} onValueChange={onCustomThemeChange}>
           <SelectTrigger><SelectValue placeholder="Dùng bảng màu mặc định của Theme trên" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">Dùng bảng màu mặc định của Theme trên</SelectItem>
-            {meta.theme === 'custom' && !customThemes.some((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme)) && (
-              <SelectItem value="__custom_unlisted__">Theme tự tạo (chưa lưu vào Xưởng Theme)</SelectItem>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Theme màu có sẵn</SelectLabel>
+              {Object.values(THEMES).map((t) => <SelectItem key={t.id} value={BUILTIN_PREFIX + t.id}>{t.name}</SelectItem>)}
+            </SelectGroup>
+            {(customThemes.length > 0 || meta.theme === 'custom') && (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>Theme tự tạo (Xưởng Theme)</SelectLabel>
+                  {meta.theme === 'custom' && !customThemes.some((t) => JSON.stringify(t.vars) === JSON.stringify(meta.customTheme)) && (
+                    <SelectItem value="__custom_unlisted__">Theme tự tạo (chưa lưu vào Xưởng Theme)</SelectItem>
+                  )}
+                  {customThemes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                </SelectGroup>
+              </>
             )}
-            {customThemes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground">Chọn 1 theme đã lưu ở "Xưởng Theme" (font/màu/hình dạng riêng) để dùng thay cho bảng màu có sẵn của Theme trên.</p>
+        <p className="text-[10px] text-muted-foreground">Chọn 1 theme màu có sẵn, hoặc 1 theme tự dựng ở "Xưởng Theme" (font/màu/hình dạng riêng), để dùng thay cho bảng màu mặc định của Phong cách ở trên.</p>
       </div>
 
       <div className="space-y-1.5">
