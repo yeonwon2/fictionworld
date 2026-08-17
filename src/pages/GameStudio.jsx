@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
 import SystemScriptImporter from "@/components/game-studio/SystemScriptImporter";
+import NpcScriptImporter from "@/components/game-studio/NpcScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
@@ -12,14 +13,15 @@ import { newEmptyGame } from "@/lib/gameStudio/rpgThemes";
 import { listGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import { useToast } from "@/components/ui/use-toast";
 
-// "Xưởng Hệ Thống" là 1 tab RIÊNG BIỆT, độc lập hoàn toàn với "Xưởng Thiết Kế"
-// (khác component, khác parser, khác file) — chỉ dùng chung khung sườn game
-// (lưu/chơi/xuất bản) vì đó là hạ tầng chung của mọi game, không phải "cách
-// viết nội dung" mà 2 xưởng khác nhau ở đó.
+// "Xưởng Hệ Thống" và "Xưởng NPC" là các tab RIÊNG BIỆT, độc lập hoàn toàn với
+// "Xưởng Thiết Kế" (khác component, khác parser, khác file) — chỉ dùng chung
+// khung sườn game (lưu/chơi/xuất bản) vì đó là hạ tầng chung của mọi game,
+// không phải "cách viết nội dung" mà các xưởng khác nhau ở đó.
 const TABS = [
   { id: "play", label: "Trải Nghiệm Game", short: "Chơi", icon: Gamepad2 },
   { id: "studio", label: "Xưởng Thiết Kế", short: "Xưởng", icon: Wrench },
   { id: "system", label: "Xưởng Hệ Thống", short: "Hệ Thống", icon: Bot },
+  { id: "npc", label: "Xưởng NPC", short: "NPC", icon: Heart },
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
 
@@ -240,6 +242,13 @@ function GameEditor({ gameId, onBack }) {
           <div className="max-w-2xl mx-auto space-y-4">
             <GameMetaConfig gameData={gameData} setGameData={handleChange} />
             <SystemScriptImporter gameData={gameData} setGameData={handleChange} onGenerated={handleGenerated} />
+            <NodeTreeEditor gameData={gameData} setGameData={handleChange} />
+          </div>
+        )}
+        {tab === "npc" && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <GameMetaConfig gameData={gameData} setGameData={handleChange} />
+            <NpcScriptImporter gameData={gameData} setGameData={handleChange} onGenerated={handleGenerated} />
             <NodeTreeEditor gameData={gameData} setGameData={handleChange} />
           </div>
         )}

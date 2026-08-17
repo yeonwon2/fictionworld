@@ -48,6 +48,9 @@ export async function prepareOfflineGame(gameData) {
     if (node.bgImage) urls.add(node.bgImage);
     if (node.npcAvatar) urls.add(node.npcAvatar);
     if (node.combat?.enemy?.avatar) urls.add(node.combat.enemy.avatar);
+    for (const c of node.choices || []) {
+      if (c.npcCard?.image) urls.add(c.npcCard.image);
+    }
   }
   game.meta.offlineAssets = {};
   // Đóng gói TỪNG ảnh độc lập — 1 ảnh lỗi (link chết, chặn CORS...) không được
@@ -197,6 +200,21 @@ const ENGINE_JS = [
   '    return s; }',
   '',
   '  function renderChoices(node){ var el=document.getElementById("choices"); if(!el) return; var s=""; var list=node.choices||[];',
+  '    var isNpcSelect=list.length>0; for(var ni=0;ni<list.length;ni++){ if(!list[ni].npcCard){ isNpcSelect=false; break; } }',
+  '    if(isNpcSelect){',
+  '      s+=\'<div class="rpg-npc-select-grid">\';',
+  '      for(var i=0;i<list.length;i++){ var c=list[i];',
+  '        s+=\'<button class="rpg-npc-card" data-idx="\'+i+\'">\';',
+  '        if(c.npcCard.image){ s+=\'<img class="rpg-npc-card-img" src="\'+esc(asset(c.npcCard.image))+\'"/>\'; }',
+  '        s+=\'<span class="rpg-npc-card-body"><span class="rpg-npc-card-name">\'+esc(c.npcCard.name||"")+\'</span>\';',
+  '        if(c.npcCard.tagline){ s+=\'<span class="rpg-npc-card-tagline">\'+esc(c.npcCard.tagline)+\'</span>\'; }',
+  '        s+=\'<span class="rpg-npc-card-btn">\'+esc(c.text||"")+\'</span></span></button>\';',
+  '      }',
+  '      s+=\'</div>\';',
+  '      el.innerHTML=s;',
+  '      var cards=el.querySelectorAll(".rpg-npc-card"); for(var j=0;j<cards.length;j++){ (function(b){ b.addEventListener("click", function(){ choose(node, parseInt(b.getAttribute("data-idx"))); }); })(cards[j]); }',
+  '      return;',
+  '    }',
   '    if(list.length>0){ s+=\'<div class="rpg-choices-header"><span class="rpg-choices-title">Bạn sẽ làm gì? <span class="rpg-choices-count">(\'+list.length+\' lựa chọn)</span></span><button class="rpg-choices-toggle" id="choicesToggle">\'+(choicesOpen?"Ẩn ▲":"Hiện ▼")+\'</button></div>\'; }',
   '    if(choicesOpen){',
   '    for(var i=0;i<list.length;i++){ var c=list[i]; var st=choiceStatus(c);',
@@ -369,6 +387,14 @@ html[data-bg-pattern="glow"] body{background-image:radial-gradient(circle at 18%
 .rpg-vn-choice-dice{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:color-mix(in srgb, var(--rpg-accent2) 16%, transparent);color:var(--rpg-accent2);}
 .rpg-vn-choice-reason{font-size:11px;margin-top:4px;color:var(--rpg-muted);}
 .rpg-vn-empty{font-size:12px;font-style:italic;color:var(--rpg-muted);}
+.rpg-npc-select-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;}
+.rpg-npc-card{display:flex;flex-direction:column;text-align:left;padding:0;border-radius:var(--rpg-panel-radius, 16px);overflow:hidden;background:color-mix(in srgb, var(--rpg-panel-2) 62%, transparent);border:1px solid color-mix(in srgb, var(--rpg-accent2) 16%, transparent);cursor:pointer;font-family:var(--rpg-font);transition:transform .18s ease, background .18s ease, box-shadow .18s ease;}
+.rpg-npc-card:hover{background:color-mix(in srgb, var(--rpg-accent2) 14%, var(--rpg-panel-2));box-shadow:0 6px 18px rgba(0,0,0,.18);transform:translateY(-2px);}
+.rpg-npc-card-img{width:100%;height:150px;object-fit:cover;object-position:center 18%;background:var(--rpg-panel-2);}
+.rpg-npc-card-body{padding:12px;display:flex;flex-direction:column;gap:6px;flex:1;}
+.rpg-npc-card-name{font-weight:700;font-size:14px;color:var(--rpg-text);}
+.rpg-npc-card-tagline{font-size:11px;color:var(--rpg-muted);line-height:1.5;flex:1;}
+.rpg-npc-card-btn{align-self:flex-start;margin-top:2px;font-size:11px;font-weight:700;padding:5px 12px;border-radius:999px;background:var(--rpg-accent2);color:#fff;}
 body.rpg-adventure .rpg-vn-choice{border-radius:10px;border-left:3px solid var(--rpg-accent);text-transform:uppercase;letter-spacing:.06em;font-size:12px;}
 body.rpg-transmigration .rpg-vn-frame{background-image:linear-gradient(rgba(78,45,58,.1) 1px,transparent 1px);background-size:100% 28px;}
 body.rpg-system .rpg-vn-choice{border-radius:5px;box-shadow:inset 3px 0 var(--rpg-accent);}

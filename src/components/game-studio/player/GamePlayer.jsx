@@ -483,6 +483,11 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   const hasArt = !!art;
   const isNarration = !node.speaker || !node.speaker.trim();
   const choiceCount = (node.choices || []).length;
+  // Màn hình "Bạn muốn theo đuổi ai?" của archetype Công Lược (romance) — mọi
+  // lựa chọn của node đều gắn npcCard (do npcScriptParser.js gán) — vẽ thành
+  // lưới thẻ bài thay vì danh sách nút chữ suông. Vẫn dùng chung engine chọn
+  // (choose()) như lựa chọn bình thường, chỉ khác cách hiển thị.
+  const isNpcSelect = choiceCount > 0 && (node.choices || []).every((c) => c.npcCard);
   // Khi danh sách lựa chọn không chiếm chỗ (đang gõ chữ, đã bấm "Ẩn", hoặc
   // không có lựa chọn nào) thì mở rộng khung chữ hết cỡ thay vì cuộn trong ô nhỏ.
   const choicesVisible = typingDone && choicesOpen && choiceCount > 0;
@@ -521,7 +526,7 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
       )}
 
       <div className="rpg-vn-choices">
-        {typingDone && choiceCount > 0 && (
+        {typingDone && choiceCount > 0 && !isNpcSelect && (
           <div className="rpg-choices-header">
             <span className="rpg-choices-title">Bạn sẽ làm gì? <span className="rpg-choices-count">({choiceCount} lựa chọn)</span></span>
             <button className="rpg-choices-toggle" onClick={() => setChoicesOpen((v) => !v)}>
@@ -529,7 +534,21 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             </button>
           </div>
         )}
-        {typingDone && choicesOpen && (node.choices || []).map((c, i) => {
+        {typingDone && isNpcSelect && (
+          <div className="rpg-npc-select-grid">
+            {node.choices.map((c, i) => (
+              <button key={i} onClick={() => choose(c)} className="rpg-npc-card">
+                {c.npcCard.image && <img src={c.npcCard.image} alt={c.npcCard.name} className="rpg-npc-card-img" />}
+                <span className="rpg-npc-card-body">
+                  <span className="rpg-npc-card-name">{c.npcCard.name}</span>
+                  {c.npcCard.tagline && <span className="rpg-npc-card-tagline">{c.npcCard.tagline}</span>}
+                  <span className="rpg-npc-card-btn">{c.text}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {typingDone && !isNpcSelect && choicesOpen && (node.choices || []).map((c, i) => {
           const st = choiceStatus(c);
           const lbl = c.label ? CHOICE_LABELS[c.label] : null;
           return (

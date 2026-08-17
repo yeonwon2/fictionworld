@@ -363,6 +363,12 @@ export const ARCHETYPES = {
     stats: [{ key: 'san', label: 'Tâm trí (SAN)', default: 100, isVital: true }],
     config: { inventorySlots: 4 },
   },
+  romance: {
+    id: 'romance',
+    name: 'Công Lược (Otome / Dating Sim)',
+    description: 'Màn hình chọn "Bạn muốn theo đuổi ai?" ngay đầu game — sau khi chọn, chỉ tuyến truyện của người đó tiếp diễn. Thiện/ác cảm quyết định tỏ tình thành hay bại.',
+    stats: [],
+  },
 };
 
 export const CHOICE_LABELS = {
