@@ -21,6 +21,11 @@ Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — ác cảm quá
 Chỉ số khởi đầu: Thiện cảm = 20       (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở
                                        trên — nếu không khai, mặc định bắt
                                        đầu ở 0 và sẽ bị tính là "chết" ngay!)
+Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả, cả tính mạng lẫn ngôi vị.
+                                      (tuỳ chọn — đổi chữ hiện khi chết vì
+                                       "Chỉ số sinh tử" ở trên, thay cho
+                                       "GAME OVER" mặc định. Bỏ qua dòng này
+                                       thì vẫn hiện chữ mặc định như cũ.)
 
 GIỚI THIỆU
 Bạn muốn theo đuổi ai?                (văn bản hiện trên màn hình chọn nhân

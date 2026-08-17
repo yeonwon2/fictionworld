@@ -9,6 +9,11 @@
 // # <Tên game>
 // **Thể loại:** ...              (tuỳ chọn)
 // **Tác giả:** ...                (tuỳ chọn)
+// **Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi
+//                                thua cuộc, thay cho "GAME OVER" mặc định.
+//                                Chỉ có tác dụng nếu bạn tự đặt 1 chỉ số là
+//                                "sinh tử" trong Cấu hình chung. Bỏ qua dòng
+//                                này thì vẫn hiện chữ mặc định như cũ.)
 //
 // ## GIỚI THIỆU
 // <văn bản mở đầu, có thể nhiều đoạn>
@@ -93,6 +98,7 @@ function stripMarkers(line) {
 
 const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
+const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
@@ -137,6 +143,8 @@ export function parseScript(scriptText, baseMeta = {}) {
   let title = "";
   let genre = "";
   let author = "";
+  let gameOverTitle = "";
+  let gameOverText = "";
 
   const sceneOrder = []; // ["scene_1", "scene_2", ...] theo đúng thứ tự xuất hiện
   const nodesMap = {};
@@ -202,6 +210,12 @@ export function parseScript(scriptText, baseMeta = {}) {
     let m;
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_GAMEOVER))) {
+      const parts = m[1].split("|");
+      gameOverTitle = (parts[0] || "").trim();
+      gameOverText = (parts[1] || "").trim();
+      continue;
+    }
 
     if (RE_INTRO.test(norm)) {
       introNode = { id: "start_node", speaker: "", text: "", bgImage: "", isEnding: false, endingType: null, choices: [] };
@@ -337,6 +351,8 @@ export function parseScript(scriptText, baseMeta = {}) {
     playerAvatar: baseMeta.playerAvatar || "",
     statsConfig,
     initialStats,
+    gameOverTitle: gameOverTitle || baseMeta.gameOverTitle || "",
+    gameOverText: gameOverText || baseMeta.gameOverText || "",
     litrpg: baseMeta.litrpg || { ranks: ["Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh"], expPerRank: 100 },
     mystery: baseMeta.mystery || { inventorySlots: 4 },
   };

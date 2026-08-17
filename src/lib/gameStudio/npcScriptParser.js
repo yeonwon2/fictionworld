@@ -32,6 +32,13 @@
 //                                               khởi đầu cao hơn ngưỡng chết,
 //                                               nếu không sẽ "chết" ngay khi
 //                                               vừa vào game.)
+// **Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi
+//                                               chết vì "Chỉ số sinh tử" ở
+//                                               trên, thay cho "GAME OVER" mặc
+//                                               định. Vd: "Bị Phế Truất | Nàng
+//                                               đã đánh mất tất cả, cả tính
+//                                               mạng lẫn ngôi vị." Bỏ qua dòng
+//                                               này thì vẫn hiện chữ mặc định.)
 //
 // ## GIỚI THIỆU
 // <văn bản hiện trên màn hình chọn nhân vật, vd "Bạn muốn theo đuổi ai?">
@@ -110,6 +117,7 @@ const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
 const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
+const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_NPC = /^NHÂN\s+VẬT\s+(.+?)\s*(?:[—\-:]\s*(.+))?$/i;
 const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
@@ -158,6 +166,8 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
   let title = "";
   let genre = "";
   let author = "";
+  let gameOverTitle = "";
+  let gameOverText = "";
   const vitalDeclarations = [];
   const initialDeclarations = [];
 
@@ -239,6 +249,12 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
     let m;
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_GAMEOVER))) {
+      const parts = m[1].split("|");
+      gameOverTitle = (parts[0] || "").trim();
+      gameOverText = (parts[1] || "").trim();
+      continue;
+    }
     if ((m = norm.match(RE_META_VITAL))) {
       for (const part of m[1].split(",")) {
         const vm = part.trim().match(RE_VITAL_ITEM);
@@ -411,6 +427,8 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
     playerAvatar: baseMeta.playerAvatar || "",
     statsConfig,
     initialStats,
+    gameOverTitle: gameOverTitle || baseMeta.gameOverTitle || "",
+    gameOverText: gameOverText || baseMeta.gameOverText || "",
     litrpg: baseMeta.litrpg || { ranks: ["Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh"], expPerRank: 100 },
     mystery: baseMeta.mystery || { inventorySlots: 4 },
   };

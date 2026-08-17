@@ -10,6 +10,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 
 # <Tên game>
 **Thể loại:** <thể loại>
+**Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi thua cuộc, thay cho "GAME OVER" mặc định, viết đúng văn phong truyện)
 
 ## GIỚI THIỆU
 <văn bản mở đầu, 1-2 đoạn>

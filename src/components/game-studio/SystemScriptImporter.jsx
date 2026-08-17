@@ -20,6 +20,10 @@ Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — chỉ số nà
 Chỉ số khởi đầu: Thiện cảm = 20       (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
                                        không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
                                        tính là "chết" ngay từ đầu game!)
+Thông báo thua cuộc: Ký Chủ Ngừng Hoạt Động | Nhiệm vụ thất bại, hệ thống đã ngắt kết nối.
+                                      (tuỳ chọn — đổi chữ hiện khi chết vì "Chỉ số sinh
+                                       tử" ở trên, thay cho "GAME OVER" mặc định. Bỏ qua
+                                       dòng này thì vẫn hiện chữ mặc định như cũ.)
 
 GIỚI THIỆU
 → Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Chào mừng ký chủ đến với thế giới này...

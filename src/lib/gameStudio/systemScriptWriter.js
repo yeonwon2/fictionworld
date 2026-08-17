@@ -11,6 +11,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 **Thể loại:** <thể loại>
 **Chỉ số sinh tử:** <Tên chỉ số> < <ngưỡng>
 **Chỉ số khởi đầu:** <Tên chỉ số (CÙNG TÊN với "Chỉ số sinh tử" ở trên)> = <giá trị cao hơn ngưỡng chết>
+**Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi chết, thay cho "GAME OVER" mặc định, viết đúng văn phong "hệ thống")
 
 ## GIỚI THIỆU
 → Hệ thống: <tiêu đề> | <lời chào của hệ thống, mời người chơi xác nhận để bắt đầu>

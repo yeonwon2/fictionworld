@@ -11,6 +11,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 **Thể loại:** <thể loại>
 **Chỉ số sinh tử:** Thiện cảm < 10
 **Chỉ số khởi đầu:** Thiện cảm = 20
+**Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi chết, thay cho "GAME OVER" mặc định, viết đúng văn phong truyện)
 
 ## GIỚI THIỆU
 Bạn muốn theo đuổi ai?

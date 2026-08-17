@@ -10,6 +10,10 @@ import { useToast } from "@/components/ui/use-toast";
 
 const CHEAT_SHEET = `# Tên game
 **Thể loại:** ...
+**Thông báo thua cuộc:** Tiêu đề | Nội dung (tuỳ chọn — chữ hiện khi thua cuộc,
+                                             thay cho "GAME OVER" mặc định. Chỉ
+                                             có tác dụng nếu bạn tự đặt 1 chỉ số
+                                             là "Sinh tử" trong Cấu hình chung.)
 
 ## GIỚI THIỆU
 Văn bản mở đầu.

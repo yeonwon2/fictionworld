@@ -259,7 +259,7 @@ const ENGINE_JS = [
   '',
   '  function renderSummary(){ var s=\'<div class="rpg-sum-title">Thành tích</div>\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; s+=\'<div class="rpg-sum-row"><span>\'+esc(sc.label||sc.key)+\'</span><b>\'+(state.stats[sc.key]||0)+\'</b></div>\'; } s+=\'<div class="rpg-sum-row"><span>Số cảnh đã qua</span><b>\'+state.history.length+\'</b></div>\'; return s; }',
   '',
-  '  function renderGameOver(){ return \'<div class="rpg-bg"></div><div class="rpg-ending"><div class="rpg-ending-badge bad">GAME OVER</div><div class="rpg-ending-text">Bạn đã gục ngã. Số phận đã khép lại quá sớm...</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="goRestart">Bắt đầu lại</button></div>\'; }',
+  '  function renderGameOver(){ var got=esc(meta.gameOverTitle||"GAME OVER"); var goText=esc(meta.gameOverText||"Bạn đã gục ngã. Số phận đã khép lại quá sớm..."); return \'<div class="rpg-bg"></div><div class="rpg-ending"><div class="rpg-ending-badge bad">\'+got+\'</div><div class="rpg-ending-text">\'+goText+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="goRestart">Bắt đầu lại</button></div>\'; }',
   '',
   '  function renderEnding(node){ var et=node.endingType||"NORMAL_END"; var em=ENDINGS[et]||{l:"Kết Thúc",i:"🏁"}; return \'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(asset(node.bgImage)||"")+\'\\\')"></div><div class="rpg-ending"><div class="rpg-ending-badge \'+et.toLowerCase()+\'">\'+em.i+" "+em.l+\'</div><div class="rpg-ending-text">\'+esc(node.text||"")+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="endRestart">Chơi lại từ đầu</button></div>\'; }',
   '',

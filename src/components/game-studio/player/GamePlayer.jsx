@@ -407,8 +407,8 @@ export default function GamePlayer({ gameData, onExit }) {
         {/* Game Over */}
         {screen === 'gameover' && (
           <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
-            <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ef4444', color: '#fff' }}><Skull size={22} /> GAME OVER</div>
-            <p className="text-base" style={{ color: 'var(--rpg-text)' }}>Bạn đã gục ngã. Số phận đã khép lại quá sớm...</p>
+            <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ef4444', color: '#fff' }}><Skull size={22} /> {meta.gameOverTitle || 'GAME OVER'}</div>
+            <p className="text-base" style={{ color: 'var(--rpg-text)' }}>{meta.gameOverText || 'Bạn đã gục ngã. Số phận đã khép lại quá sớm...'}</p>
             <Summary statsConfig={statsConfig} rt={rt} />
             <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Bắt đầu lại</Button>
           </div>

@@ -34,6 +34,14 @@
 //                                               ngay khi vừa vào game vì mọi
 //                                               chỉ số mặc định bắt đầu ở 0.
 //                                               Vd: "Thiện cảm = 20")
+// **Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — đổi chữ hiện khi
+//                                               chết vì "Chỉ số sinh tử" ở
+//                                               trên, thay cho "GAME OVER" mặc
+//                                               định. Vd: "Ký Chủ Ngừng Hoạt
+//                                               Động | Nhiệm vụ thất bại, hệ
+//                                               thống đã ngắt kết nối.". Bỏ
+//                                               qua dòng này thì vẫn hiện chữ
+//                                               mặc định như cũ.)
 //
 // ## GIỚI THIỆU
 // → Hệ thống: <tiêu đề> | <nội dung>          (tuỳ chọn — bảng thông báo hệ
@@ -124,6 +132,7 @@ const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_META_VITAL = /^Chỉ số sinh tử\s*:\s*(.+)$/i;
 const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
+const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
 const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
@@ -181,6 +190,8 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
   let title = "";
   let genre = "";
   let author = "";
+  let gameOverTitle = "";
+  let gameOverText = "";
   const vitalDeclarations = []; // [{ key, deathThreshold }] — từ "**Chỉ số sinh tử:**"
   const initialDeclarations = []; // [{ key, value }] — từ "**Chỉ số khởi đầu:**"
 
@@ -263,6 +274,12 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
     let m;
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
+    if ((m = norm.match(RE_META_GAMEOVER))) {
+      const parts = m[1].split("|");
+      gameOverTitle = (parts[0] || "").trim();
+      gameOverText = (parts[1] || "").trim();
+      continue;
+    }
     if ((m = norm.match(RE_META_VITAL))) {
       for (const part of m[1].split(",")) {
         const vm = part.trim().match(RE_VITAL_ITEM);
@@ -408,6 +425,8 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
     playerAvatar: baseMeta.playerAvatar || "",
     statsConfig,
     initialStats,
+    gameOverTitle: gameOverTitle || baseMeta.gameOverTitle || "",
+    gameOverText: gameOverText || baseMeta.gameOverText || "",
     litrpg: baseMeta.litrpg || { ranks: ["Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh"], expPerRank: 100 },
     mystery: baseMeta.mystery || { inventorySlots: 4 },
   };
