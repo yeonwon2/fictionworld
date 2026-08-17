@@ -37,6 +37,46 @@ function insertSnippetAtCursor({ textareaRef, script, setScript, snippet, placeh
   });
 }
 
+// Dò vị trí (start, end) trong "script" ứng với 1 dòng cảnh báo, để bấm vào
+// là nhảy tới + bôi đen đúng chỗ sai. Ưu tiên số dòng tường minh ("Dòng N:"
+// — có ở các cảnh báo cú pháp); nếu không có (cảnh báo cấu trúc từ
+// postprocess.js không biết số dòng gốc), thử tìm theo TÊN LỰA CHỌN được
+// trích dẫn trong câu cảnh báo. Trả về null nếu không đoán được.
+function resolveWarningPosition(script, warning) {
+  const lineMatch = warning.match(/^Dòng (\d+):/);
+  const lines = script.split("\n");
+  if (lineMatch) {
+    const lineNo = parseInt(lineMatch[1], 10);
+    if (lineNo >= 1 && lineNo <= lines.length) {
+      let offset = 0;
+      for (let i = 0; i < lineNo - 1; i++) offset += lines[i].length + 1;
+      return { start: offset, end: offset + lines[lineNo - 1].length };
+    }
+  }
+  const choiceMatch = warning.match(/lựa chọn "([^"]+)"/);
+  if (choiceMatch && choiceMatch[1] !== "(không có chữ)") {
+    const idx = script.indexOf(choiceMatch[1]);
+    if (idx !== -1) return { start: idx, end: idx + choiceMatch[1].length };
+  }
+  return null;
+}
+
+function jumpToWarning(textareaRef, script, warning) {
+  const pos = resolveWarningPosition(script, warning);
+  const el = textareaRef.current;
+  if (!pos || !el) return false;
+  el.focus();
+  el.setSelectionRange(pos.start, pos.end);
+  // setSelectionRange KHÔNG tự cuộn textarea tới chỗ chọn (khác input thường)
+  // — phải tự tính cuộn tay, ước lượng theo số dòng xuống tới vị trí đó (đủ
+  // dùng cho các dòng hiệu ứng ngắn hiếm khi bị wrap xuống dòng tiếp theo).
+  const lineIndex = script.slice(0, pos.start).split("\n").length - 1;
+  const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 18;
+  const target = lineIndex * lineHeight - el.clientHeight / 2;
+  el.scrollTop = Math.max(0, Math.min(target, el.scrollHeight - el.clientHeight));
+  return true;
+}
+
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/scriptParser.js
 // của "Xưởng Offline", sửa file này không ảnh hưởng gì tới xưởng đó.
 const CHEAT_SHEET = `KHÔNG CẦN gõ dấu #, ##, ** gì cả — hệ thống nhận diện qua TỪ KHOÁ (CẢNH,
@@ -316,9 +356,20 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
 
       {warnings.length > 0 && (
         <div className="text-[11px] rounded-lg p-2.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> {warnings.length} lỗi/cảnh báo — sửa trong ô kịch bản ở trên rồi kiểm tra lại:</div>
+          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> {warnings.length} lỗi/cảnh báo — bấm vào 1 dòng để nhảy tới + bôi đen đúng chỗ sai trong ô kịch bản:</div>
           <ul className="list-disc list-inside space-y-0.5">
-            {warnings.map((w, i) => <li key={i}>{w}</li>)}
+            {warnings.map((w, i) => {
+              const clickable = resolveWarningPosition(script, w) !== null;
+              return (
+                <li key={i}>
+                  {clickable ? (
+                    <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-amber-500/50 hover:decoration-solid hover:text-amber-800 dark:hover:text-amber-300">
+                      {w}
+                    </button>
+                  ) : w}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
