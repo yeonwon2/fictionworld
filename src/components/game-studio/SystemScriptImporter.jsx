@@ -3,7 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Wand2, Loader2, AlertTriangle, Copy, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight } from "lucide-react";
+import { Bot, Wand2, Loader2, AlertTriangle, Copy, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { parseSystemScript } from "@/lib/gameStudio/systemScriptParser";
 import { generateSystemScriptFromPrompt } from "@/lib/gameStudio/systemScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
@@ -101,6 +101,8 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [producing, setProducing] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState(false);
   const [cheatSheetCopied, setCheatSheetCopied] = useState(false);
   const textareaRef = useRef(null);
   const { toast } = useToast();
@@ -144,6 +146,33 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
     }
   };
 
+  // Kiểm tra QA — chạy CÙNG 1 hàm phân tích kịch bản như lúc sản xuất thật,
+  // nhưng KHÔNG ghi đè gameData — chỉ để xem trước danh sách lỗi/cảnh báo và
+  // sửa ngay trong ô kịch bản, không cần sản xuất thật rồi mới biết chỗ sai.
+  const handleCheck = () => {
+    if (!script.trim()) {
+      toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
+      return;
+    }
+    setChecking(true);
+    try {
+      const result = parseSystemScript(script, gameData.meta);
+      setWarnings(result.warnings || []);
+      setChecked(true);
+      if (result.warnings?.length) {
+        toast({ variant: "destructive", title: `Tìm thấy ${result.warnings.length} lỗi/cảnh báo`, description: "Xem chi tiết bên dưới rồi sửa lại trong ô kịch bản." });
+      } else {
+        toast({ title: "Không phát hiện lỗi nào!", description: "Kịch bản sẵn sàng để sản xuất." });
+      }
+    } catch (e) {
+      setWarnings([]);
+      setChecked(true);
+      toast({ variant: "destructive", title: "Kịch bản có lỗi nghiêm trọng", description: e.message || "Kiểm tra lại cú pháp kịch bản." });
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const handleProduce = () => {
     if (!script.trim()) {
       toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
@@ -154,6 +183,7 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
       const result = parseSystemScript(script, gameData.meta);
       setGameData(result);
       setWarnings(result.warnings || []);
+      setChecked(true);
       onGenerated && onGenerated(result);
       toast({
         title: "Sản xuất thành công!",
@@ -260,21 +290,33 @@ export default function SystemScriptImporter({ gameData, setGameData, onGenerate
         <Textarea
           ref={textareaRef}
           value={script}
-          onChange={(e) => setScript(e.target.value)}
+          onChange={(e) => { setScript(e.target.value); setChecked(false); }}
           rows={12}
           placeholder="Dán kịch bản viết tay vào đây, hoặc dùng nút 'Nhờ AI viết kịch bản giúp' ở trên..."
           className="font-mono text-xs"
         />
       </div>
 
-      <Button onClick={handleProduce} disabled={producing} className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
-        {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Bot size={16} className="mr-2" />}
-        {producing ? "Đang sản xuất..." : "Sản Xuất Game (Hệ Thống)"}
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={handleCheck} disabled={checking} variant="outline" className="flex-1">
+          {checking ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ClipboardCheck size={16} className="mr-2" />}
+          {checking ? "Đang kiểm tra..." : "Kiểm Tra Kịch Bản"}
+        </Button>
+        <Button onClick={handleProduce} disabled={producing} className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
+          {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Bot size={16} className="mr-2" />}
+          {producing ? "Đang sản xuất..." : "Sản Xuất Game"}
+        </Button>
+      </div>
+
+      {checked && warnings.length === 0 && (
+        <div className="text-[11px] rounded-lg p-2.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 font-semibold">
+          <CheckCircle2 size={12} /> Không phát hiện lỗi nào — kịch bản sẵn sàng để sản xuất.
+        </div>
+      )}
 
       {warnings.length > 0 && (
         <div className="text-[11px] rounded-lg p-2.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> {warnings.length} cảnh báo khi sản xuất:</div>
+          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> {warnings.length} lỗi/cảnh báo — sửa trong ô kịch bản ở trên rồi kiểm tra lại:</div>
           <ul className="list-disc list-inside space-y-0.5">
             {warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
