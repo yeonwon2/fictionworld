@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown } from 'lucide-react';
-import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown } from 'lucide-react';
+import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle, GAME_PRESENTATIONS } from '@/lib/gameStudio/rpgThemes';
+import { palaceRankIndex, palaceProgressToNext } from '@/lib/gameStudio/palaceScriptParser';
+import { rebirthEraIndex, rebirthEraProgress, rebirthUnclaimedBonus } from '@/lib/gameStudio/rebirthScriptParser';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 
-const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles };
+const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles, crown: Crown };
 
 export default function GamePlayer({ gameData, onExit }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
   const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
+  const posterArt = meta.posterImage || meta.playerAvatar || heroineArt;
+  const posterTag = GAME_PRESENTATIONS[presentation]?.name || '';
   const archetype = meta.archetype || 'none';
   const statsConfig = meta.statsConfig || [];
   const theme = THEMES[meta.theme] || THEMES['fantasy-parchment'];
   const litrpg = meta.litrpg || { ranks: ['Luyện Khí', 'Trúc Cơ', 'Kim Đan', 'Nguyên Anh'], expPerRank: 100 };
+  const palace = meta.palace || { ranks: [], favorStat: '', favorLabel: '', deathThreshold: 0, stepFavor: 15 };
+  const rebirth = meta.rebirth || { moneyStat: '', moneyLabel: 'Vốn', deathThreshold: 0, eras: [], bonusStat: '' };
   const mysterySlots = (meta.mystery && meta.mystery.inventorySlots) || 4;
   // Túi đồ chỉ giới hạn số ô cho archetype "mystery" (cơ chế giải đố cố ý
   // giới hạn) — mọi archetype khác (tức mọi game từ Xưởng Offline/Hệ Thống/
@@ -56,10 +62,30 @@ export default function GamePlayer({ gameData, onExit }) {
   const [shake, setShake] = useState(false);
   const [dicePending, setDicePending] = useState(null);
   const [combatActive, setCombatActive] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(meta.poster !== false);
+  // "Niên đại làm giàu" đã chạm tới (mốc cao nhất từng nhận thưởng) — riêng với
+  // mốc đã vượt rồi tụt xuống: niên đại HIỆN TẠI vẫn giữ (max(derived, reached)),
+  // nhưng thu nhập chỉ cộng MỘT LẦN mỗi mốc, không bao giờ cộng lại.
+  const [eraReached, setEraReached] = useState(() => rebirthEraIndex((meta.initialStats || {})[rebirth.moneyStat] || 0, rebirth));
   const typingRef = useRef(null);
   const fullTextRef = useRef('');
   const rtRef = useRef(rt);
   rtRef.current = rt;
+  const eraReachedRef = useRef(eraReached);
+  eraReachedRef.current = eraReached;
+
+  const palaceRankIdx = palaceRankIndex(rt.stats[palace.favorStat] || 0, palace);
+  const palaceRankLabel = palace.ranks?.[palaceRankIdx] || '—';
+  const palaceProgress = palaceProgressToNext(rt.stats[palace.favorStat] || 0, palace, palaceRankIdx);
+
+  // Niên đại làm giàu — niên đại HIỆN TẠI = mốc cao nhất đã từng chạm (giữ vững
+  // khi vốn tụt xuống dưới mốc), tiến độ thì theo Vốn thực tại.
+  const rebirthMoney = rt.stats[rebirth.moneyStat] || 0;
+  const derivedEraIdx = rebirthEraIndex(rebirthMoney, rebirth);
+  const eraIdx = Math.max(derivedEraIdx, eraReached);
+  const eraLabel = rebirth.eras?.[eraIdx]?.label || '—';
+  const eraProgress = rebirthEraProgress(rebirthMoney, rebirth, eraIdx);
+  const nextEra = rebirth.eras?.[eraIdx + 1];
 
   const node = gameData.nodes[rt.nodeId] || gameData.nodes['start_node'];
 
@@ -96,6 +122,25 @@ export default function GamePlayer({ gameData, onExit }) {
     return false;
   }, [statsConfig]);
 
+  // Cộng thu nhập thời đại MỘT LẦN khi Vốn chạm mốc niên đại mới — gọi SAU khi
+  // đã áp mọi cộng/trừ vốn. Thay đổi trực tiếp "stats", bổ sung sự kiện vào
+  // "ev", trả về mốc niên đại mới đã đạt (gọi để lưu vào state eraReached).
+  const advanceEra = useCallback((stats, reachedVal, ev) => {
+    if (archetype !== 'rebirth') return reachedVal;
+    const key = rebirth.moneyStat;
+    const bkey = rebirth.bonusStat || key;
+    const money = stats[key] || 0;
+    const newEra = rebirthEraIndex(money, rebirth);
+    if (newEra <= reachedVal) return reachedVal;
+    const bonus = rebirthUnclaimedBonus(newEra, reachedVal, rebirth);
+    if (bonus > 0) {
+      stats[bkey] = (stats[bkey] || 0) + bonus;
+      ev.push(['◆', `Thu nhập thời đại +${bonus} ${rebirth.moneyLabel}`]);
+    }
+    ev.push(['✦', 'Bước sang niên đại mới: ' + ((rebirth.eras && rebirth.eras[newEra]?.label) || 'Niên đại mới')]);
+    return newEra;
+  }, [archetype, rebirth]);
+
   const startTypewriter = useCallback((text) => {
     if (typingRef.current) clearInterval(typingRef.current);
     fullTextRef.current = text || '';
@@ -119,8 +164,11 @@ export default function GamePlayer({ gameData, onExit }) {
     setTimeout(() => setEvents((prev) => prev.filter((e) => e.id !== id)), 3800);
   }, []);
 
-  // Node entry effect
+  // Node entry effect — khi poster mở đầu còn phủ màn hình thì CHƯA xử lý vào
+  // cảnh; phải đợi người chơi bấm "Bắt đầu" (posterOpen = false) thì thông báo
+  // hệ thống, sự kiện ngẫu nhiên, nhiệm vụ... mới chạy, không hiện sớm nữa.
   useEffect(() => {
+    if (posterOpen) return;
     const cur = rtRef.current;
     const n = gameData.nodes[cur.nodeId];
     if (!n) return;
@@ -147,6 +195,13 @@ export default function GamePlayer({ gameData, onExit }) {
         }
       }
     }
+    // Niên đại làm giàu — thu nhập thời đại cộng MỘT LẦN khi Vốn chạm mốc mới.
+    {
+      const evEra = [];
+      const nextEra = advanceEra(ns, eraReachedRef.current, evEra);
+      if (nextEra !== eraReachedRef.current) setEraReached(nextEra);
+      for (const [ic, tx] of evEra) pushEvent(ic, tx);
+    }
     if (n.systemPopup && n.systemPopup.title) { setSystemPopup(n.systemPopup); playTing(); }
     if (n.grantItem && !inv.includes(n.grantItem) && canCarryMore(inv.length)) {
       inv.push(n.grantItem);
@@ -166,7 +221,7 @@ export default function GamePlayer({ gameData, onExit }) {
     startTypewriter(n.text);
     return () => { if (typingRef.current) clearInterval(typingRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rt.nodeId, forceKey]);
+  }, [rt.nodeId, forceKey, posterOpen]);
 
   const skipTyping = () => {
     if (typingRef.current) { clearInterval(typingRef.current); typingRef.current = null; }
@@ -174,18 +229,23 @@ export default function GamePlayer({ gameData, onExit }) {
     setTypingDone(true);
   };
 
-  const meetsStatReq = (req, s) => {
-    if (!req) return true;
-    for (const k in req) if ((s[k] || 0) < req[k]) return false;
+  const meetsStatReq = (req, s, reqMax) => {
+    if (!req && !reqMax) return true;
+    for (const k in (req || {})) if ((s[k] || 0) < req[k]) return false;
+    if (reqMax) for (const k2 in reqMax) if ((s[k2] || 0) > reqMax[k2]) return false;
     return true;
   };
 
   const choiceStatus = (c) => {
-    if (!meetsStatReq(c.statRequirements, rt.stats)) {
+    if (!meetsStatReq(c.statRequirements, rt.stats, c.statRequirementsMax)) {
       const parts = [];
       for (const k in (c.statRequirements || {})) {
         const lbl = statsConfig.find((s) => s.key === k)?.label || k;
         parts.push(`${lbl} ≥ ${c.statRequirements[k]} (cần ${c.statRequirements[k] - (rt.stats[k] || 0)})`);
+      }
+      for (const k2 in (c.statRequirementsMax || {})) {
+        const lbl2 = statsConfig.find((s) => s.key === k2)?.label || k2;
+        parts.push(`${lbl2} ≤ ${c.statRequirementsMax[k2]} (đang ${rt.stats[k2] || 0})`);
       }
       return { ok: false, reason: parts.join(', ') };
     }
@@ -197,6 +257,24 @@ export default function GamePlayer({ gameData, onExit }) {
     }
     if (c.requiresFlagAbsent && rt.flags.includes(c.requiresFlagAbsent)) {
       return { ok: false, reason: 'Chỉ khi chưa có cờ: ' + c.requiresFlagAbsent };
+    }
+    if (c.requiresNpcAffinity) {
+      const reqs = c.requiresNpcAffinity;
+      for (const n in reqs) {
+        if ((rt.npcAffinity[n] || 0) < reqs[n]) {
+          const have = rt.npcAffinity[n] || 0;
+          return { ok: false, reason: `Cần hảo cảm ${n} ≥ ${reqs[n]} (đang ${have}, thiếu ${reqs[n] - have})` };
+        }
+      }
+    }
+    if (c.requiresNpcAffinityMax) {
+      const maxs = c.requiresNpcAffinityMax;
+      for (const n in maxs) {
+        if ((rt.npcAffinity[n] || 0) > maxs[n]) {
+          const have = rt.npcAffinity[n] || 0;
+          return { ok: false, reason: `Cần hảo cảm ${n} ≤ ${maxs[n]} (đang ${have})` };
+        }
+      }
     }
     return { ok: true };
   };
@@ -212,6 +290,9 @@ export default function GamePlayer({ gameData, onExit }) {
     // Hệ quả chỉ số hiện qua badge "Lượt N" ở đầu văn bản (rpg-turn-delta), không
     // cần lặp lại bằng toast nữa — toast chỉ dành cho vật phẩm/cờ truyện/nhiệm vụ.
     const ev = [];
+    // Niên đại làm giàu — thu nhập thời đại cộng MỘT LẦN khi Vốn chạm mốc mới.
+    let nextEraReached = eraReachedRef.current;
+    nextEraReached = advanceEra(ns, nextEraReached, ev);
     let exp = rt.exp, rankIndex = rt.rankIndex, systemPoints = rt.systemPoints;
     let inventory = [...rt.inventory], flags = [...rt.flags], skills = [...rt.skills];
     let quests = { ...rt.quests }, npcAffinity = { ...rt.npcAffinity };
@@ -241,6 +322,7 @@ export default function GamePlayer({ gameData, onExit }) {
       if (c.targetNodeId && gameData.nodes[c.targetNodeId]) newRt.nodeId = c.targetNodeId;
     }
     setRt(newRt);
+    if (nextEraReached !== eraReachedRef.current) setEraReached(nextEraReached);
     for (const [ic, tx] of ev) pushEvent(ic, tx);
     if (c.systemPopup && c.systemPopup.title) { setSystemPopup(c.systemPopup); playTing(); }
     if (dead) { setScreen('gameover'); triggerShake(); }
@@ -249,6 +331,9 @@ export default function GamePlayer({ gameData, onExit }) {
   const onDiceDone = (result) => {
     const c = dicePending.choice;
     const { stats: newStats, target, mods } = applyDiceResult(c.diceRoll, result, rt.stats);
+    const evEra = [];
+    let nextEraReached = eraReachedRef.current;
+    nextEraReached = advanceEra(newStats, nextEraReached, evEra);
     const dead = checkGameOver(newStats);
     const newRt = { ...rt, stats: newStats, lastChoiceText: c.text, lastDeltas: { ...mods } };
     if (!dead) {
@@ -256,7 +341,9 @@ export default function GamePlayer({ gameData, onExit }) {
       if (target && gameData.nodes[target]) newRt.nodeId = target;
     }
     setRt(newRt);
+    if (nextEraReached !== eraReachedRef.current) setEraReached(nextEraReached);
     setDicePending(null);
+    for (const [ic, tx] of evEra) pushEvent(ic, tx);
     pushEvent('•', result.crit ? (result.outcome === 'success' ? 'CRITICAL thành công!' : 'CRITICAL thất bại!') : (result.outcome === 'success' ? 'Quay trúng!' : 'Quay trượt...'));
     if (dead) { setScreen('gameover'); triggerShake(); }
   };
@@ -266,6 +353,7 @@ export default function GamePlayer({ gameData, onExit }) {
     const ns = { ...rt.stats, ...combatStats };
     let inv = [...rt.inventory];
     const ev = [];
+    let nextEraReached = eraReachedRef.current;
     let target = null;
     if (result === 'win') {
       const loot = (n.combat && n.combat.loot) || {};
@@ -284,6 +372,7 @@ export default function GamePlayer({ gameData, onExit }) {
     } else {
       target = n.combat && n.combat.loseTarget;
     }
+    nextEraReached = advanceEra(ns, nextEraReached, ev);
     const dead = result === 'lose' || checkGameOver(ns);
     const newRt = { ...rt, stats: ns, inventory: inv, lastChoiceText: null, lastDeltas: {} };
     if (!dead && target && gameData.nodes[target]) {
@@ -291,6 +380,7 @@ export default function GamePlayer({ gameData, onExit }) {
       newRt.nodeId = target;
     }
     setRt(newRt);
+    if (nextEraReached !== eraReachedRef.current) setEraReached(nextEraReached);
     setCombatActive(false);
     for (const [ic, tx] of ev) pushEvent(ic, tx);
     if (dead) { setScreen('gameover'); triggerShake(); }
@@ -302,6 +392,7 @@ export default function GamePlayer({ gameData, onExit }) {
       inventory: [], quests: {}, flags: [], skills: [], exp: 0, rankIndex: 0, systemPoints: 0, npcAffinity: {},
       lastChoiceText: null, lastDeltas: {},
     });
+    setEraReached(rebirthEraIndex((meta.initialStats || {})[rebirth.moneyStat] || 0, rebirth));
     setForceKey((k) => k + 1);
     setScreen('scene');
     setCombatActive(false);
@@ -320,15 +411,30 @@ export default function GamePlayer({ gameData, onExit }) {
   // không đè mất --rpg-bg-image (theme gradient) hay data-bg-pattern đặt qua CSS.
   const rootStyle = { ...themeStyle, backgroundColor: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
   const endingMeta = ENDING_TYPES[node?.endingType];
-  const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg' || hasItemMechanic;
+  const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg' || archetype === 'rebirth' || hasItemMechanic;
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
   const turn = rt.history.length + 1;
   const isCustomTheme = meta.theme === 'custom';
+  const ambientEffect = isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
 
   return (
     <div style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+      <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
+      {posterOpen && (
+        <div className="rpg-poster" style={{ backgroundImage: `url(${posterArt})` }}>
+          <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
+          <div className="rpg-poster-shade" />
+          <div className="rpg-poster-inner">
+            {posterTag && <div className="rpg-poster-badge">{posterTag}</div>}
+            <h1 className="rpg-poster-title">{meta.title || 'Trò Chơi'}</h1>
+            {meta.player_name && <div className="rpg-poster-sub">{meta.player_name}</div>}
+            {meta.player_bio && <p className="rpg-poster-bio">{meta.player_bio}</p>}
+            <button className="rpg-poster-btn" onClick={() => setPosterOpen(false)}>Bắt đầu</button>
+          </div>
+        </div>
+      )}
       <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
         {/* Thanh trên cùng — nút thoát, avatar, tên game + lượt, điểm hệ thống, menu */}
         <div className="rpg-topbar">
@@ -399,6 +505,16 @@ export default function GamePlayer({ gameData, onExit }) {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Bảng cấp bậc tần phi + thế lực hậu cung — chỉ archetype Cung Đấu */}
+        {archetype === 'palace' && (
+          <PalaceCourtBoard palace={palace} palaceRankIdx={palaceRankIdx} palaceRankLabel={palaceRankLabel} palaceProgress={palaceProgress} npcAffinity={rt.npcAffinity} />
+        )}
+
+        {/* Bảng gia sản — niên đại làm giàu theo Vốn — chỉ archetype Trọng Sinh */}
+        {archetype === 'rebirth' && (
+          <RebirthWealthBoard rebirth={rebirth} eraIdx={eraIdx} eraLabel={eraLabel} eraProgress={eraProgress} nextEra={nextEra} assetCount={rt.inventory.length} />
         )}
 
         {/* Combat */}
@@ -627,9 +743,6 @@ function Summary({ statsConfig, rt }) {
   );
 }
 
-// Menu game — bottom sheet với các mục dựng từ dữ liệu đã có sẵn (không thêm
-// hệ thống lưu tiến trình mới): nhân vật, chỉ số, túi đồ, nhiệm vụ, quan hệ,
-// lịch sử phân cảnh đã qua, chơi lại, thoát.
 function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, showInventoryTab, showQuestTab, mysterySlots, onReset, onExit }) {
   const affinityEntries = Object.entries(rt.npcAffinity || {});
   const historyEntries = [...rt.history].slice(-20).reverse().map((id) => {
@@ -757,5 +870,71 @@ function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, sh
         </div>
       </div>
     </>
+  );
+}
+
+// Bảng cung đấu — cấp bậc tần phi hiện tại + tiến độ thăng chức theo Sủng Ái,
+// và "Hậu Cung · Thế Lực": danh sách phi tần/Thái Hậu với hảo cảm hiện tại.
+function PalaceCourtBoard({ palace, palaceRankIdx, palaceRankLabel, palaceProgress, npcAffinity }) {
+  const nextRank = palace.ranks?.[palaceRankIdx + 1];
+  const entries = Object.entries(npcAffinity || {});
+  return (
+    <div className="flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 55%, transparent)' }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>
+          <Crown size={11} /> {palaceRankLabel || '—'}
+        </span>
+        <div className="flex-1 min-w-[120px]">
+          <div className="text-[10px] mb-0.5" style={{ color: 'var(--rpg-muted)' }}>
+            {palace.favorLabel || 'Sủng Ái'} · {palaceRankIdx + 1}/{palace.ranks?.length || 1}
+            {nextRank ? ` · còn ${Math.max(0, Math.round((100 - palaceProgress) / 100 * (palace.stepFavor || 15)))} điểm đến ${nextRank}` : ' · đã đạt đỉnh'}
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--rpg-panel-2)' }}>
+            <div className="h-full rounded-full transition-all" style={{ width: Math.max(0, Math.min(100, palaceProgress)) + '%', background: 'var(--rpg-accent2)' }} />
+          </div>
+        </div>
+      </div>
+      {entries.length > 0 && (
+        <div>
+          <div className="text-[10px] mb-1 font-bold uppercase tracking-wider" style={{ color: 'var(--rpg-muted)' }}>Hậu Cung · Thế Lực</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {entries.map(([name, v]) => (
+              <div key={name} className="flex justify-between items-center gap-2 text-xs">
+                <span className="truncate" style={{ color: 'var(--rpg-text)' }}>{name}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <Heart size={10} className={v >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+                  <b style={{ color: v >= 0 ? '#4ade80' : '#ff4d4d' }}>{v > 0 ? '+' : ''}{v}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Bảng gia sản — niên đại làm giàu hiện tại theo Vốn + tiến độ tới niên đại kế
+// (mốc vốn + thu nhập thời đại), kèm số tài sản đang nắm giữ (vật phẩm).
+function RebirthWealthBoard({ rebirth, eraIdx, eraLabel, eraProgress, nextEra, assetCount }) {
+  const erasLen = rebirth.eras?.length || 1;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl px-3 py-2" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 55%, transparent)' }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>
+          <Coins size={11} /> {eraLabel || '—'}
+        </span>
+        <div className="flex-1 min-w-[120px]">
+          <div className="text-[10px] mb-0.5" style={{ color: 'var(--rpg-muted)' }}>
+            {rebirth.moneyLabel || 'Vốn'} · Niên đại {Math.min(eraIdx + 1, erasLen)}/{erasLen}
+            {assetCount > 0 ? ` · Tài sản ${assetCount}` : ''}
+            {nextEra ? ` · cần ${nextEra.at} ${rebirth.moneyLabel} để tới ${nextEra.label} (+${nextEra.bonus || 0})` : ' · đã đạt đỉnh'}
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--rpg-panel-2)' }}>
+            <div className="h-full rounded-full transition-all" style={{ width: Math.max(0, Math.min(100, eraProgress)) + '%', background: 'var(--rpg-accent2)' }} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

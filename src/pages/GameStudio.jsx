@@ -1,29 +1,40 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
 import SystemScriptImporter from "@/components/game-studio/SystemScriptImporter";
 import NpcScriptImporter from "@/components/game-studio/NpcScriptImporter";
+import PalaceScriptImporter from "@/components/game-studio/PalaceScriptImporter";
+import RebirthScriptImporter from "@/components/game-studio/RebirthScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import ThemeWorkshop from "@/components/game-studio/ThemeWorkshop";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { newEmptyGame } from "@/lib/gameStudio/rpgThemes";
 import { listGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import { useToast } from "@/components/ui/use-toast";
 
-// "Xưởng Hệ Thống" và "Xưởng NPC" là các tab RIÊNG BIỆT, độc lập hoàn toàn với
-// "Xưởng Thiết Kế" (khác component, khác parser, khác file) — chỉ dùng chung
-// khung sườn game (lưu/chơi/xuất bản) vì đó là hạ tầng chung của mọi game,
-// không phải "cách viết nội dung" mà các xưởng khác nhau ở đó.
-const TABS = [
+// "Xưởng Thiết Kế" / "Xưởng Hệ Thống" / "Xưởng NPC" / "Xưởng Cung Đấu" /
+// "Xưởng Trọng Sinh Làm Giàu" là các xưởng RIÊNG BIỆT, độc lập hoàn toàn với
+// nhau (khác component, khác parser, khác file) — chỉ dùng chung khung sườn
+// game (lưu/chơi/xuất bản) vì đó là hạ tầng chung của mọi game, không phải
+// "cách viết nội dung" mà các xưởng khác nhau ở đó. Vì có nhiều xưởng, chúng
+// được GOM VÀO 1 NÚT THẢ (dropdown "Xưởng") trên thanh điều hướng — tránh bấm
+// nhầm — thay vì xếp thẳng hàng từng xưởng.
+const MAIN_TABS = [
   { id: "play", label: "Trải Nghiệm Game", short: "Chơi", icon: Gamepad2 },
+  { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
+];
+const WORKSHOP_TABS = [
   { id: "studio", label: "Xưởng Thiết Kế", short: "Xưởng", icon: Wrench },
   { id: "system", label: "Xưởng Hệ Thống", short: "Hệ Thống", icon: Bot },
   { id: "npc", label: "Xưởng NPC", short: "NPC", icon: Heart },
-  { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
+  { id: "palace", label: "Xưởng Cung Đấu", short: "Cung Đấu", icon: Crown },
+  { id: "rebirth", label: "Xưởng Trọng Sinh Làm Giàu", short: "Trọng Sinh", icon: Coins },
 ];
+const ALL_TABS = [...MAIN_TABS, ...WORKSHOP_TABS];
 
 function GameLibrary({ onOpen, onOpenThemeWorkshop }) {
   const [games, setGames] = useState([]);
@@ -132,6 +143,9 @@ function GameEditor({ gameId, onBack }) {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const saveTimer = useRef(null);
   const { toast } = useToast();
+  const activeWorkshopTab = WORKSHOP_TABS.find((t) => t.id === tab);
+  const isWorkshopActive = !!activeWorkshopTab;
+  const activeWorkshopLabel = activeWorkshopTab ? activeWorkshopTab.short : "";
 
   useEffect(() => {
     setLoading(true);
@@ -203,7 +217,7 @@ function GameEditor({ gameId, onBack }) {
             </p>
           </div>
           <nav className="hidden lg:flex items-center gap-1.5 ml-auto glass-panel rounded-xl p-1">
-            {TABS.map((t) => {
+            {MAIN_TABS.map((t) => {
               const Icon = t.icon;
               const active = tab === t.id;
               return (
@@ -220,6 +234,31 @@ function GameEditor({ gameId, onBack }) {
                 </button>
               );
             })}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    isWorkshopActive
+                      ? "bg-gradient-to-r from-cyan-500/90 to-violet-600/90 text-white shadow-md shadow-cyan-500/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  }`}
+                >
+                  <Wrench size={15} /> {activeWorkshopLabel || "Xưởng"} <ChevronDown size={13} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {WORKSHOP_TABS.map((t) => {
+                  const Icon = t.icon;
+                  const active = tab === t.id;
+                  return (
+                    <DropdownMenuItem key={t.id} onClick={() => setTab(t.id)} className={active ? "text-cyan-500 font-semibold" : ""}>
+                      <Icon size={15} /> {t.label}
+                      {active && <span className="ml-auto text-[10px]">●</span>}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
         </div>
       </header>
@@ -252,6 +291,20 @@ function GameEditor({ gameId, onBack }) {
             <NodeTreeEditor gameData={gameData} setGameData={handleChange} />
           </div>
         )}
+        {tab === "palace" && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <GameMetaConfig gameData={gameData} setGameData={handleChange} />
+            <PalaceScriptImporter gameData={gameData} setGameData={handleChange} onGenerated={handleGenerated} />
+            <NodeTreeEditor gameData={gameData} setGameData={handleChange} />
+          </div>
+        )}
+        {tab === "rebirth" && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <GameMetaConfig gameData={gameData} setGameData={handleChange} />
+            <RebirthScriptImporter gameData={gameData} setGameData={handleChange} onGenerated={handleGenerated} />
+            <NodeTreeEditor gameData={gameData} setGameData={handleChange} />
+          </div>
+        )}
         {tab === "export" && (
           <div className="max-w-2xl mx-auto space-y-4">
             <ExportCenter gameData={gameData} setGameData={handleChange} />
@@ -269,7 +322,7 @@ function GameEditor({ gameId, onBack }) {
 
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl" style={{ background: "hsl(var(--background) / 0.72)", borderColor: "hsl(var(--border) / 0.6)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="flex">
-          {TABS.map((t) => {
+          {MAIN_TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
             return (
@@ -287,6 +340,32 @@ function GameEditor({ gameId, onBack }) {
               </button>
             );
           })}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={`relative flex-1 flex flex-col items-center gap-0.5 py-1.5 transition-colors ${
+                  isWorkshopActive ? "" : "text-muted-foreground"
+                }`}
+                style={isWorkshopActive ? { color: "hsl(var(--primary))" } : undefined}
+              >
+                <Wrench size={17} />
+                <span className="text-[9.5px] font-medium">{activeWorkshopLabel || "Xưởng"}</span>
+                {isWorkshopActive && <span className="absolute bottom-0 h-0.5 w-6 rounded-full" style={{ background: "hsl(var(--primary))" }} />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top" className="w-52">
+              {WORKSHOP_TABS.map((t) => {
+                const Icon = t.icon;
+                const active = tab === t.id;
+                return (
+                  <DropdownMenuItem key={t.id} onClick={() => setTab(t.id)} className={active ? "text-cyan-500 font-semibold" : ""}>
+                    <Icon size={15} /> {t.label}
+                    {active && <span className="ml-auto text-[10px]">●</span>}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </nav>
     </div>

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { listThemes, createTheme, updateTheme, deleteTheme } from '@/lib/worldcrud';
 import { VNScenePanel } from '@/components/game-studio/player/GamePlayer';
-import { FONT_OPTIONS, BUTTON_SHAPES, PANEL_SHAPES, BG_PATTERNS, defaultCustomTheme, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
+import { FONT_OPTIONS, BUTTON_SHAPES, PANEL_SHAPES, BG_PATTERNS, THEME_EFFECTS, defaultCustomTheme, customThemeStyle } from '@/lib/gameStudio/rpgThemes';
 
 const COLOR_FIELDS = [
   { key: 'bg', label: 'Nền tổng' },
@@ -152,7 +152,8 @@ export default function ThemeWorkshop({ onBack }) {
             <Label className="text-xs">Tên theme</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="vd: Ấm áp cổ điển" />
           </div>
-          <div style={previewStyle} data-bg-pattern={vars.bgPattern} data-panel-shape={vars.panelShape} className="rpg-root rounded-2xl overflow-hidden p-4" >
+          <div style={previewStyle} data-bg-pattern={vars.bgPattern} data-panel-shape={vars.panelShape} className="rpg-root rounded-2xl overflow-hidden p-4 relative" >
+            <div className={`rpg-effect rpg-effect-${vars.effect || 'none'}`} aria-hidden="true" />
             <div className="rounded-xl p-2.5 mb-3 flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 65%, transparent)', border: '1px solid var(--rpg-accent)44' }}>
               <div className="w-11 h-11 rounded-full shrink-0" style={{ background: 'var(--rpg-accent2)', border: '2px solid var(--rpg-accent)' }} />
               <div>
@@ -224,6 +225,19 @@ export default function ThemeWorkshop({ onBack }) {
               {Object.entries(BG_PATTERNS).map(([id, s]) => (
                 <ShapeSwatch key={id} active={vars.bgPattern === id} label={s.label} onClick={() => setVars((v) => ({ ...v, bgPattern: id }))}>
                   <div className="w-full h-6 rounded-md" style={{ background: 'var(--foreground, #888)', opacity: .15 }} />
+                </ShapeSwatch>
+              ))}
+            </div>
+          </section>
+
+          <section className="glass-card rounded-2xl p-4 space-y-2.5">
+            <Label className="text-xs font-semibold">✨ Hiệu ứng nền (động)</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(THEME_EFFECTS).map(([id, s]) => (
+                <ShapeSwatch key={id} active={vars.effect === id} label={s.label} onClick={() => setVars((v) => ({ ...v, effect: id }))}>
+                  <div className="relative w-full h-6 overflow-hidden rounded-md">
+                    <div className={`rpg-effect rpg-effect-${id}`} />
+                  </div>
                 </ShapeSwatch>
               ))}
             </div>

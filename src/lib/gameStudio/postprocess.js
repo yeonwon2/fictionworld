@@ -166,6 +166,7 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
         c.targetNodeId = "broken_link_end";
       }
       if (!c.statRequirements) c.statRequirements = {};
+      if (!c.statRequirementsMax) c.statRequirementsMax = {};
       if (!c.statModifiers) c.statModifiers = {};
       if (forceNonEmptyModifiers && Object.keys(c.statModifiers).length === 0) {
         const lbl = (c.label || "").toLowerCase();
@@ -216,8 +217,12 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
       }
     }
   }
+  const dropped = [];
   for (const id of Object.keys(nodesMap)) {
-    if (!reachable.has(id)) delete nodesMap[id];
+    if (!reachable.has(id)) { dropped.push(id); delete nodesMap[id]; }
+  }
+  if (dropped.length) {
+    warnings.push('Có ' + dropped.length + ' cảnh/kết thúc KHÔNG thể đến được từ mạch truyện chính nên đã bị bỏ đi: ' + dropped.slice(0, 12).join(', ') + (dropped.length > 12 ? ' …' : '') + '. Muốn giữ chúng, hãy thêm lựa chọn "→ Đến cảnh …" dẫn vào từ một cảnh đang chạy được.');
   }
 
   // Ending đạt độ sâu < minDepth → chèn ĐỦ SỐ NODE ĐỆM còn thiếu để buộc đạt

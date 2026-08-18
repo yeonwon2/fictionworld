@@ -138,7 +138,7 @@ const RE_EFF_ITEM = /^(?:Nhận\s+)?Vật phẩm:\s*(.+)$/i;
 const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
 const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
-const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
+const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥|<=|≤)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
 const RE_EFFECT_DASH = /^-\s+(.+)$/;
 
@@ -225,7 +225,12 @@ export function parseScript(scriptText, baseMeta = {}) {
     if ((m = raw.match(RE_EFF_ENDING))) { target.__explicitTarget = "ending_" + slugify(m[1]); return; }
     if ((m = raw.match(RE_EFF_REQ_STAT))) {
       const key = registerStat(m[1]);
-      target.statRequirements[key] = Number(m[3]);
+      if (m[2] === "<=" || m[2] === "≤") {
+        if (!target.statRequirementsMax) target.statRequirementsMax = {};
+        target.statRequirementsMax[key] = Number(m[3]);
+      } else {
+        target.statRequirements[key] = Number(m[3]);
+      }
       return;
     }
     if ((m = raw.match(RE_EFF_STAT))) {

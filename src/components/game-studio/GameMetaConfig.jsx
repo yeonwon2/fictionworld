@@ -153,6 +153,10 @@ export default function GameMetaConfig({ gameData, setGameData }) {
             )}
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-2 text-xs cursor-pointer mt-2">
+          <input type="checkbox" checked={meta.poster !== false} onChange={(e) => updateMeta({ poster: e.target.checked })} />
+          <span>Màn hình poster mở đầu (chân dung + nút Bắt đầu)</span>
+        </label>
         <p className="text-[10px] text-muted-foreground">Chọn 1 theme màu có sẵn, hoặc 1 theme tự dựng ở "Xưởng Theme" (font/màu/hình dạng riêng), để dùng thay cho bảng màu mặc định của Phong cách ở trên.</p>
       </div>
 
@@ -198,6 +202,114 @@ export default function GameMetaConfig({ gameData, setGameData }) {
           <div className="space-y-1.5">
             <Label className="text-[11px]">Số slot Túi đồ (Inventory)</Label>
             <Input type="number" min={1} max={12} value={mystery.inventorySlots} onChange={(e) => updateMeta({ mystery: { inventorySlots: Number(e.target.value) } })} className="text-xs h-8 w-32" />
+          </div>
+        </div>
+      )}
+
+      {meta.archetype === 'palace' && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+          <Label className="text-xs font-semibold text-amber-600">⚙️ Cấu hình Cung Đấu (Hậu Cung)</Label>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Chỉ số dùng làm "Sủng Ái" (quyết định cấp bậc tần phi)</Label>
+            <Select value={(meta.palace && meta.palace.favorStat) || meta.statsConfig[0]?.key || 'sung_ai'} onValueChange={(v) => updateMeta({ palace: { ...(meta.palace || {}), favorStat: v } })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {meta.statsConfig.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} ({s.key})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Điểm Sủng Ái mỗi cấp (thăng chức sau từng ấy điểm trên ngưỡng sống)</Label>
+            <Input type="number" min={1} max={100} value={((meta.palace && meta.palace.stepFavor) || 15)} onChange={(e) => updateMeta({ palace: { ...(meta.palace || {}), stepFavor: Number(e.target.value) } })} className="text-xs h-8 w-32" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Cấp bậc khởi đầu khi mới vào game</Label>
+            <Select
+              value={String((meta.palace && meta.palace.startRankIndex) || 0)}
+              onValueChange={(v) => updateMeta({ palace: { ...(meta.palace || {}), startRankIndex: Number(v) } })}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {((meta.palace && meta.palace.ranks) || []).map((r, idx) => (
+                  <SelectItem key={idx} value={String(idx)}>{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">Mốc tính cấp được hiệu chỉnh theo Sủng Ái khởi đầu để đúng cấp này — không đổi danh sách cấp bậc.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Danh sách Cấp bậc tần phi (từ thấp lên cao)</Label>
+            <div className="space-y-1.5">
+              {((meta.palace && meta.palace.ranks) || []).map((r, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-5">{idx + 1}.</span>
+                  <Input value={r} onChange={(e) => {
+                    const ranks = [...((meta.palace && meta.palace.ranks) || [])];
+                    ranks[idx] = e.target.value;
+                    updateMeta({ palace: { ...(meta.palace || {}), ranks } });
+                  }} className="text-xs h-8" />
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => {
+                    const ranks = ((meta.palace && meta.palace.ranks) || []).filter((_, i) => i !== idx);
+                    updateMeta({ palace: { ...(meta.palace || {}), ranks } });
+                  }}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updateMeta({ palace: { ...(meta.palace || {}), ranks: [...((meta.palace && meta.palace.ranks) || []), 'Cấp bậc mới'] } })}>
+              <Plus size={13} className="mr-1" /> Thêm cấp bậc
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {meta.archetype === 'rebirth' && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
+          <Label className="text-xs font-semibold text-emerald-600">⚙️ Cấu hình Trọng Sinh Làm Giàu</Label>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Chỉ số dùng làm "Vốn" (quyết định niên đại làm giàu)</Label>
+            <Select value={(meta.rebirth && meta.rebirth.moneyStat) || meta.statsConfig[0]?.key || 'von'} onValueChange={(v) => updateMeta({ rebirth: { ...(meta.rebirth || {}), moneyStat: v, bonusStat: v } })}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {meta.statsConfig.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} ({s.key})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Thang Niên Đại (mốc vốn đổi niên đại; thu nhập cộng MỘT LẦN khi thăng)</Label>
+            <p className="text-[10px] text-muted-foreground">Mỗi mốc: <b>Nhãn niên đại</b> | <b>mốc vốn</b> | <b>thu nhập thời đại</b>. Niên đại thứ 1 nên có mốc vốn = 0 và thu nhập = 0.</p>
+            <div className="space-y-1.5">
+              {((meta.rebirth && meta.rebirth.eras) || []).map((e, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-5">{idx + 1}.</span>
+                  <Input value={e.label} placeholder="Nhãn niên đại" onChange={(ev) => {
+                    const eras = [...((meta.rebirth && meta.rebirth.eras) || [])];
+                    eras[idx] = { ...eras[idx], label: ev.target.value };
+                    updateMeta({ rebirth: { ...(meta.rebirth || {}), eras } });
+                  }} className="text-xs h-8 flex-1" />
+                  <Input type="number" value={e.at} onChange={(ev) => {
+                    const eras = [...((meta.rebirth && meta.rebirth.eras) || [])];
+                    eras[idx] = { ...eras[idx], at: Number(ev.target.value) };
+                    updateMeta({ rebirth: { ...(meta.rebirth || {}), eras } });
+                  }} className="text-xs h-8 w-20" title="Mốc vốn" />
+                  <Input type="number" value={e.bonus} onChange={(ev) => {
+                    const eras = [...((meta.rebirth && meta.rebirth.eras) || [])];
+                    eras[idx] = { ...eras[idx], bonus: Number(ev.target.value) };
+                    updateMeta({ rebirth: { ...(meta.rebirth || {}), eras } });
+                  }} className="text-xs h-8 w-20" title="Thu nhập thời đại (cộng 1 lần)" />
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => {
+                    const eras = ((meta.rebirth && meta.rebirth.eras) || []).filter((_, i) => i !== idx);
+                    updateMeta({ rebirth: { ...(meta.rebirth || {}), eras } });
+                  }}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updateMeta({ rebirth: { ...(meta.rebirth || {}), eras: [...((meta.rebirth && meta.rebirth.eras) || []), { at: 0, label: 'Niên đại mới', bonus: 0 }] } })}>
+              <Plus size={13} className="mr-1" /> Thêm niên đại
+            </Button>
           </div>
         </div>
       )}

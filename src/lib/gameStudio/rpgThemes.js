@@ -1,6 +1,7 @@
 export const THEMES = {
   'lily-noir': {
     id: 'lily-noir',
+    effect: 'dust',
     name: 'Lily Noir · Ngự Tỷ',
     description: 'Mực đen, rượu vang và champagne — phong cách đặc trưng LilyHub.',
     vars: {
@@ -12,6 +13,7 @@ export const THEMES = {
   },
   'retro-8bit': {
     id: 'retro-8bit',
+    effect: 'stars',
     name: 'Retro 8-bit',
     description: 'Font monospace, viền pixel, nền đen xanh neon',
     vars: {
@@ -28,6 +30,7 @@ export const THEMES = {
   },
   'fantasy-parchment': {
     id: 'fantasy-parchment',
+    effect: 'dust',
     name: 'Fantasy Parchment',
     description: 'Màu giấy da cổ, font serif, viền vàng kim',
     vars: {
@@ -44,6 +47,7 @@ export const THEMES = {
   },
   'cyberpunk-2077': {
     id: 'cyberpunk-2077',
+    effect: 'rain',
     name: 'Cyberpunk 2077',
     description: 'Hiệu ứng glitch, viền neon hồng/cyan, nền tối kim loại',
     vars: {
@@ -60,6 +64,7 @@ export const THEMES = {
   },
   'aaa-dark': {
     id: 'aaa-dark',
+    effect: 'stars',
     name: 'AAA Dark Glass',
     description: 'Obsidian tối, kính mờ, viền neon Cyan/Purple — chuẩn AAA Gaming',
     vars: {
@@ -76,6 +81,7 @@ export const THEMES = {
   },
   'midnight-velvet': {
     id: 'midnight-velvet',
+    effect: 'sparkle',
     name: 'Midnight Velvet',
     description: 'Tím nhung đêm, vàng kim — cho ngôn tình, huyết tộc, gothic',
     vars: {
@@ -92,6 +98,7 @@ export const THEMES = {
   },
   'emerald-myth': {
     id: 'emerald-myth',
+    effect: 'leaves',
     name: 'Emerald Myth',
     description: 'Xanh ngọc rừng sâu, vàng rêu — cho huyền huyễn, tiên hiệp',
     vars: {
@@ -108,6 +115,7 @@ export const THEMES = {
   },
   'crimson-empire': {
     id: 'crimson-empire',
+    effect: 'embers',
     name: 'Crimson Empire',
     description: 'Đỏ máu hoàng triều, đồng đen — cho lịch sử, chiến tranh, dark fantasy',
     vars: {
@@ -124,6 +132,7 @@ export const THEMES = {
   },
   'sakura-dream': {
     id: 'sakura-dream',
+    effect: 'petals',
     name: 'Sakura Dream',
     description: 'Hồng anh đào, trắng ngà — cho ngôn tình, đời thường, nhẹ nhàng',
     vars: {
@@ -140,6 +149,7 @@ export const THEMES = {
   },
   'aurora-gradient': {
     id: 'aurora-gradient',
+    effect: 'stars',
     name: 'Aurora Gradient',
     description: 'Nền chuyển sắc xanh đêm — cực quang, cyberpunk mềm, sci-fi lãng mạn',
     vars: {
@@ -157,6 +167,7 @@ export const THEMES = {
   },
   'royal-amethyst': {
     id: 'royal-amethyst',
+    effect: 'sparkle',
     name: 'Royal Amethyst',
     description: 'Tím hoàng gia, ánh vàng — cho cung đấu, quý tộc, huyền huyễn xa hoa',
     vars: {
@@ -173,6 +184,7 @@ export const THEMES = {
   },
   'jade-forest': {
     id: 'jade-forest',
+    effect: 'leaves',
     name: 'Jade Forest',
     description: 'Xanh ngọc bích trầm, đồng cổ — cho tu tiên rừng sâu, sinh tồn hoang dã',
     vars: {
@@ -189,6 +201,7 @@ export const THEMES = {
   },
   'onyx-mono': {
     id: 'onyx-mono',
+    effect: 'none',
     name: 'Onyx Mono',
     description: 'Đen tuyền tối giản, chữ trắng bạc — cho phong cách lạnh, hiện đại, tối thượng',
     vars: {
@@ -205,6 +218,7 @@ export const THEMES = {
   },
   'moonlight-ivory': {
     id: 'moonlight-ivory',
+    effect: 'dust',
     name: 'Moonlight Ivory',
     description: 'Trắng ngà sáng, vàng và xanh khói — nền sáng thanh lịch cho đời thường, tâm lý',
     vars: {
@@ -221,6 +235,7 @@ export const THEMES = {
   },
   'pastel-blossom': {
     id: 'pastel-blossom',
+    effect: 'petals',
     name: 'Pastel Blossom',
     description: 'Hồng pastel nhẹ nhàng, nền sáng — cho ngôn tình học đường, đời thường dễ thương',
     vars: {
@@ -235,6 +250,202 @@ export const THEMES = {
       '--rpg-font': '"Quicksand", system-ui, sans-serif',
     },
   },
+  'imperial-gold': {
+    id: 'imperial-gold',
+    effect: 'sparkle',
+    name: 'Imperial Gold · Hoàng Gia',
+    description: 'Đen sơn mài + vàng kim + đỏ cánh gián — sang trọng cho cung đấu, quý tộc, lịch sử.',
+    vars: {
+      '--rpg-bg': '#1a0f06',
+      '--rpg-bg-image': 'radial-gradient(1200px 500px at 50% -10%, rgba(212,175,55,0.16), transparent 60%)',
+      '--rpg-panel': '#241407', '--rpg-panel-2': '#301a0a',
+      '--rpg-text': '#f5ead2', '--rpg-muted': '#c2a97e',
+      '--rpg-accent': '#d4af37', '--rpg-accent2': '#8f1d1d',
+      '--rpg-border': '#d4af3755',
+      '--rpg-font': '"Noto Serif", Georgia, serif',
+    },
+  },
+  'wuxia-ink': {
+    id: 'wuxia-ink',
+    effect: 'leaves',
+    name: 'Wuxia Ink · Giang Hồ',
+    description: 'Mực tàu + giấy dã quỳ + ấn son đỏ — võ hiệp, kiếm hiệp, giang hồ.',
+    vars: {
+      '--rpg-bg': '#0e0e10',
+      '--rpg-bg-image': 'radial-gradient(1000px 600px at 20% 0%, rgba(192,57,43,0.08), transparent 55%)',
+      '--rpg-panel': '#1a1a1d', '--rpg-panel-2': '#26262a',
+      '--rpg-text': '#efe9dc', '--rpg-muted': '#a39a8a',
+      '--rpg-accent': '#c0392b', '--rpg-accent2': '#6b6f78',
+      '--rpg-border': '#c0392b55',
+      '--rpg-font': '"Noto Serif", Georgia, serif',
+    },
+  },
+  'ink-noir': {
+    id: 'ink-noir',
+    effect: 'rain',
+    name: 'Ink Noir · Trinh Thám',
+    description: 'Đen khói, giấy cũ, vàng hổ phách — mưu mô, phá án, gián điệp.',
+    vars: {
+      '--rpg-bg': '#0f0f12',
+      '--rpg-bg-image': 'radial-gradient(900px 400px at 80% -10%, rgba(216,160,60,0.08), transparent 60%)',
+      '--rpg-panel': '#18181c', '--rpg-panel-2': '#222228',
+      '--rpg-text': '#ede7da', '--rpg-muted': '#a49a8c',
+      '--rpg-accent': '#d8a03c', '--rpg-accent2': '#b3362b',
+      '--rpg-border': '#d8a03c44',
+      '--rpg-font': '"Courier New", ui-monospace, monospace',
+    },
+  },
+  'ashen-horror': {
+    id: 'ashen-horror',
+    effect: 'fog',
+    name: 'Ashen Horror · Kinh Dị',
+    description: 'Tro tàn, xương trắng, đỏ máu khô — kinh dị, tâm linh, huyền bí.',
+    vars: {
+      '--rpg-bg': '#0a0a0c',
+      '--rpg-bg-image': 'radial-gradient(1000px 700px at 50% 110%, rgba(139,140,130,0.06), transparent 60%)',
+      '--rpg-panel': '#131417', '--rpg-panel-2': '#1c1d21',
+      '--rpg-text': '#d9d4c8', '--rpg-muted': '#8b857a',
+      '--rpg-accent': '#b7c0b4', '--rpg-accent2': '#8e1f1f',
+      '--rpg-border': '#8e1f1f55',
+      '--rpg-font': '"Cormorant Garamond", Georgia, serif',
+    },
+  },
+  'rusted-wasteland': {
+    id: 'rusted-wasteland',
+    effect: 'embers',
+    name: 'Rusted Wasteland · Hậu Tận Thế',
+    description: 'Bụi đất, gỉ sét, ô-liu — sống còn, hậu tận thế, sinh tồn.',
+    vars: {
+      '--rpg-bg': '#14100a',
+      '--rpg-bg-image': 'radial-gradient(1000px 500px at 50% 0%, rgba(217,154,61,0.10), transparent 60%)',
+      '--rpg-panel': '#1e1810', '--rpg-panel-2': '#2a2216',
+      '--rpg-text': '#e6dcc8', '--rpg-muted': '#a3957c',
+      '--rpg-accent': '#d99a3d', '--rpg-accent2': '#7a9b5b',
+      '--rpg-border': '#d99a3d44',
+      '--rpg-font': '"Rajdhani", system-ui, sans-serif',
+    },
+  },
+  'steam-brass': {
+    id: 'steam-brass',
+    effect: 'steam',
+    name: 'Steam Brass · Cơ Khí',
+    description: 'Đồng thau + gỗ cũ + ánh lửa hơi nước — steampunk, cỗ máy, lịch sử cơ khí.',
+    vars: {
+      '--rpg-bg': '#171008',
+      '--rpg-bg-image': 'radial-gradient(1100px 600px at 50% -10%, rgba(201,148,63,0.12), transparent 60%)',
+      '--rpg-panel': '#201709', '--rpg-panel-2': '#2c1f0e',
+      '--rpg-text': '#eee2c8', '--rpg-muted': '#b09a76',
+      '--rpg-accent': '#c9943f', '--rpg-accent2': '#5d7b6e',
+      '--rpg-border': '#c9943f44',
+      '--rpg-font': '"Rajdhani", system-ui, sans-serif',
+    },
+  },
+  'neon-rain': {
+    id: 'neon-rain',
+    effect: 'rain',
+    name: 'Neon Rain · Tương Lai Đêm',
+    description: 'Mưa neon hồng/cyan trên nền đêm kim loại — cyberpunk, hacker, tương lai.',
+    vars: {
+      '--rpg-bg': '#0b0e1a',
+      '--rpg-bg-image': 'repeating-linear-gradient(180deg, rgba(0,0,0,0.22) 0 1px, transparent 1px 4px), radial-gradient(1000px 500px at 80% -10%, rgba(244,114,182,0.10), transparent 60%)',
+      '--rpg-panel': '#131a2c', '--rpg-panel-2': '#1c2540',
+      '--rpg-text': '#eef2ff', '--rpg-muted': '#93a0c4',
+      '--rpg-accent': '#22d3ee', '--rpg-accent2': '#f472b6',
+      '--rpg-border': '#22d3ee44',
+      '--rpg-font': '"Rajdhani", system-ui, sans-serif',
+    },
+  },
+  'stellar-deep': {
+    id: 'stellar-deep',
+    effect: 'stars',
+    name: 'Stellar Deep · Vũ Trụ',
+    description: 'Bầu trời đêm đầy sao, xanh đen thẳm — khoa học viễn tưởng, không gian, tương lai.',
+    vars: {
+      '--rpg-bg': '#05060f',
+      '--rpg-bg-image': 'radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.5) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 70% 15%, rgba(255,255,255,0.4) 50%, transparent 51%), radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.35) 50%, transparent 51%), radial-gradient(2px 2px at 85% 60%, rgba(255,255,255,0.3) 50%, transparent 51%), linear-gradient(170deg, #05060f 0%, #0a1026 60%, #0e1630 100%)',
+      '--rpg-panel': '#0c1020', '--rpg-panel-2': '#141a30',
+      '--rpg-text': '#e8edff', '--rpg-muted': '#8d97bd',
+      '--rpg-accent': '#67e8f9', '--rpg-accent2': '#a78bfa',
+      '--rpg-border': '#67e8f944',
+      '--rpg-font': 'Inter, system-ui, sans-serif',
+    },
+  },
+  'frostborne': {
+    id: 'frostborne',
+    effect: 'snow',
+    name: 'Frostborne · Băng Giá',
+    description: 'Băng tuyết xanh ngọc, khí lạnh Bắc Âu — fantasy lạnh, nordic, pháp sư băng.',
+    vars: {
+      '--rpg-bg': '#0b1418',
+      '--rpg-bg-image': 'radial-gradient(1100px 600px at 50% -10%, rgba(125,211,252,0.10), transparent 60%)',
+      '--rpg-panel': '#122027', '--rpg-panel-2': '#1a2e37',
+      '--rpg-text': '#eaf6fa', '--rpg-muted': '#8fb3c0',
+      '--rpg-accent': '#7dd3fc', '--rpg-accent2': '#d6f0f5',
+      '--rpg-border': '#7dd3fc44',
+      '--rpg-font': '"Lora", Georgia, serif',
+    },
+  },
+  'rosewood-belle': {
+    id: 'rosewood-belle',
+    effect: 'petals',
+    name: 'Rosewood Belle · Ngôn Tình',
+    description: 'Gỗ hồng mộc + hồng vàng hồng nhu + kem — lãng mạn, ngôn tình, xa xỉ.',
+    vars: {
+      '--rpg-bg': '#1d0f14',
+      '--rpg-bg-image': 'radial-gradient(1000px 550px at 85% -10%, rgba(232,160,176,0.12), transparent 60%)',
+      '--rpg-panel': '#28151c', '--rpg-panel-2': '#351d27',
+      '--rpg-text': '#f7e8ec', '--rpg-muted': '#c2a1ab',
+      '--rpg-accent': '#e8a0b0', '--rpg-accent2': '#d4af37',
+      '--rpg-border': '#e8a0b044',
+      '--rpg-font': '"Cormorant Garamond", Georgia, serif',
+    },
+  },
+  'bloodmoon-gothic': {
+    id: 'bloodmoon-gothic',
+    effect: 'embers',
+    name: 'Bloodmoon Gothic · Huyết Tộc',
+    description: 'Đen tuyền + đỏ máu + nến vàng — gothic, huyết tộc, dark fantasy.',
+    vars: {
+      '--rpg-bg': '#0d0709',
+      '--rpg-bg-image': 'radial-gradient(900px 500px at 50% -10%, rgba(201,24,42,0.10), transparent 60%)',
+      '--rpg-panel': '#180c10', '--rpg-panel-2': '#231218',
+      '--rpg-text': '#f0e3e6', '--rpg-muted': '#b3909a',
+      '--rpg-accent': '#c9182a', '--rpg-accent2': '#cfa63c',
+      '--rpg-border': '#c9182a55',
+      '--rpg-font': '"Playfair Display", Georgia, serif',
+    },
+  },
+  'cloud-nine': {
+    id: 'cloud-nine',
+    effect: 'petals',
+    name: 'Cloud Nine · Đời Thường',
+    description: 'Trời xanh dịu, mây trắng, hồng phớt — đời thường, học đường, nhẹ nhàng.',
+    vars: {
+      '--rpg-bg': '#eef4f8',
+      '--rpg-bg-image': 'radial-gradient(1200px 600px at 20% -10%, rgba(255,255,255,0.9), transparent 60%), linear-gradient(180deg, #e8f1f7 0%, #eef4f8 60%)',
+      '--rpg-panel': '#ffffff', '--rpg-panel-2': '#f3f7fb',
+      '--rpg-text': '#2e3a47', '--rpg-muted': '#7e8c9c',
+      '--rpg-accent': '#5aa7d4', '--rpg-accent2': '#f4a9b8',
+      '--rpg-border': '#5aa7d444',
+      '--rpg-font': '"Quicksand", system-ui, sans-serif',
+    },
+  },
+};
+
+// Hiệu ứng nền theo theme — CSS thuần (không tải ảnh), mỗi theme có 1 hiệu ứng
+// động riêng (rpg-effect-<id>). Chỉ cần render 1 div lớp phủ là engine tự chạy.
+export const THEME_EFFECTS = {
+  none: { label: 'Không hiệu ứng' },
+  petals: { label: 'Cánh hoa rơi' },
+  snow: { label: 'Tuyết rơi' },
+  embers: { label: 'Tàn lửa bay' },
+  rain: { label: 'Mưa rơi' },
+  stars: { label: 'Sao lấp lánh' },
+  sparkle: { label: 'Ánh vàng bay' },
+  fog: { label: 'Sương mù trôi' },
+  leaves: { label: 'Lá rơi' },
+  steam: { label: 'Hơi nước bốc' },
+  dust: { label: 'Bụi nhẹ bay' },
 };
 
 // ===== Xưởng Theme — bộ tuỳ chọn để tự dựng theme (font/hình dạng/nền) =====
@@ -283,6 +494,7 @@ export function defaultCustomTheme() {
     buttonShape: 'soft',
     panelShape: 'panel',
     bgPattern: 'glow',
+    effect: 'none',
   };
 }
 
@@ -327,13 +539,16 @@ export const GAME_PRESENTATIONS = {
   dialogue: { id: 'dialogue', name: 'Visual Novel · Trò chuyện NPC', icon: '❝', description: 'Chân dung nhân vật nổi bật, khung thoại thân mật — hợp bách hợp và tâm lý.', theme: 'lily-noir', archetype: 'isekai' },
   transmigration: { id: 'transmigration', name: 'Xuyên sách · Sửa kịch bản', icon: '蝶', description: 'Trang sách, cờ cốt truyện và hảo cảm — dành cho xuyên không/xuyên sách.', theme: 'sakura-dream', archetype: 'isekai' },
   system: { id: 'system', name: 'Hệ thống · Trọng sinh', icon: '◇', description: 'HUD nhiệm vụ, cấp bậc và thông báo hệ thống — hợp LitRPG/trọng sinh.', theme: 'aaa-dark', archetype: 'litrpg' },
-  detective: { id: 'detective', name: 'Hồ sơ · Phá án', icon: '⌕', description: 'Bàn điều tra, chứng cứ và tâm trí — hợp trinh thám, kinh dị, bí ẩn.', theme: 'crimson-empire', archetype: 'mystery' },
+  detective: { id: 'detective', name: 'Hồ sơ · Phá án', icon: '⌕', description: 'Bàn điều tra, chứng cứ và tâm trí — hợp trinh thám, kinh dị, bí ẩn.', theme: 'ink-noir', archetype: 'mystery' },
+  palace: { id: 'palace', name: 'Cung Đấu · Hậu Cung', icon: '皇', description: 'Cấp bậc tần phi theo Sủng Ái, bảng Chỉ Dụ và phe phái hậu cung — hợp cung đấu, quý tộc.', theme: 'imperial-gold', archetype: 'palace' },
+  rebirth: { id: 'rebirth', name: 'Trọng Sinh · Làm Giàu', icon: '金', description: 'Niên đại làm giàu theo Vốn, bảng Cơ Hội và đế chế tài chính — hợp trọng sinh, doanh nhân.', theme: 'steam-brass', archetype: 'rebirth' },
 };
 
 export const PRESENTATION_ART = {
-  adventure: '/hero-adventure.png', dialogue: '/lilyhub-muse.png',
-  transmigration: '/hero-transmigration.png', system: '/hero-system.png',
-  detective: '/hero-detective.png',
+  adventure: '/hero-adventure.jpg', dialogue: '/lilyhub-muse.jpg',
+  transmigration: '/hero-transmigration.jpg', system: '/hero-system.jpg',
+  detective: '/hero-detective.jpg', palace: '/hero-transmigration.jpg',
+  rebirth: '/hero-system.jpg',
 };
 
 export const ARCHETYPES = {
@@ -369,6 +584,13 @@ export const ARCHETYPES = {
     description: 'Màn hình chọn "Bạn muốn theo đuổi ai?" ngay đầu game — sau khi chọn, chỉ tuyến truyện của người đó tiếp diễn. Thiện/ác cảm quyết định tỏ tình thành hay bại.',
     stats: [],
   },
+  palace: {
+    id: 'palace',
+    name: 'Cung Đấu (Hậu Cung)',
+    description: 'Cấp bậc tần phi tự tính từ Sủng Ái, bảng "Chỉ Dụ" hoàng cung, hảo cảm phe phái và mưu kế bằng cờ/vật phẩm.',
+    stats: [],
+    config: { ranks: ['Thường Tại', 'Quý Nhân', 'Tần', 'Quý Tần', 'Phi', 'Quý Phi', 'Hoàng Quý Phi', 'Hoàng Hậu'], stepFavor: 15 },
+  },
 };
 
 export const CHOICE_LABELS = {
@@ -388,6 +610,11 @@ export const STAT_STYLES = {
   stamina: { color: '#9a5b2e', icon: 'flame' },
   exp: { color: '#5c7a3a', icon: 'sparkles' },
   pastKnowledge: { color: '#4a6a8a', icon: 'book' },
+  sung_ai: { color: '#d1a054', icon: 'star' },
+  favor: { color: '#d1a054', icon: 'star' },
+  the_luc: { color: '#6b4d8f', icon: 'crown' },
+  than_the: { color: '#8a6f3f', icon: 'star' },
+  canh_giac: { color: '#9a5b2e', icon: 'flame' },
 };
 export function statStyle(key) {
   return STAT_STYLES[key] || { color: '#94a3b8', icon: 'circle' };

@@ -161,7 +161,7 @@ const RE_EFF_REQ_ITEM = /^Cần vật phẩm:\s*(.+)$/i;
 const RE_EFF_GOTO = /^Đến\s+cảnh\s+(\S+)$/i;
 const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 const RE_EFF_GOTO_BARE = /^Đến\s+(?!cảnh\b)(\S+)$/i;
-const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
+const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥|<=|≤)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
 const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
 const RE_INITIAL_ITEM = /^(.+?)\s*=\s*(-?\d+)$/;
@@ -265,7 +265,12 @@ export function parseNpcScript(scriptText, baseMeta = {}) {
     if ((m = raw.match(RE_EFF_GOTO_BARE))) { target.__explicitTarget = "npc_" + currentNpc.slug + "_ending_" + slugifyNpc(m[1]); return; }
     if ((m = raw.match(RE_EFF_REQ_STAT))) {
       const key = registerStat(m[1]);
-      target.statRequirements[key] = Number(m[3]);
+      if (m[2] === "<=" || m[2] === "≤") {
+        if (!target.statRequirementsMax) target.statRequirementsMax = {};
+        target.statRequirementsMax[key] = Number(m[3]);
+      } else {
+        target.statRequirements[key] = Number(m[3]);
+      }
       return;
     }
     if ((m = raw.match(RE_EFF_STAT))) {

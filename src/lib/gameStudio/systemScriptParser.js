@@ -157,7 +157,7 @@ const RE_EFF_ENDING = /^(?:Đến\s+)?kết\s+thúc\s+(\S+)$/i;
 // kết thúc — miễn KHÔNG PHẢI dạng "Đến cảnh N" (đã xử lý riêng ở trên). Nhiều
 // người quen tay gõ giống "Đến cảnh N" nên hay quên chữ "kết thúc".
 const RE_EFF_GOTO_BARE = /^Đến\s+(?!cảnh\b)(\S+)$/i;
-const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥)\s*(-?\d+)$/i;
+const RE_EFF_REQ_STAT = /^Cần\s+(.+?)\s*(>=|≥|<=|≤)\s*(-?\d+)$/i;
 const RE_EFF_STAT = /^(.+?)\s*([+-]\d+)\s*$/;
 const RE_EFF_SYSPOPUP = /^Hệ thống\s*:\s*(.+)$/i;
 const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
@@ -300,7 +300,12 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
     if ((m = raw.match(RE_EFF_GOTO_BARE))) { target.__explicitTarget = "ending_" + slugifySystem(m[1]); return; }
     if ((m = raw.match(RE_EFF_REQ_STAT))) {
       const key = registerStat(m[1]);
-      target.statRequirements[key] = Number(m[3]);
+      if (m[2] === "<=" || m[2] === "≤") {
+        if (!target.statRequirementsMax) target.statRequirementsMax = {};
+        target.statRequirementsMax[key] = Number(m[3]);
+      } else {
+        target.statRequirements[key] = Number(m[3]);
+      }
       return;
     }
     if ((m = raw.match(RE_EFF_STAT))) {
