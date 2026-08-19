@@ -294,7 +294,26 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
     }
   }
 
-  return { nodes: nodesMap, warnings: warnings.concat(analyzeLogic(nodesMap, statsConfig)).concat(simulatePlaytest(nodesMap, statsConfig)).concat(detectTrappedCycles(nodesMap)) };
+  return { nodes: nodesMap, warnings: warnings.concat(analyzeLogic(nodesMap, statsConfig)).concat(simulatePlaytest(nodesMap, statsConfig)).concat(detectTrappedCycles(nodesMap)).concat(checkDeadOnArrival(statsConfig)) };
+}
+
+/**
+ * Chỉ số sinh tử đã ≤ ngưỡng chết NGAY TỪ GIÁ TRỊ KHỞI ĐẦU (thường do quên khai
+ * "Chỉ số khởi đầu" nên mặc định = 0, hoặc khai ngưỡng chết cao hơn giá trị
+ * khởi đầu) → người chơi Game Over ngay khi vừa mở game, chưa kịp làm gì.
+ * simulatePlaytest() không bắt được lỗi này vì nó coi start_node luôn "sống".
+ */
+function checkDeadOnArrival(statsConfig) {
+  const warnings = [];
+  for (const sc of (statsConfig || [])) {
+    if (!sc.isVital) continue;
+    const start = typeof sc.default === "number" ? sc.default : 0;
+    const threshold = sc.deathThreshold || 0;
+    if (start <= threshold) {
+      warnings.push(`Chỉ số sinh tử "${sc.label || sc.key}" có giá trị khởi đầu là ${start}, đã ≤ ngưỡng chết (${threshold}) — game sẽ Game Over NGAY khi vừa mở, người chơi chưa kịp làm gì. Kiểm tra lại "Chỉ số khởi đầu" của "${sc.label || sc.key}" trong kịch bản (hoặc mục Cấu hình chung), phải để cao hơn ${threshold}.`);
+    }
+  }
+  return warnings;
 }
 
 /**

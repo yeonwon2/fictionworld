@@ -3,7 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Wand2, Loader2, AlertTriangle, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Copy, ClipboardList } from "lucide-react";
+import { Bot, FileText, Wand2, Loader2, AlertTriangle, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Copy, ClipboardList } from "lucide-react";
 import { parseScript } from "@/lib/gameStudio/scriptParser";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateScriptFromPrompt } from "@/lib/gameStudio/scriptWriter";

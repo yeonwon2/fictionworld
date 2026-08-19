@@ -140,7 +140,7 @@ const RE_META_INITIAL = /^Chỉ số khởi đầu\s*:\s*(.+)$/i;
 const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_META_RANKS = /^Cấp bậc hậu cung\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)(?:(?:\s*[—:.]|\s+-)\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -411,7 +411,7 @@ export function parsePalaceScript(scriptText, baseMeta = {}) {
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_GAMEOVER))) {
-      const parts = m[1].split("|");
+      const parts = stripMetaNote(m[1]).split("|");
       gameOverTitle = (parts[0] || "").trim();
       gameOverText = (parts[1] || "").trim();
       continue;
@@ -469,7 +469,7 @@ export function parsePalaceScript(scriptText, baseMeta = {}) {
         endTitle = endTitle.slice(0, strayType.index).trim();
         warnings.push(`Dòng ${lineNo}: loại kết thúc "[${strayType[1]}]" không hợp lệ — chỉ nhận TRUE_END/GOOD_END/NORMAL_END/BAD_END, đã tự chuyển thành NORMAL_END.`);
       }
-      const node = { id, speaker: endTitle, text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
+      const node = { id, speaker: endTitle, text: "", bgImage: "", isEnding: true, endingType: (m[3] || "NORMAL_END").toUpperCase(), choices: [] };
       nodesMap[id] = node;
       currentNode = node;
       currentChoice = null;
@@ -587,7 +587,7 @@ export function parsePalaceScript(scriptText, baseMeta = {}) {
     gameOverTitle: gameOverTitle || baseMeta.gameOverTitle || "",
     gameOverText: gameOverText || baseMeta.gameOverText || "",
     palace: {
-      ranks: ranksDeclared.length ? ranksDeclared : DEFAULT_PALACE_RANKS,
+      ranks: ranksDeclared.length ? ranksDeclared : (baseMeta.palace?.ranks?.length ? baseMeta.palace.ranks : DEFAULT_PALACE_RANKS),
       favorStat: favorKey,
       favorLabel,
       deathThreshold: favorDeathThreshold,

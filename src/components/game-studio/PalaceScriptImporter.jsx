@@ -161,7 +161,7 @@ Ghi chú:
 - Mỗi cảnh nên có 2-4 lựa chọn. Không ghi "→ Đến cảnh N"/"→ Kết thúc <nhãn>" thì tự sang CẢNH kế tiếp.
 - "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều kiện. Muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn khoá "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
 - "→ Chỉ dụ: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng CẢNH thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG lựa chọn thì bật NGAY SAU KHI chọn.
-- Cấp bậc tần phi tự tính từ Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp).
+- Cấp bậc tần phi tự tính từ Sủng Ái (mỗi 15 điểm trên Sủng Ái khởi đầu thăng 1 cấp).
 - Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END / BAD_END.
 - "→ Đến cảnh N"/"→ Kết thúc <nhãn>" CHỈ trỏ tới cảnh/kết thúc CÓ THẬT trong kịch bản.`;
 
@@ -174,7 +174,7 @@ const CHEAT_SHEET_NOTES = `CÁCH DÙNG:
 - "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa
   chọn nếu chưa đủ điều kiện — chính là chỗ lựa chọn trước quyết định lựa chọn sau.
 - "→ Chỉ dụ: TIÊU ĐỀ | Nội dung" bật bảng thông báo hoàng cung. Cấp bậc tần phi
-  tự tính từ Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp).`;
+  tự tính từ Sủng Ái (mỗi 15 điểm trên Sủng Ái khởi đầu thăng 1 cấp).`;
 
 
 export default function PalaceScriptImporter({ gameData, setGameData, onGenerated }) {

@@ -1,11 +1,12 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
 import Characters from '@/pages/Characters';
@@ -26,6 +27,7 @@ import ResetPassword from '@/pages/ResetPassword';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth } = useAuth();
+  const { pathname } = useLocation();
 
   if (isLoadingAuth) {
     return (
@@ -35,8 +37,10 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Render the main app
+  // Bọc trong ErrorBoundary — key theo pathname để tự reset khi chuyển
+  // trang, tránh lỗi ở 1 trang làm trắng luôn cả app cho đến khi F5.
   return (
+    <ErrorBoundary key={pathname}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -59,6 +63,7 @@ const AuthenticatedApp = () => {
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </ErrorBoundary>
   );
 };
 

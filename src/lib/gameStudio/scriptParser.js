@@ -122,11 +122,26 @@ function stripMarkers(line) {
   return line.replace(/^#{1,6}\s*/, "").replace(/^\*{1,3}\s*/, "").replace(/\*{1,3}\s*$/, "").trim();
 }
 
+// Bỏ chú thích "(...)" ở CUỐI dòng cấu hình — kịch bản mẫu hay viết chú thích
+// hướng dẫn sau giá trị thật (vd "Thông báo thua cuộc: A | B (tuỳ chọn ...)").
+// Không chạm nhóm "(+N)"/"(<số>)" toàn số — đó là dữ liệu thật.
+function stripMetaNote(s) {
+  let t = String(s || "").trim();
+  for (;;) {
+    const numericTail = t.match(/\(\s*[+-]?\d+\s*\)\s*$/);
+    if (numericTail) break;
+    const next = t.replace(/\s*\([^)]*\)?\s*$/, "").trim();
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
 const RE_META_GENRE = /^Thể loại\s*:\s*(.+)$/i;
 const RE_META_AUTHOR = /^Tác giả\s*:\s*(.+)$/i;
 const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)(?:(?:\s*[—:.]|\s+-)\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -258,7 +273,7 @@ export function parseScript(scriptText, baseMeta = {}) {
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_GAMEOVER))) {
-      const parts = m[1].split("|");
+      const parts = stripMetaNote(m[1]).split("|");
       gameOverTitle = (parts[0] || "").trim();
       gameOverText = (parts[1] || "").trim();
       continue;
@@ -293,7 +308,7 @@ export function parseScript(scriptText, baseMeta = {}) {
         title = title.slice(0, strayType.index).trim();
         warnings.push(`Dòng ${lineNo}: loại kết thúc "[${strayType[1]}]" không hợp lệ — chỉ nhận TRUE_END/GOOD_END/NORMAL_END/BAD_END, đã tự chuyển thành NORMAL_END.`);
       }
-      const node = { id, speaker: title, text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
+      const node = { id, speaker: title, text: "", bgImage: "", isEnding: true, endingType: (m[3] || "NORMAL_END").toUpperCase(), choices: [] };
       nodesMap[id] = node;
       currentNode = node;
       currentChoice = null;

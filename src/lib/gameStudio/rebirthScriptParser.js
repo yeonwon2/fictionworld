@@ -128,7 +128,7 @@ const RE_META_GAMEOVER = /^Thông báo thua cuộc\s*:\s*(.+)$/i;
 const RE_META_ERAS = /^Thang thời đại\s*:\s*(.+)$/i;
 const RE_ERA_ITEM = /^(.+?)\s*=\s*(-?\d+)\s*(?:\(?\+?(\d+)\)?)?\s*$/;
 const RE_INTRO = /^GIỚI THIỆU\s*$/i;
-const RE_SCENE = /^CẢNH\s+(\S+?)\s*(?:[—\-:.]\s*(.+))?$/i;
+const RE_SCENE = /^CẢNH\s+(\S+?)(?:(?:\s*[—:.]|\s+-)\s*(.+))?$/i;
 const RE_ENDING = /^KẾT THÚC\s+(\S+)\s*(?:[—\-:.]\s*(.+?))?\s*(?:\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/i;
 const RE_CHOICE = /^([A-ZĐ])\s*[—\-:.)]\s*(.+?)\s*\**\s*$/;
 const RE_EFFECT = /^(?:→|->|=>)\s*(.+)$/;
@@ -247,15 +247,23 @@ function pushParagraph(node, line) {
  * tiền". Chỉ là hàm thuần, KHÔNG tự cộng tiền: việc cộng bonus do engine
  * (GamePlayer/rpgExport) làm đúng MỘT LẦN mỗi mốc, thông qua state eraReached.
  */
+// Sắp xếp TĂNG DẦN theo "at" trước khi dùng — 3 hàm dưới đây cùng gọi qua đây
+// nên luôn đồng nhất 1 cách đánh index, kể cả khi rebirth.eras lưu trong
+// gameData bị lệch thứ tự (vd chỉnh tay qua UI mà chưa Sản Xuất Game lại).
+function sortedEras(rebirth) {
+  const eras = (rebirth?.eras?.length ? rebirth.eras : DEFAULT_ERAS);
+  return [...eras].sort((a, b) => (a.at || 0) - (b.at || 0));
+}
+
 export function rebirthEraIndex(money, rebirth) {
-  const eras = (rebirth?.eras) || DEFAULT_ERAS;
+  const eras = sortedEras(rebirth);
   let idx = 0;
   for (let i = 0; i < eras.length; i++) if (money >= (eras[i].at || 0)) idx = i;
   return idx;
 }
 
 export function rebirthEraProgress(money, rebirth, eraIdx) {
-  const eras = (rebirth?.eras) || DEFAULT_ERAS;
+  const eras = sortedEras(rebirth);
   const cur = eras[eraIdx] || eras[0] || { at: 0 };
   const next = eras[eraIdx + 1];
   if (!next) return 100;
@@ -267,7 +275,7 @@ export function rebirthEraProgress(money, rebirth, eraIdx) {
 // Tổng thu nhập của các mốc (reachedIdx, eraIdx] chưa được nhận — engine gọi
 // để cộng MỘT LẦN khi niên đại thăng hạng rồi cập nhật reachedIdx.
 export function rebirthUnclaimedBonus(eraIdx, reachedIdx, rebirth) {
-  const eras = (rebirth?.eras) || DEFAULT_ERAS;
+  const eras = sortedEras(rebirth);
   let bonus = 0;
   const start = Math.min(eraIdx, Math.max(0, reachedIdx + 1));
   for (let i = start; i <= eraIdx && i < eras.length; i++) bonus += (eras[i].bonus || 0);
@@ -402,7 +410,7 @@ export function parseRebirthScript(scriptText, baseMeta = {}) {
     if ((m = norm.match(RE_META_GENRE))) { genre = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_AUTHOR))) { author = m[1].trim(); continue; }
     if ((m = norm.match(RE_META_GAMEOVER))) {
-      const parts = m[1].split("|");
+      const parts = stripMetaNote(m[1]).split("|");
       gameOverTitle = (parts[0] || "").trim();
       gameOverText = (parts[1] || "").trim();
       continue;
@@ -468,7 +476,7 @@ export function parseRebirthScript(scriptText, baseMeta = {}) {
         endTitle = endTitle.slice(0, strayType.index).trim();
         warnings.push(`Dòng ${lineNo}: loại kết thúc "[${strayType[1]}]" không hợp lệ — chỉ nhận TRUE_END/GOOD_END/NORMAL_END/BAD_END, đã tự chuyển thành NORMAL_END.`);
       }
-      const node = { id, speaker: endTitle, text: "", bgImage: "", isEnding: true, endingType: m[3] || "NORMAL_END", choices: [] };
+      const node = { id, speaker: endTitle, text: "", bgImage: "", isEnding: true, endingType: (m[3] || "NORMAL_END").toUpperCase(), choices: [] };
       nodesMap[id] = node;
       currentNode = node;
       currentChoice = null;
@@ -567,7 +575,11 @@ export function parseRebirthScript(scriptText, baseMeta = {}) {
       `Chưa khai "Chỉ số sinh tử" — niên đại làm giàu được tính từ "Vốn", nên khai "**Chỉ số sinh tử:** Vốn < 5" (kèm "**Chỉ số khởi đầu:** Vốn = 50") để có ngưỡng phá sản và thang niên đại chuẩn. Đã tạm lấy "${moneyLabel}" làm thang Vốn.`
     );
   }
-  const eras = erasDeclared.length ? erasDeclared : DEFAULT_ERAS;
+  // rebirthEraIndex() giả định eras đã sắp xếp TĂNG DẦN theo "at" — sắp xếp
+  // lại ở đây (nguồn duy nhất tạo ra mảng eras) để không lệ thuộc người viết
+  // kịch bản/chỉnh sửa UI phải tự giữ đúng thứ tự.
+  const eras = [...(erasDeclared.length ? erasDeclared : (baseMeta.rebirth?.eras?.length ? baseMeta.rebirth.eras : DEFAULT_ERAS))]
+    .sort((a, b) => (a.at || 0) - (b.at || 0));
   const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false, statsConfig });
   const nodes = repaired.nodes;
   warnings.push(...repaired.warnings);

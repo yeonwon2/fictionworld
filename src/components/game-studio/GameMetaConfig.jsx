@@ -12,7 +12,9 @@ import { listThemes } from '@/lib/worldcrud';
 const BUILTIN_PREFIX = '__builtin__:';
 
 export default function GameMetaConfig({ gameData, setGameData }) {
-  const { meta } = gameData;
+  // statsConfig có thể thiếu ở game cũ/dữ liệu bất thường — luôn ép về mảng
+  // để .map/.filter bên dưới không làm sập cả trang (trắng màn hình).
+  const meta = { ...gameData.meta, statsConfig: gameData.meta.statsConfig || [] };
   const [customThemes, setCustomThemes] = useState([]);
   useEffect(() => { listThemes().then(setCustomThemes).catch(() => {}); }, []);
 
@@ -211,12 +213,13 @@ export default function GameMetaConfig({ gameData, setGameData }) {
           <Label className="text-xs font-semibold text-amber-600">⚙️ Cấu hình Cung Đấu (Hậu Cung)</Label>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Chỉ số dùng làm "Sủng Ái" (quyết định cấp bậc tần phi)</Label>
-            <Select value={(meta.palace && meta.palace.favorStat) || meta.statsConfig[0]?.key || 'sung_ai'} onValueChange={(v) => updateMeta({ palace: { ...(meta.palace || {}), favorStat: v } })}>
+            <Select value={(meta.palace && meta.palace.favorStat) || meta.statsConfig[0]?.key || 'sung_ai'} disabled>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {meta.statsConfig.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} ({s.key})</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-[10px] text-muted-foreground">Chỉ hiển thị — chỉ số Sủng Ái luôn LẤY THEO "Chỉ số sinh tử" khai trong kịch bản (để đảm bảo thất sủng dẫn tới đúng ngưỡng chết), đổi ở đây không có tác dụng. Muốn đổi, sửa dòng "Chỉ số sinh tử" trong kịch bản rồi Sản Xuất Game lại.</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Điểm Sủng Ái mỗi cấp (thăng chức sau từng ấy điểm trên ngưỡng sống)</Label>
@@ -269,12 +272,13 @@ export default function GameMetaConfig({ gameData, setGameData }) {
           <Label className="text-xs font-semibold text-emerald-600">⚙️ Cấu hình Trọng Sinh Làm Giàu</Label>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Chỉ số dùng làm "Vốn" (quyết định niên đại làm giàu)</Label>
-            <Select value={(meta.rebirth && meta.rebirth.moneyStat) || meta.statsConfig[0]?.key || 'von'} onValueChange={(v) => updateMeta({ rebirth: { ...(meta.rebirth || {}), moneyStat: v, bonusStat: v } })}>
+            <Select value={(meta.rebirth && meta.rebirth.moneyStat) || meta.statsConfig[0]?.key || 'von'} disabled>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {meta.statsConfig.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} ({s.key})</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-[10px] text-muted-foreground">Chỉ hiển thị — chỉ số Vốn luôn LẤY THEO "Chỉ số sinh tử" khai trong kịch bản (để đảm bảo phá sản dẫn tới đúng ngưỡng chết), đổi ở đây không có tác dụng. Muốn đổi, sửa dòng "Chỉ số sinh tử" trong kịch bản rồi Sản Xuất Game lại.</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-[11px]">Thang Niên Đại (mốc vốn đổi niên đại; thu nhập cộng MỘT LẦN khi thăng)</Label>

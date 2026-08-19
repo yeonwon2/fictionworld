@@ -103,7 +103,7 @@ const ENGINE_JS = [
   '  function palaceProgress(){ var f=state.stats[palace.favorStat]||0; var base=palaceBase(); var step=palace.stepFavor||15; var ri=palaceRankIdx(); var into=f-base-ri*step; return Math.max(0, Math.min(100, (into/step)*100)); }',
   '  var rebirth = meta.rebirth || { moneyStat:"", moneyLabel:"Vốn", deathThreshold:0, eras:[], bonusStat:"" };',
   '  var DFLT_ERAS=[{at:0,label:"1995 · Vốn mồ hôi",bonus:0},{at:60,label:"1999 · Cổ phiếu vàng",bonus:5},{at:200,label:"2003 · Đất vàng",bonus:10},{at:600,label:"2007 · Đế chế",bonus:20},{at:1500,label:"2011 · Huyền thoại",bonus:35}];',
-  '  function rebirthEras(){ return (rebirth.eras && rebirth.eras.length) ? rebirth.eras : DFLT_ERAS; }',
+  '  function rebirthEras(){ var eras=(rebirth.eras && rebirth.eras.length) ? rebirth.eras : DFLT_ERAS; return eras.slice().sort(function(a,b){ return (a.at||0)-(b.at||0); }); }',
   '  function rebirthEraIdx(){ var eras=rebirthEras(); var m=state.stats[rebirth.moneyStat]||0; var idx=0; for(var i=0;i<eras.length;i++){ if(m>=(eras[i].at||0)) idx=i; } return Math.max(idx, state.eraReached||0); }',
   '  function rebirthEraProgress(){ var eras=rebirthEras(); var m=state.stats[rebirth.moneyStat]||0; var idx=rebirthEraIdx(); var cur=eras[idx]||eras[0]||{at:0}; var next=eras[idx+1]; if(!next) return 100; var span=next.at-cur.at; if(span<=0) return 100; return Math.max(0, Math.min(100, ((m-cur.at)/span)*100)); }',
   '  function initialEraReached(){ if(archetype!=="rebirth") return 0; var eras=rebirthEras(); var m=(meta.initialStats||{})[rebirth.moneyStat]||0; var idx=0; for(var i=0;i<eras.length;i++){ if(m>=(eras[i].at||0)) idx=i; } return idx; }',

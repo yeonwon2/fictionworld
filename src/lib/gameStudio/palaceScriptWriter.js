@@ -14,7 +14,7 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 (NÊN là "Sủng Ái < 10" — chỉ số này tụt bằng/dưới ngưỡng là bị phế truất/Game Over. Khai nhiều cách nhau dấu phẩy, nhưng "Sủng Ái" phải là chỉ số ĐẦU TIÊN vì cấp bậc tần phi được tính từ nó.)
 **Chỉ số khởi đầu:** Sủng Ái = <giá trị CAO HƠN ngưỡng chết, vd 30> (khai nhiều cách nhau dấu phẩy, vd "Sủng Ái = 30, Thế Lực = 5". QUAN TRỌNG: chỉ số nào không khai "Chỉ số khởi đầu" sẽ bắt đầu ở 0 — nếu 0 đã thấp hơn/bằng ngưỡng chết thì nhân vật bị coi là chết NGAY KHI VỪA VÀO GAME.)
 **Thông báo thua cuộc:** <tiêu đề> | <nội dung> (tuỳ chọn — chữ hiện khi bị phế truất, thay cho "GAME OVER" mặc định. Vd: "Bị Phế Truất | Thất sủng quá mức, nàng bị đày vào lãnh cung...")
-**Cấp bậc hậu cung:** <tên> / <tên> / <tên> (tuỳ chọn — danh sách cấp bậc tần phi cách nhau dấu "/", từ thấp lên cao. Bỏ qua thì dùng mặc định. Mỗi 15 điểm Sủng Ái trên ngưỡng sống thăng 1 cấp, tự động.)
+**Cấp bậc hậu cung:** <tên> / <tên> / <tên> (tuỳ chọn — danh sách cấp bậc tần phi cách nhau dấu "/", từ thấp lên cao. Bỏ qua thì dùng mặc định. Mỗi 15 điểm Sủng Ái trên mức khởi đầu thăng 1 cấp, tự động.)
 
 ## GIỚI THIỆU
 → Chỉ dụ: <tiêu đề> | <lời chào nhập cung, mời người chơi bắt đầu>
@@ -50,7 +50,7 @@ QUY TẮC:
 - LOGIC: mọi "→ Cần vật phẩm: X" PHẢI có "→ Vật phẩm: X" (hoặc "→ Nhận Vật phẩm: X") cho ra vật phẩm đó ở MỘT CẢNH PHÍA TRƯỚC — đừng yêu cầu vật phẩm chưa từng xuất hiện.
 - LOGIC: mọi "→ Cần cờ: X" PHẢI có "→ Cờ: X" tạo cờ đó ở phía trước; "→ Cần không có cờ: X" chỉ dùng khi cờ X chưa từng được tạo trên mọi nhánh dẫn tới lựa chọn đó.
 - LOGIC: mọi "→ Cần <chỉ số> >= N" phải ĐẠT ĐƯỢC dựa trên "Chỉ số khởi đầu" cộng các lần tăng chỉ số ở các cảnh phía trước — đừng đặt ngưỡng cao hơn mức tối đa có thể đạt.
-- Cấp bậc hậu cung TỰ ĐỘNG tăng/giảm theo Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp). Có sự kiện thăng chức/giáng chức thì nêu rõ trong văn bản hoặc "→ Chỉ dụ:".
+- Cấp bậc hậu cung TỰ ĐỘNG tăng/giảm theo Sủng Ái (mỗi 15 điểm trên mức Sủng Ái khởi đầu thăng 1 cấp). Có sự kiện thăng chức/giáng chức thì nêu rõ trong văn bản hoặc "→ Chỉ dụ:".
 - "→ Hảo cảm <tên nhân vật> +N/-N" là mối quan hệ phe phái (Hoàng hậu, Quý Phi, Thái Hậu...). "→ Cần hảo cảm <tên> >= N" khoá lựa chọn nếu hảo cảm chưa đủ.
 - Dòng "→ Chỉ dụ: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI "## CẢNH N" (trước lựa chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì bật NGAY SAU KHI chọn. Mỗi cảnh/lựa chọn tối đa 1 dòng này. Tiêu đề và nội dung cách nhau bằng dấu " | " (có khoảng trắng 2 bên). Muốn xuống dòng trong nội dung thì gõ "\n" (gạch chéo ngược + n), KHÔNG xuống dòng thật.
 - Mỗi cảnh (trừ kết thúc) PHẢI có 2-4 lựa chọn.
