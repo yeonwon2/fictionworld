@@ -3,9 +3,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ClipboardList, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Lightbulb } from "lucide-react";
+import { Bot, Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ClipboardList, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Lightbulb, Trash2, EyeOff } from "lucide-react";
 import { parseNpcScript } from "@/lib/gameStudio/npcScriptParser";
-import { isSuggestionWarning, categorizeSuggestion, SUGGESTION_CATEGORIES } from "@/lib/gameStudio/postprocess";
+import { isSuggestionWarning, categorizeSuggestion, extractOrphanName, SUGGESTION_CATEGORIES } from "@/lib/gameStudio/postprocess";
+import { removeGrantLines } from "@/lib/gameStudio/scriptTextEdits";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateNpcScriptFromPrompt } from "@/lib/gameStudio/npcScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
@@ -170,6 +171,7 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
   const [cheatSheetCopied, setCheatSheetCopied] = useState(false);
   const [selectedErrors, setSelectedErrors] = useState(new Set());
   const [aiFixPreview, setAiFixPreview] = useState(null);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set());
   const textareaRef = useRef(null);
   const { toast } = useToast();
 
@@ -180,6 +182,20 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
       return next;
     });
   };
+
+  const handleDeleteOrphan = (w) => {
+    const parsed = extractOrphanName(w);
+    if (!parsed) return;
+    const { script: nextScript, removedCount } = removeGrantLines(script, parsed.kind, parsed.name);
+    setScript(nextScript);
+    try {
+      setWarnings(parseNpcScript(nextScript, gameData.meta).warnings || []);
+      setChecked(true);
+    } catch { /* lỗi cú pháp nghiêm trọng — để nút Kiểm Tra báo lại */ }
+    toast({ title: `Đã xoá ${removedCount} dòng cấp "${parsed.name}"`, description: "Đã bỏ khỏi kịch bản." });
+  };
+
+  const dismissSuggestion = (w) => setDismissedSuggestions((prev) => new Set(prev).add(w));
 
   const insertSnippet = (snippet, placeholder) => insertSnippetAtCursor({ textareaRef, script, setScript, snippet, placeholder });
 
@@ -391,7 +407,7 @@ const handleProduce = () => {
   };
 
   const blockingWarnings = warnings.filter((w) => !isSuggestionWarning(w));
-  const suggestionWarnings = warnings.filter(isSuggestionWarning);
+  const suggestionWarnings = warnings.filter((w) => isSuggestionWarning(w) && !dismissedSuggestions.has(w));
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-pink-500/20">
@@ -607,17 +623,30 @@ const handleProduce = () => {
                 <summary className="cursor-pointer select-none px-2 py-1.5 font-medium">{items.length} {meta.label}</summary>
                 <div className="px-2 pb-2 space-y-1.5">
                   <p className="italic text-sky-700/80 dark:text-sky-400/80">{meta.hint}</p>
-                  <ul className="list-disc list-inside space-y-0.5">
+                  <ul className="space-y-1">
                     {items.map((w, i) => {
                       const text = w.replace(/^\[GỢI Ý\]\s*/, "");
                       const clickable = resolveWarningPosition(script, w) !== null;
+                      const orphan = key !== "redundantReq" ? extractOrphanName(w) : null;
                       return (
-                        <li key={i}>
-                          {clickable ? (
-                            <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-sky-500/50 hover:decoration-solid hover:text-sky-800 dark:hover:text-sky-300">
-                              {text}
+                        <li key={i} className="flex items-start justify-between gap-2">
+                          <span className="flex-1">
+                            • {clickable ? (
+                              <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-sky-500/50 hover:decoration-solid hover:text-sky-800 dark:hover:text-sky-300">
+                                {text}
+                              </button>
+                            ) : text}
+                          </span>
+                          <span className="flex items-center gap-1 shrink-0">
+                            {orphan && (
+                              <button type="button" onClick={() => handleDeleteOrphan(w)} title={`Xoá mọi dòng cấp "${orphan.name}" khỏi kịch bản`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-red-500/30 text-red-700 dark:text-red-400 hover:bg-red-500/10">
+                                <Trash2 size={10} /> Xoá
+                              </button>
+                            )}
+                            <button type="button" onClick={() => dismissSuggestion(w)} title="Ẩn gợi ý này khỏi danh sách đang xem" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border text-muted-foreground hover:bg-accent">
+                              <EyeOff size={10} /> Giữ
                             </button>
-                          ) : text}
+                          </span>
                         </li>
                       );
                     })}

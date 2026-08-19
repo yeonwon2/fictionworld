@@ -41,6 +41,27 @@ export function categorizeSuggestion(w) {
   return "redundantReq";
 }
 
+/**
+ * Lấy tên vật phẩm/cờ từ 1 dòng gợi ý "mồ côi" — dùng để xoá thẳng dòng cấp
+ * nó khỏi kịch bản (nút "Xoá" trong UI) mà không cần người dùng tự tìm.
+ * Chỉ áp dụng cho orphanItem/orphanFlag: đích xoá RÕ RÀNG (mọi dòng cấp trong
+ * toàn kịch bản), khác với "điều kiện thừa" vốn gắn vào 1 lựa chọn cụ thể.
+ * @returns {{kind: "item"|"flag", name: string}|null}
+ */
+export function extractOrphanName(w) {
+  const category = categorizeSuggestion(w);
+  const text = String(w || "").replace(/^\[GỢI Ý\]\s*/, "");
+  if (category === "orphanItem") {
+    const m = text.match(/^Vật phẩm "([^"]+)"/);
+    return m ? { kind: "item", name: m[1] } : null;
+  }
+  if (category === "orphanFlag") {
+    const m = text.match(/^Cờ "([^"]+)"/);
+    return m ? { kind: "flag", name: m[1] } : null;
+  }
+  return null;
+}
+
 function cleanPopup(p) {
   if (!p || typeof p !== "object") return null;
   const t = cleanStr(p.title);
