@@ -3,8 +3,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ClipboardList, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { parseNpcScript } from "@/lib/gameStudio/npcScriptParser";
+import { fixScriptWithAI, verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateNpcScriptFromPrompt } from "@/lib/gameStudio/npcScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
 import FileUrlInput from "@/components/FileUrlInput";
@@ -247,7 +248,59 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
     }
   };
 
-  const handleProduce = () => {
+  
+  const handleAIFix = async () => {
+    if (!script.trim()) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    let parseWarnings;
+    try {
+      parseWarnings = parseNpcScript(script, gameData.meta).warnings || [];
+    } catch (e) {
+      toast({ variant: "destructive", title: "Kịch bản có lỗi cú pháp", description: e.message || "Sửa lỗi cú pháp trước, rồi bấm Kiểm Tra." });
+      return;
+    }
+    if (parseWarnings.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
+    setAiLoading(true);
+    try {
+      const fixed = await fixScriptWithAI(CHEAT_SHEET, script, parseWarnings);
+      setScript(fixed);
+      setChecked(false);
+      toast({ title: "AI đã sửa xong", description: "Kiểm tra lại kịch bản rồi bấm Sản Xuất Game." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi sửa kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
+  const handleAIWriteVerified = async () => {
+    if (!aiInput.trim()) { toast({ variant: "destructive", title: "Thiếu nội dung", description: "Nhập ý tưởng hoặc dán nội dung chương truyện." }); return; }
+    setAiLoading(true);
+    try {
+      const draft = await generateNpcScriptFromPrompt({ mode: aiMode, input: aiInput, length: aiLength });
+      setScript(draft);
+      const report = await verifyAndFixScript({
+        cheatSheet: CHEAT_SHEET,
+        parseFn: (txt) => parseNpcScript(txt, gameData.meta),
+        script: draft,
+        maxRounds: 3,
+      });
+      setScript(report.script);
+      setWarnings(report.warnings || []);
+      setChecked(true);
+      if (report.clean) {
+        toast({ title: "Kịch bản chuẩn hoàn tất", description: report.rounds > 0 ? `Đã tự sửa ${report.rounds} lượt. 0 lỗi — sẵn sàng Sản Xuất Game.` : "0 lỗi ngay từ đầu — sẵn sàng Sản Xuất Game." });
+      } else {
+        toast({ variant: "destructive", title: "Vẫn còn lỗi sau khi sửa", description: `Còn ${report.warnings.length} lỗi — xem bên dưới và sửa tay hoặc bấm "Sửa lỗi logic bằng AI".` });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi viết kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+const handleProduce = () => {
     if (!script.trim()) {
       toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
       return;
@@ -255,6 +308,7 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
     setProducing(true);
     try {
       const result = parseNpcScript(script, gameData.meta);
+      result.meta = { ...(result.meta || {}), sourceScript: script };
       setGameData(result);
       setWarnings(result.warnings || []);
       setChecked(true);
@@ -269,6 +323,28 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
       setProducing(false);
     }
   };
+  const loadFromSaved = () => {
+    const saved = gameData?.meta?.sourceScript;
+    if (!saved) {
+      toast({ variant: "destructive", title: "Chưa có kịch bản gốc", description: "Sản xuất 1 kịch bản trước (game sẽ lưu bản gốc), hoặc dán kịch bản rồi bấm Sản Xuất Game." });
+      return;
+    }
+    setScript(saved);
+    setChecked(false);
+    toast({ title: "Đã lấy lại kịch bản gốc", description: "Kịch bản văn bản đã được dán vào ô bên dưới để chỉnh sửa." });
+  };
+
+  const copyScript = async () => {
+    const text = gameData?.meta?.sourceScript || script;
+    if (!text) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Đã sao chép kịch bản", description: "Kịch bản dạng văn bản đã vào clipboard." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Không sao chép được", description: err.message });
+    }
+  };
+
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-pink-500/20">
@@ -359,6 +435,10 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
               {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Wand2 size={14} className="mr-1.5" />}
               {aiLoading ? "AI đang viết..." : "Viết kịch bản bằng AI"}
             </Button>
+            <Button size="sm" onClick={handleAIWriteVerified} disabled={aiLoading} variant="outline" className="w-full">
+              {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <CheckCircle2 size={14} className="mr-1.5" />}
+              {aiLoading ? "Đang viết & tự sửa lỗi..." : "Viết Kịch Bản Chuẩn (tự kiểm tra & sửa đến khi hết lỗi)"}
+            </Button>
           </div>
         )}
       </div>
@@ -378,7 +458,25 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
                 <Icon size={12} /> {label}
               </button>
             ))}
-          </div>
+          
+            <button
+              type="button"
+              onClick={loadFromSaved}
+              disabled={!gameData?.meta?.sourceScript}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Lấy lại kịch bản văn bản đã dùng để sản xuất game hiện tại, để chỉnh sửa tiếp"
+            >
+              <ClipboardList size={12} /> Lấy lại kịch bản
+            </button>
+            <button
+              type="button"
+              onClick={copyScript}
+              disabled={!gameData?.meta?.sourceScript && !script}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Sao chép toàn bộ kịch bản văn bản ra clipboard"
+            >
+              <Copy size={12} /> Sao chép kịch bản
+            </button></div>
         </div>
         <p className="text-[10px] text-muted-foreground">Đặt con trỏ vào chỗ muốn chèn trong kịch bản rồi bấm nút tương ứng ở trên — phần cần điền sẽ được bôi đen sẵn để gõ đè lên.</p>
         <Textarea
@@ -391,13 +489,18 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
         />
       </div>
 
-      <div className="flex gap-2">
+      
+      <div className="flex gap-2 flex-wrap">
+        <Button onClick={handleAIFix} disabled={aiLoading} variant="outline" className="px-3">
+          {aiLoading ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Wand2 size={16} className="mr-2" />}
+          {aiLoading ? "AI đang sửa..." : "Sửa lỗi logic bằng AI"}
+        </Button>
         <Button onClick={handleCheck} disabled={checking} variant="outline" className="flex-1">
           {checking ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ClipboardCheck size={16} className="mr-2" />}
           {checking ? "Đang kiểm tra..." : "Kiểm Tra Kịch Bản"}
         </Button>
-        <Button onClick={handleProduce} disabled={producing} className="flex-1 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700">
-          {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Heart size={16} className="mr-2" />}
+        <Button onClick={handleProduce} disabled={producing} className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700">
+          {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Bot size={16} className="mr-2" />}
           {producing ? "Đang sản xuất..." : "Sản Xuất Game"}
         </Button>
       </div>

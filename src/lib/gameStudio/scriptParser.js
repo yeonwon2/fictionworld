@@ -380,7 +380,7 @@ export function parseScript(scriptText, baseMeta = {}) {
   const initialStats = {};
   for (const key of statKeys) initialStats[key] = 0;
 
-  const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false });
+  const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false, statsConfig });
   const nodes = repaired.nodes;
   warnings.push(...repaired.warnings);
 

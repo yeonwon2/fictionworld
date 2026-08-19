@@ -43,6 +43,10 @@ riêng → ghen tuông/thiện cảm → nhận ra tình cảm → biến cố l
 ...(một tuyến truyện ĐỘC LẬP hoàn toàn, số cảnh lại bắt đầu từ 1)
 
 QUY TẮC:
+- LOGIC (QUAN TRỌNG): mạch truyện phải LIỀN MẠCH — mỗi "→ Đến cảnh N" phải hợp lý: cảnh đích PHẢI mở đầu bằng 1 câu nhắc lại tình huống vừa xảy ra ở cảnh trước, tuyệt đối không nhảy sang chuyện khác không liên quan.
+- LOGIC: mọi "→ Cần vật phẩm: X" PHẢI có "→ Vật phẩm: X" (hoặc "→ Nhận Vật phẩm: X") cho ra vật phẩm đó ở MỘT CẢNH PHÍA TRƯỚC — đừng yêu cầu vật phẩm chưa từng xuất hiện.
+- LOGIC: mọi "→ Cần cờ: X" PHẢI có "→ Cờ: X" tạo cờ đó ở phía trước; "→ Cần không có cờ: X" chỉ dùng khi cờ X chưa từng được tạo trên mọi nhánh dẫn tới lựa chọn đó.
+- LOGIC: mọi "→ Cần <chỉ số> >= N" phải ĐẠT ĐƯỢC dựa trên "Chỉ số khởi đầu" cộng các lần tăng chỉ số ở các cảnh phía trước — đừng đặt ngưỡng cao hơn mức tối đa có thể đạt.
 - PHẢI có ít nhất 2 khối "## NHÂN VẬT" (nhiều "công lược đối tượng" để người chơi chọn).
 - Mỗi nhân vật PHẢI có tối thiểu 5-8 cảnh đi theo mạch: gặp gỡ lần đầu → nhân vật bắt đầu chú ý → nhân vật chủ động tìm đến → 1 sự kiện đặc trưng → các lựa chọn tăng/giảm Thiện cảm rõ rệt → nhận ra tình cảm → 1 biến cố lớn thử thách mối quan hệ → cảnh tỏ tình.
 - CẢNH TỎ TÌNH (cảnh cuối) PHẢI có ít nhất 2 lựa chọn: 1 lựa chọn khoá bằng "→ Cần Thiện cảm >= <ngưỡng cao>" dẫn tới kết thúc TRUE_END/GOOD_END (thành đôi), 1 lựa chọn KHÔNG khoá (hoặc khoá "Cần không có cờ") dẫn tới kết thúc BAD_END (thất bại) — để người chơi Thiện cảm chưa đủ vẫn có kết thúc riêng thay vì bị chặn hoàn toàn.

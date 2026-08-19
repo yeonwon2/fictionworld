@@ -98,7 +98,7 @@ function cleanRandomEvents(evs) {
  *   để người viết sửa lại kịch bản.
  */
 export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}) {
-  const { forceNonEmptyModifiers = true } = options;
+  const { forceNonEmptyModifiers = true, statsConfig } = options;
   const nodesMap = {};
   const ids = new Set();
   const warnings = [];
@@ -214,6 +214,17 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
           depthMap[t] = d + 1;
           queue.push([t, d + 1]);
         }
+        // Lựa chọn xúc xắc/chiến đấu đi theo đích riêng — không có targetNodeId.
+        const extra = [];
+        if (c.diceRoll) { extra.push(c.diceRoll.successTarget, c.diceRoll.failTarget); }
+        else if (c.combat) { extra.push(c.combat.winTarget, c.combat.loseTarget, c.combat.fleeTarget); }
+        for (const t2 of extra) {
+          if (t2 && nodesMap[t2] && !reachable.has(t2)) {
+            reachable.add(t2);
+            depthMap[t2] = d + 1;
+            queue.push([t2, d + 1]);
+          }
+        }
       }
     }
   }
@@ -281,5 +292,324 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
     }
   }
 
-  return { nodes: nodesMap, warnings };
+  return { nodes: nodesMap, warnings: warnings.concat(analyzeLogic(nodesMap, statsConfig)).concat(simulatePlaytest(nodesMap, statsConfig)).concat(detectTrappedCycles(nodesMap)) };
+}
+
+/**
+ * Phát hiện VÒNG LẶP KẸT: một nhóm cảnh quay vòng với nhau nhưng KHÔNG có lối
+ * ra nào dẫn tới một kết thúc (và bên trong cũng không có kết thúc) → người
+ * chơi bị kẹt quay vòng vô hạn, không bao giờ hết game. Dùng Tarjan SCC để tìm
+ * các thành phần liên thông mạnh (chu trình) rồi kiểm tra lối ra.
+ * Vòng lặp CÓ lối ra (như mạch "trọng sinh làm lại từ cảnh 21") là hợp lệ và
+ * không bị báo — chỉ báo vòng lặp không thoát được.
+ */
+function detectTrappedCycles(nodesMap) {
+  const adj = {};
+  for (const n of Object.values(nodesMap)) {
+    adj[n.id] = [];
+    for (const c of (n.choices || [])) {
+      if (c.targetNodeId && nodesMap[c.targetNodeId]) adj[n.id].push(c.targetNodeId);
+      if (c.diceRoll) {
+        if (c.diceRoll.successTarget && nodesMap[c.diceRoll.successTarget]) adj[n.id].push(c.diceRoll.successTarget);
+        if (c.diceRoll.failTarget && nodesMap[c.diceRoll.failTarget]) adj[n.id].push(c.diceRoll.failTarget);
+      } else if (c.combat) {
+        for (const t of [c.combat.winTarget, c.combat.loseTarget, c.combat.fleeTarget]) {
+          if (t && nodesMap[t]) adj[n.id].push(t);
+        }
+      }
+    }
+  }
+
+  let idx = 0;
+  const stack = [];
+  const onStack = new Set();
+  const disc = {};
+  const low = {};
+  const sccs = [];
+  const strongconnect = (v) => {
+    disc[v] = idx; low[v] = idx; idx++;
+    stack.push(v); onStack.add(v);
+    for (const w of (adj[v] || [])) {
+      if (disc[w] === undefined) { strongconnect(w); low[v] = Math.min(low[v], low[w]); }
+      else if (onStack.has(w)) low[v] = Math.min(low[v], disc[w]);
+    }
+    if (low[v] === disc[v]) {
+      const comp = [];
+      let w;
+      do { w = stack.pop(); onStack.delete(w); comp.push(w); } while (w !== v);
+      sccs.push(comp);
+    }
+  };
+  for (const id of Object.keys(adj)) if (disc[id] === undefined) strongconnect(id);
+
+  const warnings = [];
+  for (const comp of sccs) {
+    const isCycle = comp.length > 1 || (adj[comp[0]] || []).includes(comp[0]);
+    if (!isCycle) continue;
+    const hasEndingInside = comp.some((id) => nodesMap[id] && nodesMap[id].isEnding);
+    const exits = comp.flatMap((id) => adj[id] || []).filter((t) => !comp.includes(t));
+    if (!hasEndingInside && exits.length === 0) {
+      warnings.push(
+        `KẸT VÒNG LẶP: các cảnh ${comp.map((id) => `"${id}"`).join(", ")} quay vòng với nhau và KHÔNG có lối ra nào dẫn tới kết thúc — người chơi sẽ bị kẹt quay vòng vô hạn, không bao giờ hết game. Thêm 1 lựa chọn thoát ("→ Đến cảnh …" hoặc "→ Kết thúc …") từ ít nhất một cảnh trong vòng này.`
+      );
+    }
+  }
+  return warnings;
+}
+
+/**
+ * MÔ PHỎNG CHẠY THỬ toàn bộ cây lựa chọn — "chơi thử" tất cả các trạng thái có
+ * thể tới được từ đầu game để bắt các lỗi mà kiểm tra tĩnh ở trên không thấy:
+ *   - KẸT CỨNG (soft-lock): một cảnh có thể tới được, nhưng với trạng thái đó
+ *     KHÔNG có lựa chọn nào khả dụng (mọi lựa chọn đều bị khoá bởi yêu cầu) →
+ *     người chơi đứng im giữa chừng không làm gì được. Đây chính là lỗi người
+ *     dùng hay gặp nhất với kịch bản AI.
+ *   - CẢNH KHÔNG BAO GIỜ VÀO ĐƯỢC: tồn tại trong đồ thị (BFS thấy cạnh nối) nhưng
+ *     mọi đường dẫn thực tế đều bị khoá yêu cầu → người chơi không bao giờ tới.
+ * Mô phỏng này xác định, chạy nhanh (giới hạn số trạng thái), không tốn AI.
+ */
+function simulatePlaytest(nodesMap, statsConfig) {
+  const warnings = [];
+  const startStats = {};
+  for (const sc of (statsConfig || [])) startStats[sc.key] = typeof sc.default === "number" ? sc.default : 0;
+  const vital = (statsConfig || []).filter((sc) => sc.isVital).map((sc) => ({ key: sc.key, threshold: sc.deathThreshold || 0 }));
+  const clamp = (v) => Math.max(-1000000, Math.min(1000000, v));
+
+  const stateSig = (st) =>
+    st.nodeId + "|" +
+    Object.keys(st.stats).sort().map((k) => k + "=" + st.stats[k]).join(",") + "|" +
+    [...st.items].sort().join(",") + "|" +
+    [...st.flags].sort().join(",") + "|" +
+    Object.keys(st.npcAffinity).sort().map((k) => k + "=" + st.npcAffinity[k]).join(",");
+
+  const choiceAvailable = (c, st) => {
+    for (const k in (c.statRequirements || {})) if ((st.stats[k] || 0) < c.statRequirements[k]) return false;
+    for (const k in (c.statRequirementsMax || {})) if ((st.stats[k] || 0) > c.statRequirementsMax[k]) return false;
+    if (c.requiresItem && !st.items.has(c.requiresItem)) return false;
+    if (c.requiresFlag && !st.flags.has(c.requiresFlag)) return false;
+    if (c.requiresFlagAbsent && st.flags.has(c.requiresFlagAbsent)) return false;
+    if (c.requiresNpcAffinity) for (const n in c.requiresNpcAffinity) if ((st.npcAffinity[n] || 0) < c.requiresNpcAffinity[n]) return false;
+    if (c.requiresNpcAffinityMax) for (const n in c.requiresNpcAffinityMax) if ((st.npcAffinity[n] || 0) > c.requiresNpcAffinityMax[n]) return false;
+    return true;
+  };
+
+  const makeState = (nodeId, stats, items, flags, npcAffinity) => ({ nodeId, stats, items, flags, npcAffinity });
+
+  const visited = new Set();
+  const queue = [];
+  const nodeSeen = new Set();        // nodeId có ít nhất 1 trạng thái tới
+  const nodeHasMove = new Set();     // nodeId có ít nhất 1 trạng thái có lựa chọn khả dụng
+  const blockedNodes = new Map();    // nodeId -> ví dụ lý do khoá (cho thông báo)
+
+  // Các cạnh vào mỗi node (kèm tóm tắt yêu cầu của lựa chọn đó) — dùng để chỉ
+  // cho người viết biết CHÍNH XÁC lựa chọn nào chặn đường vào một cảnh.
+  const inEdges = {};
+  const summarizeReqs = (c) => {
+    const bits = [];
+    for (const k in (c.statRequirements || {})) bits.push(`cần chỉ số ${k} ≥ ${c.statRequirements[k]}`);
+    for (const k in (c.statRequirementsMax || {})) bits.push(`cần chỉ số ${k} ≤ ${c.statRequirementsMax[k]}`);
+    if (c.requiresItem) bits.push(`cần vật phẩm "${c.requiresItem}"`);
+    if (c.requiresFlag) bits.push(`cần cờ "${c.requiresFlag}"`);
+    if (c.requiresFlagAbsent) bits.push(`chỉ khi CHƯA có cờ "${c.requiresFlagAbsent}"`);
+    return bits.join(", ") || "không có yêu cầu";
+  };
+  for (const n of Object.values(nodesMap)) {
+    for (const c of (n.choices || [])) {
+      const targets = [];
+      if (c.targetNodeId && nodesMap[c.targetNodeId]) targets.push(c.targetNodeId);
+      if (c.diceRoll) {
+        if (c.diceRoll.successTarget && nodesMap[c.diceRoll.successTarget]) targets.push(c.diceRoll.successTarget);
+        if (c.diceRoll.failTarget && nodesMap[c.diceRoll.failTarget]) targets.push(c.diceRoll.failTarget);
+      } else if (c.combat) {
+        for (const t of [c.combat.winTarget, c.combat.loseTarget, c.combat.fleeTarget]) if (t && nodesMap[t]) targets.push(t);
+      }
+      for (const t of targets) {
+        (inEdges[t] = inEdges[t] || []).push({ from: n.id, choiceText: c.text || "(không có chữ)", req: summarizeReqs(c) });
+      }
+    }
+  }
+
+  const MAX_STATES = 200000;
+  const NODE_STATE_CAP = 500; // tối đa trạng thái giữ lại cho MỖI cảnh (chống bùng nổ do chỉ số tích luỹ qua chuỗi cảnh dài)
+  let explored = 0;
+  const nodeStateCount = {}; // nodeId -> số trạng thái đã xếp hàng (đã khử trùng)
+
+  // start_node luôn là điểm vào và luôn có lựa chọn (Bắt đầu / chọn nhân vật).
+  if (nodesMap["start_node"]) { nodeSeen.add("start_node"); nodeHasMove.add("start_node"); }
+
+  const pushState = (st) => {
+    const sig = stateSig(st);
+    if (visited.has(sig)) return;
+    if ((nodeStateCount[st.nodeId] || 0) >= NODE_STATE_CAP) return;
+    visited.add(sig);
+    nodeStateCount[st.nodeId] = (nodeStateCount[st.nodeId] || 0) + 1;
+    queue.push(st);
+  };
+
+  // Mỗi lựa chọn của start_node là 1 "luồng chơi" RIÊNG (đúng model Xưởng NPC:
+  // chọn ai thì CHỈ tuyến đó chạy, không hoà trộn đồ đạc/cờ giữa các tuyến).
+  const startNode = nodesMap["start_node"];
+  if (startNode) {
+    const sg = { items: new Set(), flags: new Set() };
+    if (startNode.grantItem) sg.items.add(startNode.grantItem);
+    if (startNode.setFlags) for (const f of startNode.setFlags) sg.flags.add(f);
+    for (const c of (startNode.choices || [])) {
+      if (c.targetNodeId && nodesMap[c.targetNodeId]) {
+        const st = makeState(c.targetNodeId, { ...startStats }, new Set(sg.items), new Set(sg.flags), {});
+        // phần thưởng từ chọn nhân vật ở start_node (grantItem/grantFlag trên lựa chọn)
+        if (c.grantItem) st.items.add(c.grantItem);
+        if (c.grantFlag) st.flags.add(c.grantFlag);
+        pushState(st);
+      }
+    }
+  }
+
+  while (queue.length && explored < MAX_STATES) {
+    const st = queue.shift();
+    explored++;
+    const node = nodesMap[st.nodeId];
+    if (!node) continue;
+    nodeSeen.add(st.nodeId);
+    // áp dụng phần thưởng của NODE khi bước vào (giống GamePlayer)
+    if (node.grantItem) st.items.add(node.grantItem);
+    if (node.setFlags) for (const f of node.setFlags) st.flags.add(f);
+
+    if (node.isEnding) continue; // kết thúc hợp lệ
+
+    const avail = (node.choices || []).filter((c) => choiceAvailable(c, st));
+    if (avail.length) {
+      nodeHasMove.add(st.nodeId);
+      for (const c of avail) {
+        const ns = { ...st.stats };
+        let dead = false;
+        for (const [k, d] of Object.entries(c.statModifiers || {})) ns[k] = clamp((ns[k] || 0) + d);
+        for (const v of vital) if ((ns[v.key] || 0) <= v.threshold) { dead = true; break; }
+        if (dead) continue; // chọn xong chết → Game Over (kết cục hợp lệ, không phải kẹt cứng)
+        const items = new Set(st.items);
+        if (c.grantItem) items.add(c.grantItem);
+        if (c.removeItem) items.delete(c.removeItem);
+        const flags = new Set(st.flags);
+        if (c.grantFlag) flags.add(c.grantFlag);
+        const affinity = { ...st.npcAffinity };
+        if (c.npcAffinity) for (const n in c.npcAffinity) affinity[n] = (affinity[n] || 0) + c.npcAffinity[n];
+        // Lựa chọn xúc xắc/chiến đấu: người chơi luôn bấm được (dù kết quả thắng/thua) —
+        // đi theo mọi đích có thể xảy ra để không báo nhầm kẹt cứng.
+        let targets = [];
+        if (c.diceRoll) {
+          if (c.diceRoll.successTarget && nodesMap[c.diceRoll.successTarget]) targets.push(c.diceRoll.successTarget);
+          if (c.diceRoll.failTarget && nodesMap[c.diceRoll.failTarget]) targets.push(c.diceRoll.failTarget);
+          if (c.diceRoll.successMods) for (const [k, v] of Object.entries(c.diceRoll.successMods)) ns[k] = clamp((ns[k] || 0) + v);
+        } else if (c.combat) {
+          if (c.combat.winTarget && nodesMap[c.combat.winTarget]) targets.push(c.combat.winTarget);
+          if (c.combat.loseTarget && nodesMap[c.combat.loseTarget]) targets.push(c.combat.loseTarget);
+          if (c.combat.fleeTarget && nodesMap[c.combat.fleeTarget]) targets.push(c.combat.fleeTarget);
+          if (c.combat.loot) {
+            if (c.combat.loot.grantItem) items.add(c.combat.loot.grantItem);
+            for (const [k, v] of Object.entries(c.combat.loot.statModifiers || {})) ns[k] = clamp((ns[k] || 0) + v);
+          }
+        }
+        if (!targets.length && c.targetNodeId && nodesMap[c.targetNodeId]) targets.push(c.targetNodeId);
+        for (const t of targets) pushState(makeState(t, ns, items, flags, affinity));
+      }
+    } else {
+      // không có lựa chọn nào khả dụng — ghi lại lý do khoá đầu tiên
+      if (!blockedNodes.has(st.nodeId)) {
+        const reasons = (node.choices || []).map((c) => {
+          const bits = [];
+          for (const k in (c.statRequirements || {})) if ((st.stats[k] || 0) < c.statRequirements[k]) bits.push(`cần ${k} ≥ ${c.statRequirements[k]} (đang ${st.stats[k] || 0})`);
+          for (const k in (c.statRequirementsMax || {})) if ((st.stats[k] || 0) > c.statRequirementsMax[k]) bits.push(`cần ${k} ≤ ${c.statRequirementsMax[k]} (đang ${st.stats[k] || 0})`);
+          if (c.requiresItem && !st.items.has(c.requiresItem)) bits.push(`cần vật phẩm "${c.requiresItem}"`);
+          if (c.requiresFlag && !st.flags.has(c.requiresFlag)) bits.push(`cần cờ "${c.requiresFlag}"`);
+          if (c.requiresFlagAbsent && st.flags.has(c.requiresFlagAbsent)) bits.push(`chỉ khi CHƯA có cờ "${c.requiresFlagAbsent}"`);
+          return `lựa chọn "${c.text || "?"}": ${bits.join(", ") || "lựa chọn rỗng"}`;
+        });
+        blockedNodes.set(st.nodeId, reasons.join(" | "));
+      }
+    }
+  }
+
+  if (explored >= MAX_STATES) {
+    warnings.push(`Đã dừng mô phỏng chạy thử ở ${MAX_STATES} trạng thái (kịch bản phân nhánh quá lớn) — bỏ qua kiểm tra kẹt cứng chi tiết. Hãy đơn giản hoá bớt nhánh rẽ nếu gặp vấn đề.`);
+    return warnings;
+  }
+
+  for (const n of Object.values(nodesMap)) {
+    if (!n || n.isEnding || !n.id) continue;
+    const id = n.id;
+    if (!nodeSeen.has(id)) {
+      const edges = (inEdges[id] || []).slice(0, 3);
+      const edgeDesc = edges.length
+        ? edges.map((e) => `từ cảnh "${e.from}" — lựa chọn "${e.choiceText}" (${e.req})`).join("; ") + (edges.length < (inEdges[id] || []).length ? "; …" : "")
+        : "(không có lựa chọn nào trỏ tới)";
+      warnings.push(`Cảnh "${id}" không bao giờ vào được: mọi đường dẫn tới đều bị khoá — ${edgeDesc}. Sửa: cho vật phẩm/cờ/chỉ số cần thiết ở phía trước, hoặc bỏ yêu cầu trên chính lựa chọn dẫn vào. Nếu cảnh nguồn cũng không vào được, xem cảnh báo của cảnh nguồn.`);
+    } else if (!nodeHasMove.has(id)) {
+      warnings.push(`KẸT CỨNG: cảnh "${id}" có thể tới được nhưng mọi lựa chọn đều bị khoá: ${blockedNodes.get(id) || "(không rõ lý do)"}. Sửa: đảm bảo luôn có ≥ 1 lựa chọn mở, hoặc cho vật phẩm/cờ/chỉ số cần thiết ở phía trước.`);
+    }
+  }
+
+  return warnings;
+}
+
+/**
+ * Rà soát logic "mồ côi" của đồ thị đã dọn xong — chạy sau khi BFS cắt node
+ * không tới được (nên mọi node còn lại đều chạm tới được từ start_node).
+ * Bắt các lỗi AI hay gây ra nhất mà không làm vỡ cấu trúc:
+ *   - vật phẩm bị "Cần vật phẩm: X" nhưng chẳng đâu cho X (→ Vật phẩm: X).
+ *   - cờ truyện bị "Cần cờ: X" nhưng chẳng đâu tạo X (→ Cờ: X).
+ *   - ngưỡng chỉ số "Cần <chỉ số> >= N" không bao giờ đạt tới dù gom HẾT mọi
+ *     điểm cộng trong toàn kịch bản (tương tự cho "<= N" với mọi điểm trừ).
+ * Các cảnh báo này có chèn thêm gợi ý sửa cụ thể để người viết (hoặc AI) tự vá.
+ */
+function analyzeLogic(nodesMap, statsConfig) {
+  const warnings = [];
+  const itemsGranted = new Set();
+  const flagsGranted = new Set();
+  const itemSources = {};
+  const flagSources = {};
+  const statGains = {}; // chỉ số -> tổng điểm CỘNG tối đa trong toàn đồ thị
+  const statLoses = {}; // chỉ số -> tổng điểm TRỪ tối đa trong toàn đồ thị
+  const startValues = {};
+  for (const sc of (statsConfig || [])) startValues[sc.key] = typeof sc.default === "number" ? sc.default : 0;
+
+  const note = (map, key, val, loc) => { if (!val) return; map[key] = (map[key] || []).concat(loc); };
+
+  for (const n of Object.values(nodesMap)) {
+    if (n.grantItem) { itemsGranted.add(n.grantItem); note(itemSources, n.grantItem, n.id); }
+    for (const f of (n.setFlags || [])) { flagsGranted.add(f); note(flagSources, f, n.id); }
+    for (const c of (n.choices || [])) {
+      if (c.grantItem) { itemsGranted.add(c.grantItem); note(itemSources, c.grantItem, n.id); }
+      if (c.grantFlag) { flagsGranted.add(c.grantFlag); note(flagSources, c.grantFlag, n.id); }
+      for (const [k, v] of Object.entries(c.statModifiers || {})) {
+        if (typeof v === "number" && v > 0) statGains[k] = (statGains[k] || 0) + v;
+        else if (typeof v === "number" && v < 0) statLoses[k] = (statLoses[k] || 0) + v;
+      }
+    }
+  }
+
+  for (const n of Object.values(nodesMap)) {
+    for (const c of (n.choices || [])) {
+      const where = `Cảnh "${n.id}" — lựa chọn "${c.text || "(không có chữ)"}"`;
+      if (c.requiresItem && !itemsGranted.has(c.requiresItem)) {
+        warnings.push(`${where}: yêu cầu vật phẩm "${c.requiresItem}" nhưng KHÔNG có lựa chọn nào cho vật phẩm này (không thấy dòng "→ Vật phẩm: ${c.requiresItem}" ở phía trước). Thêm lựa chọn cho vật phẩm trước cảnh này, hoặc bỏ yêu cầu.`);
+      }
+      if (c.requiresFlag && !flagsGranted.has(c.requiresFlag)) {
+        warnings.push(`${where}: yêu cầu cờ "${c.requiresFlag}" nhưng KHÔNG có lựa chọn nào tạo cờ này (không thấy dòng "→ Cờ: ${c.requiresFlag}" ở phía trước). Thêm lựa chọn tạo cờ trước cảnh này, hoặc bỏ yêu cầu.`);
+      }
+      for (const [k, need] of Object.entries(c.statRequirements || {})) {
+        const start = startValues[k] ?? 0;
+        const maxReach = start + (statGains[k] || 0);
+        if (maxReach < need) {
+          warnings.push(`${where}: cần chỉ số ≥ ${need} nhưng ngay cả khi nhận HẾT mọi điểm cộng trong kịch bản thì tối đa chỉ đạt ${maxReach} (bắt đầu ${start}). Giảm ngưỡng xuống ≤ ${maxReach}, hoặc thêm lựa chọn tăng chỉ số ở phía trước.`);
+        }
+      }
+      for (const [k, need] of Object.entries(c.statRequirementsMax || {})) {
+        const start = startValues[k] ?? 0;
+        const minReach = start + (statLoses[k] || 0);
+        if (minReach > need) {
+          warnings.push(`${where}: cần chỉ số ≤ ${need} nhưng ngay cả khi chịu HẾT mọi điểm trừ trong kịch bản thì thấp nhất cũng là ${minReach} (bắt đầu ${start}). Tăng ngưỡng lên ≥ ${minReach}, hoặc thêm lựa chọn trừ chỉ số ở phía trước.`);
+        }
+      }
+    }
+  }
+  return warnings;
 }

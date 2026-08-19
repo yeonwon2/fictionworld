@@ -45,6 +45,10 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 <văn bản kết thúc>
 
 QUY TẮC:
+- LOGIC (QUAN TRỌNG): mạch truyện phải LIỀN MẠCH — mỗi "→ Đến cảnh N" phải hợp lý: cảnh đích PHẢI mở đầu bằng 1 câu nhắc lại tình huống vừa xảy ra ở cảnh trước, tuyệt đối không nhảy sang chuyện khác không liên quan.
+- LOGIC: mọi "→ Cần vật phẩm: X" PHẢI có "→ Vật phẩm: X" (hoặc "→ Nhận Vật phẩm: X") cho ra vật phẩm đó ở MỘT CẢNH PHÍA TRƯỚC — đừng yêu cầu vật phẩm chưa từng xuất hiện.
+- LOGIC: mọi "→ Cần cờ: X" PHẢI có "→ Cờ: X" tạo cờ đó ở phía trước; "→ Cần không có cờ: X" chỉ dùng khi cờ X chưa từng được tạo trên mọi nhánh dẫn tới lựa chọn đó.
+- LOGIC: mọi "→ Cần <chỉ số> >= N" phải ĐẠT ĐƯỢC dựa trên "Chỉ số khởi đầu" cộng các lần tăng chỉ số ở các cảnh phía trước — đừng đặt ngưỡng cao hơn mức tối đa có thể đạt.
 - Cấp bậc hậu cung TỰ ĐỘNG tăng/giảm theo Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp). Có sự kiện thăng chức/giáng chức thì nêu rõ trong văn bản hoặc "→ Chỉ dụ:".
 - "→ Hảo cảm <tên nhân vật> +N/-N" là mối quan hệ phe phái (Hoàng hậu, Quý Phi, Thái Hậu...). "→ Cần hảo cảm <tên> >= N" khoá lựa chọn nếu hảo cảm chưa đủ.
 - Dòng "→ Chỉ dụ: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI "## CẢNH N" (trước lựa chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì bật NGAY SAU KHI chọn. Mỗi cảnh/lựa chọn tối đa 1 dòng này. Tiêu đề và nội dung cách nhau bằng dấu " | " (có khoảng trắng 2 bên). Muốn xuống dòng trong nội dung thì gõ "\n" (gạch chéo ngược + n), KHÔNG xuống dòng thật.

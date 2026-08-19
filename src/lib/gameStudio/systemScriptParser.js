@@ -164,6 +164,21 @@ const RE_VITAL_ITEM = /^(.+?)\s*(?:(<=|<)\s*(-?\d+))?$/;
 const RE_INITIAL_ITEM = /^(.+?)\s*=\s*(-?\d+)$/;
 const RE_EFFECT_DASH = /^-\s+(.+)$/;
 
+// Bỏ chú thích "(...)" ở CUỐI dòng cấu hình — kịch bản mẫu hay viết chú thích
+// hướng dẫn sau giá trị thật (vd "Chỉ số sinh tử: Thiện cảm < 10  (tuỳ chọn ...)").
+// Không chạm nhóm "(+N)"/"(<số>)" toàn số — đó là dữ liệu thật.
+function stripMetaNote(s) {
+  let t = String(s || "").trim();
+  for (;;) {
+    const numericTail = t.match(/\(\s*[+-]?\d+\s*\)\s*$/);
+    if (numericTail) break;
+    const next = t.replace(/\s*\([^)]*\)?\s*$/, "").trim();
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
 // Nhiều người quen gõ "-" thay cho "→" (nhất là gõ trên điện thoại, bàn phím
 // không gõ được dấu mũi tên) — chỉ chấp nhận nếu phần sau dấu "-" khớp Y HỆT
 // 1 hiệu ứng THẬT SỰ, để không hiểu nhầm 1 câu văn xuôi tình cờ có gạch đầu dòng.
@@ -333,7 +348,7 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
       continue;
     }
     if ((m = norm.match(RE_META_VITAL))) {
-      for (const part of m[1].split(",")) {
+      for (const part of stripMetaNote(m[1]).split(",")) {
         const vm = part.trim().match(RE_VITAL_ITEM);
         if (!vm || !vm[1].trim()) continue;
         const key = registerStat(vm[1]);
@@ -345,7 +360,7 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
       continue;
     }
     if ((m = norm.match(RE_META_INITIAL))) {
-      for (const part of m[1].split(",")) {
+      for (const part of stripMetaNote(m[1]).split(",")) {
         const im = part.trim().match(RE_INITIAL_ITEM);
         if (!im || !im[1].trim()) { warnings.push(`Dòng ${lineNo}: "Chỉ số khởi đầu" cần đúng dạng "<Tên chỉ số> = <số>" (bỏ qua "${part.trim()}").`); continue; }
         const key = registerStat(im[1]);
@@ -469,7 +484,7 @@ export function parseSystemScript(scriptText, baseMeta = {}) {
   const initialStats = {};
   for (const sc of statsConfig) initialStats[sc.key] = sc.default;
 
-  const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false });
+  const repaired = normalizeAndRepair(nodesMap, statKeys, 0, { forceNonEmptyModifiers: false, statsConfig });
   const nodes = repaired.nodes;
   warnings.push(...repaired.warnings);
 

@@ -3,8 +3,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Wand2, Loader2, AlertTriangle, Copy, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { Bot, Wand2, Loader2, AlertTriangle, Copy, ClipboardList, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { parsePalaceScript } from "@/lib/gameStudio/palaceScriptParser";
+import { fixScriptWithAI, verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generatePalaceScriptFromPrompt } from "@/lib/gameStudio/palaceScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -71,128 +72,109 @@ function jumpToWarning(textareaRef, script, warning) {
 }
 
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/scriptParser.js
-// ("Xưởng Offline") hay SystemScriptImporter.jsx/systemScriptParser.js
-// ("Xưởng Hệ Thống"), sửa file này không ảnh hưởng gì tới các xưởng đó.
-// Dưới đây là KỊCH BẢN MẪU HOÀN CHỈNH, viết không dấu #/##/** như người dùng
-// thường gõ, dán y vậy vẫn chạy — phủ đủ mọi cơ chế của xưởng này:
-// Sủng Ái (chỉ số sinh tử → cấp bậc tần phi), Thế Lực, Hảo cảm phe phái,
-// Cờ truyện (mưu kế), Vật phẩm (chứng cứ), "→ Chỉ dụ:" (bảng thông báo hoàng
-// cung), thăng chức, và nhiều kết thúc khác nhau.
-const CHEAT_SHEET = `Mộng Hoa Cung
-Thể loại: Cung Đấu
-Chỉ số sinh tử: Sủng Ái < 10, Thế Lực < 5
-Chỉ số khởi đầu: Sủng Ái = 30, Thế Lực = 8
-Thông báo thua cuộc: Bị Phế Truất | Thất sủng quá mức, nàng bị đày vào lãnh cung. Số phận khép lại.
+// ("Xưởng Offline"), SystemScriptImporter.jsx/systemScriptParser.js ("Xưởng
+// Hệ Thống") hay RebirthScriptImporter.jsx/rebirthScriptParser.js ("Xưởng Trọng
+// Sinh"), sửa file này không ảnh hưởng gì tới các xưởng đó.
+// Dưới đây là KỊCH BẢN MẪU DẠNG CHUNG (giống Xưởng Công Lược) — chỉ để nắm CÚ
+// PHÁP của xưởng này: Sủng Ái (chỉ số sinh tử → cấp bậc tần phi), Thế Lực,
+// Hảo cảm phe phái, Cờ truyện (mưu kế), Vật phẩm (chứng cứ), "→ Chỉ dụ:" (bảng
+// thông báo hoàng cung), thăng chức, và nhiều kết thúc khác nhau. Nội dung là
+// CHỖ TRỐNG — gõ đè tên truyện, nhân vật, cảnh của BẠN vào để viết truyện MỚI,
+// đừng chép theo đúng 1 cốt truyện duy nhất nào cả.
+const CHEAT_SHEET = `Cung Đấu — Tên truyện
+Thể loại: ...
+Chỉ số sinh tử: Sủng Ái < 10, Thế Lực < 5   (tuỳ chọn — tụt xuống ngưỡng là bị phế truất/
+                                              Game Over. Chỉ số ĐẦU TIÊN nên là "Sủng Ái" vì
+                                              cấp bậc tần phi tính từ nó.)
+Chỉ số khởi đầu: Sủng Ái = 30, Thế Lực = 8  (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
+                                              không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
+                                              tính là "chết" ngay từ đầu game!)
+Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả, cả tính mạng lẫn ngôi vị.
+                                              (tuỳ chọn — đổi chữ hiện khi chết vì "Chỉ số
+                                               sinh tử" ở trên, thay cho "GAME OVER" mặc định.
+                                               Bỏ qua dòng này thì vẫn hiện chữ mặc định như cũ.)
 Cấp bậc hậu cung: Thường Tại / Quý Nhân / Tần / Quý Tần / Phi / Quý Phi / Hoàng Quý Phi / Hoàng Hậu
+                                              (tuỳ chọn — thứ tự cấp bậc từ THẤP đến CAO, cách
+                                               nhau dấu "/". Bỏ qua thì dùng mặc định.)
 
 GIỚI THIỆU
-→ Chỉ dụ: CHIẾU VÀO CUNG | Hoàng thượng triệu tân tú Tô Mộc Lan nhập cung, ban cho tước vị Thường Tại.
-Đêm đầu nhập cung, ta — Tô Mộc Lan, con gái một vị quan nhỏ — bước vào hậu cung hoa lệ mà tối tăm này. Nơi đây mỗi bước chân đều là một canh bạc.
+→ Chỉ dụ: CHIẾU VÀO CUNG | Hoàng thượng triệu nàng nhập cung, ban tước vị Thường Tại.
+Văn bản mở đầu — 1-2 đoạn giới thiệu thân phận và bối cảnh hậu cung.
 
-CẢNH 1 — Triệu kiến buổi sớm
-→ Chỉ dụ: TRIỀU TÂN | Sáng sớm, các phi tần phải đến Cung Khôn Ninh vấn an Thái Hậu.
-Tại Cung Khôn Ninh, Thái Hậu ngồi cao trên kiệu, ánh mắt dò xét từng người. Bên trái là Hoàng hậu Ôn Như Kiều, bên phải là Quý Phi Lâm Nguyệt Linh — hai thế lực lớn nhất hậu cung.
+CẢNH 1 — Tên cảnh
+→ Chỉ dụ: TRIỀU TÂN | Thông báo hoàng cung — sự kiện bắt đầu khi VÀO cảnh.
+Diễn biến của cảnh — các phe phái, lời nói bóng gió, mưu mô.
 
-A — Cúi đầu kính cẩn, không nói nhiều
+A — Lời lựa chọn khôn khéo
 → Hảo cảm Thái Hậu +10
-→ Hảo cảm Hoàng hậu +10
 → Đến cảnh 2
 
-B — Khéo léo khen ánh trăng đêm qua
+B — Lời lựa chọn mạo hiểm
 → Sủng Ái +5
 → Hảo cảm Quý Phi +10
-→ Hảo cảm Thái Hậu -5
-→ Chỉ dụ: ÁNH MẮT CỦA THÁI HẬU | Thái Hậu nhíu mày. Quá lộng lời chưa hẳn là hay, người khẽ nói: "Tân tú còn trẻ, biết thân biết phận là hơn."
+→ Cờ: nắm được bí mật của Quý Phi
 → Đến cảnh 3
 
-C — Đứng im quan sát, ghi nhớ mọi thứ
+C — Đứng im quan sát
 → Thế Lực +5
-→ Cờ: đã nắm được thói quen của Quý Phi
+→ Cờ: đã ghi nhớ thói quen của Thái Hậu
 → Đến cảnh 2
 
-CẢNH 2 — Bữa tiệc của Quý Phi
-→ Chỉ dụ: YẾN TIỆC | Quý Phi Lâm Nguyệt Linh mở tiệc thưởng hoa tại Ngự Hoa Viên, mời toàn bộ phi tần.
-Rượu thơm hoa nở, Quý Phi mỉm cười nhưng ánh mắt lại lạnh lùng. Giữa tiệc, nàng ta cố ý làm vấp cái ly rượu, khiến áo Hoàng hậu ướt đẫm — rồi nhìn về phía ta.
+CẢNH 2 — Tên cảnh
+Diễn biến của cảnh.
 
-A — Vờ ngây thơ đứng dậy dâng khăn cho Hoàng hậu
-→ Hảo cảm Hoàng hậu +10
-→ Hảo cảm Quý Phi -10
-→ Đến cảnh 3
-
-B — Thuận nước đẩy thuyền, đổ lỗi cho một cung nữ
-→ Sủng Ái -5
-→ Thế Lực -3
-→ Hảo cảm Thái Hậu -5
-→ Đến cảnh 3
-
-C — Đứng dậy bảo vệ cung nữ vô tội
-→ Cần hảo cảm Hoàng hậu >= 10
-→ Hảo cảm Hoàng hậu +15
-→ Hảo cảm Quý Phi -15
-→ Vật phẩm: Lòng trung thành của cung nữ Tiểu Hạnh
-→ Chỉ dụ: TIẾNG ĐỒN | Chuyện nàng bảo vệ cung nữ lan khắp hậu cung. Người kính nể, kẻ thù ghét.
-→ Đến cảnh 3
-
-CẢNH 3 — Mưu kế của Quý Phi
-→ Chỉ dụ: TỐ GIÁN | Quý Phi sai người tố cáo ta hạ độc Quý Tần, nhét "chứng cứ" vào cung điện của ta.
-Quý Tần trúng độc nằm liệt giường. Chỉ huy sứ mang theo một vỏ bọc độc dược tìm thấy trong khuê phòng của ta, đòi đưa ta vào đại lao.
-
-A — Bình tĩnh xin tra xét, chỉ vào vết tích lạ
-→ Cần cờ: đã nắm được thói quen của Quý Phi
-→ Hảo cảm Thái Hậu +10
-→ Cờ: đã lật tẩy âm mưu hạ độc
-→ Đến cảnh 4
-
-B — Khóc lóc cầu xin Hoàng thượng minh oan
-→ Sủng Ái -10
-→ Hảo cảm Hoàng hậu +5
-→ Đến cảnh 4
-
-C — Đưa chứng cứ do Tiểu Hạnh tìm ra
-→ Cần vật phẩm: Lòng trung thành của cung nữ Tiểu Hạnh
+A — Lựa chọn dựa vào mối quan hệ
+→ Cần hảo cảm Thái Hậu >= 20
 → Sủng Ái +15
-→ Hảo cảm Thái Hậu +10
-→ Cờ: đã lật tẩy âm mưu hạ độc
-→ Chỉ dụ: PHONG HẬU | Sủng Ái vượt ngưỡng, Hoàng thượng thăng ta lên bậc Phi. Ngự Hoa Viên đổi màu, kẻ thù căm hận, người thân mừng rỡ.
-→ Đến cảnh 4
+→ Vật phẩm: Lòng trung thành của cung nữ
+→ Chỉ dụ: PHONG THƯỞNG | Sủng Ái vượt ngưỡng, nàng được thăng cấp bậc mới.
 
-CẢNH 4 — Cạnh tranh ngôi Hậu
-Thái Hậu niên cao đã muốn lập người kế ngôi Hậu. Hoàng hậu Ôn Như Kiều ngày càng nghi kỵ ta; Quý Phi thì đã bị giam vào lãnh cung sau vụ hạ độc. Giờ chỉ còn ta và Hoàng hậu trên bàn cân.
+B — Lựa chọn trả đũa kẻ thù
+→ Cần cờ: nắm được bí mật của Quý Phi
+→ Sủng Ái +10
+→ Thế Lực -3
+→ Kết thúc song_toan
 
-A — Lựa chọn lợi dụng điểm yếu của Hoàng hậu
-→ Cần hảo cảm Hoàng hậu <= 10
-→ Hảo cảm Hoàng hậu -20
+CẢNH 3 — Tên cảnh
+→ Chỉ dụ: TỐ GIÁN | Kẻ thù dựng chuyện tố cáo nàng, cần chứng cứ để tự minh oan.
+Diễn biến quyết định.
+
+A — Đưa chứng cứ ra trước mặt Hoàng thượng
+→ Cần vật phẩm: Lòng trung thành của cung nữ
 → Sủng Ái +20
 → Kết thúc ngai_vang
 
-B — Chủ động gặp Hoàng hậu giảng hoà, cùng chống lại kẻ ngoài
-→ Cần hảo cảm Hoàng hậu >= 20
-→ Hảo cảm Hoàng hậu +20
-→ Sủng Ái +10
-→ Kết thúc song_toan
+B — Nhẫn nhịn chờ thời cơ
+→ Thế Lực +5
+→ Kết thúc an_yen
 
-C — Liều lĩnh tố cáo cả Hoàng hậu lẫn Quý Phi trước mặt Hoàng thượng
-→ Sủng Ái -25
-→ Thế Lực -8
-→ Kết thúc lao_nguc
+KẾT THÚC ngai_vang — Ngôi Vị Cao Nhất [TRUE_END]
+Văn bản kết thúc.
 
-KẾT THÚC ngai_vang — Một Mình Trên Cao [GOOD_END]
-Sủng ái của Hoàng thượng khiến mọi đối thủ phải khuất phục. Ta được phong làm Hoàng Hậu, nhưng đêm đó cũng không có ai để cùng trò chuyện. Ngôi vị cao nhất hậu cung, hóa ra lại lạnh lẽo nhất.
+KẾT THÚC song_toan — Cùng Sống Sót [GOOD_END]
+Văn bản kết thúc.
 
-KẾT THÚC song_toan — Nhiều Kẻ Sống Sót [TRUE_END]
-Hoàng hậu và ta cùng nhau bày mưu, dẹp tan mọi phe phái. Hoàng thượng thấy được tài trí lẫn nhau của hai người, phong ta làm Hoàng Hậu, Hoàng hậu cũ làm Hoàng Quý Phi. Hậu cung lần đầu yên bình — kẻ sống sót không chỉ có một.
+KẾT THÚC an_yen — Bình Yên [NORMAL_END]
+Văn bản kết thúc.
 
-KẾT THÚC lao_nguc — Lãnh Cung [BAD_END]
-Mọi âm mưu bị phanh phui, ta mất hết sủng ái lẫn thế lực. Đêm khuya, cánh cửa lãnh cung đóng sầm lại sau lưng. Ta nghe tiếng người cười nhạo ngoài tường cao.`
+Ghi chú:
+- Mỗi cảnh nên có 2-4 lựa chọn. Không ghi "→ Đến cảnh N"/"→ Kết thúc <nhãn>" thì tự sang CẢNH kế tiếp.
+- "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều kiện. Muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn khoá "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
+- "→ Chỉ dụ: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng CẢNH thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG lựa chọn thì bật NGAY SAU KHI chọn.
+- Cấp bậc tần phi tự tính từ Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp).
+- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END / BAD_END.
+- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" CHỈ trỏ tới cảnh/kết thúc CÓ THẬT trong kịch bản.`;
 
 const CHEAT_SHEET_NOTES = `CÁCH DÙNG:
+- Đây là MẪU CÚ PHÁP, không phải 1 truyện hoàn chỉnh — thay mọi chữ "Tên truyện",
+  "Tên cảnh", "Diễn biến của cảnh", "Văn bản kết thúc" bằng nội dung của bạn.
 - Mỗi lựa chọn nên có 1 dòng "→ Đến cảnh N" hoặc "→ Kết thúc <nhãn>". Bỏ qua thì
-  tự sang CẢNH kế tiếp. Trong bản mẫu, chọn B ở CẢNH 1 sẽ BỎ QUA CẢNH 2 — đó là
-  rẽ nhánh cảnh thật (mất luôn cơ hội lấy vật phẩm "Lòng trung thành...").
+  tự sang CẢNH kế tiếp. Có thể bỏ "→ Đến cảnh 3" ở lựa chọn B của CẢNH 1 để xem
+  cách cảnh tự nối tiếp nhau.
 - "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa
   chọn nếu chưa đủ điều kiện — chính là chỗ lựa chọn trước quyết định lựa chọn sau.
 - "→ Chỉ dụ: TIÊU ĐỀ | Nội dung" bật bảng thông báo hoàng cung. Cấp bậc tần phi
-  tự tính từ Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp).`
+  tự tính từ Sủng Ái (mỗi 15 điểm trên ngưỡng sống thăng 1 cấp).`;
 
 
 export default function PalaceScriptImporter({ gameData, setGameData, onGenerated }) {
@@ -273,7 +255,59 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
     }
   };
 
-  const handleProduce = () => {
+  
+  const handleAIFix = async () => {
+    if (!script.trim()) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    let parseWarnings;
+    try {
+      parseWarnings = parsePalaceScript(script, gameData.meta).warnings || [];
+    } catch (e) {
+      toast({ variant: "destructive", title: "Kịch bản có lỗi cú pháp", description: e.message || "Sửa lỗi cú pháp trước, rồi bấm Kiểm Tra." });
+      return;
+    }
+    if (parseWarnings.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
+    setAiLoading(true);
+    try {
+      const fixed = await fixScriptWithAI(CHEAT_SHEET, script, parseWarnings);
+      setScript(fixed);
+      setChecked(false);
+      toast({ title: "AI đã sửa xong", description: "Kiểm tra lại kịch bản rồi bấm Sản Xuất Game." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi sửa kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
+  const handleAIWriteVerified = async () => {
+    if (!aiInput.trim()) { toast({ variant: "destructive", title: "Thiếu nội dung", description: "Nhập ý tưởng hoặc dán nội dung chương truyện." }); return; }
+    setAiLoading(true);
+    try {
+      const draft = await generatePalaceScriptFromPrompt({ mode: aiMode, input: aiInput, length: aiLength });
+      setScript(draft);
+      const report = await verifyAndFixScript({
+        cheatSheet: CHEAT_SHEET,
+        parseFn: (txt) => parsePalaceScript(txt, gameData.meta),
+        script: draft,
+        maxRounds: 3,
+      });
+      setScript(report.script);
+      setWarnings(report.warnings || []);
+      setChecked(true);
+      if (report.clean) {
+        toast({ title: "Kịch bản chuẩn hoàn tất", description: report.rounds > 0 ? `Đã tự sửa ${report.rounds} lượt. 0 lỗi — sẵn sàng Sản Xuất Game.` : "0 lỗi ngay từ đầu — sẵn sàng Sản Xuất Game." });
+      } else {
+        toast({ variant: "destructive", title: "Vẫn còn lỗi sau khi sửa", description: `Còn ${report.warnings.length} lỗi — xem bên dưới và sửa tay hoặc bấm "Sửa lỗi logic bằng AI".` });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi viết kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+const handleProduce = () => {
     if (!script.trim()) {
       toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
       return;
@@ -281,6 +315,7 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
     setProducing(true);
     try {
       const result = parsePalaceScript(script, gameData.meta);
+      result.meta = { ...(result.meta || {}), sourceScript: script };
       setGameData(result);
       setWarnings(result.warnings || []);
       setChecked(true);
@@ -295,6 +330,28 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
       setProducing(false);
     }
   };
+  const loadFromSaved = () => {
+    const saved = gameData?.meta?.sourceScript;
+    if (!saved) {
+      toast({ variant: "destructive", title: "Chưa có kịch bản gốc", description: "Sản xuất 1 kịch bản trước (game sẽ lưu bản gốc), hoặc dán kịch bản rồi bấm Sản Xuất Game." });
+      return;
+    }
+    setScript(saved);
+    setChecked(false);
+    toast({ title: "Đã lấy lại kịch bản gốc", description: "Kịch bản văn bản đã được dán vào ô bên dưới để chỉnh sửa." });
+  };
+
+  const copyScript = async () => {
+    const text = gameData?.meta?.sourceScript || script;
+    if (!text) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Đã sao chép kịch bản", description: "Kịch bản dạng văn bản đã vào clipboard." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Không sao chép được", description: err.message });
+    }
+  };
+
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-amber-500/20">
@@ -366,6 +423,10 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
               {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Wand2 size={14} className="mr-1.5" />}
               {aiLoading ? "AI đang viết..." : "Viết kịch bản bằng AI"}
             </Button>
+            <Button size="sm" onClick={handleAIWriteVerified} disabled={aiLoading} variant="outline" className="w-full">
+              {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <CheckCircle2 size={14} className="mr-1.5" />}
+              {aiLoading ? "Đang viết & tự sửa lỗi..." : "Viết Kịch Bản Chuẩn (tự kiểm tra & sửa đến khi hết lỗi)"}
+            </Button>
           </div>
         )}
       </div>
@@ -385,7 +446,25 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
                 <Icon size={12} /> {label}
               </button>
             ))}
-          </div>
+          
+            <button
+              type="button"
+              onClick={loadFromSaved}
+              disabled={!gameData?.meta?.sourceScript}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Lấy lại kịch bản văn bản đã dùng để sản xuất game hiện tại, để chỉnh sửa tiếp"
+            >
+              <ClipboardList size={12} /> Lấy lại kịch bản
+            </button>
+            <button
+              type="button"
+              onClick={copyScript}
+              disabled={!gameData?.meta?.sourceScript && !script}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Sao chép toàn bộ kịch bản văn bản ra clipboard"
+            >
+              <Copy size={12} /> Sao chép kịch bản
+            </button></div>
         </div>
         <p className="text-[10px] text-muted-foreground">Đặt con trỏ vào chỗ muốn chèn trong kịch bản rồi bấm nút tương ứng ở trên — phần cần điền sẽ được bôi đen sẵn để gõ đè lên.</p>
         <Textarea
@@ -398,12 +477,17 @@ export default function PalaceScriptImporter({ gameData, setGameData, onGenerate
         />
       </div>
 
-      <div className="flex gap-2">
+      
+      <div className="flex gap-2 flex-wrap">
+        <Button onClick={handleAIFix} disabled={aiLoading} variant="outline" className="px-3">
+          {aiLoading ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Wand2 size={16} className="mr-2" />}
+          {aiLoading ? "AI đang sửa..." : "Sửa lỗi logic bằng AI"}
+        </Button>
         <Button onClick={handleCheck} disabled={checking} variant="outline" className="flex-1">
           {checking ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ClipboardCheck size={16} className="mr-2" />}
           {checking ? "Đang kiểm tra..." : "Kiểm Tra Kịch Bản"}
         </Button>
-        <Button onClick={handleProduce} disabled={producing} className="flex-1 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700">
+        <Button onClick={handleProduce} disabled={producing} className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700">
           {producing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Bot size={16} className="mr-2" />}
           {producing ? "Đang sản xuất..." : "Sản Xuất Game"}
         </Button>

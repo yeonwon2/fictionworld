@@ -44,6 +44,10 @@ CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdow
 <văn bản kết thúc>
 
 QUY TẮC:
+- LOGIC (QUAN TRỌNG): mạch truyện phải LIỀN MẠCH — mỗi "→ Đến cảnh N" phải hợp lý: cảnh đích PHẢI mở đầu bằng 1 câu nhắc lại tình huống vừa xảy ra ở cảnh trước, tuyệt đối không nhảy sang chuyện khác không liên quan.
+- LOGIC: mọi "→ Cần vật phẩm: X" PHẢI có "→ Vật phẩm: X" (hoặc "→ Nhận Vật phẩm: X") cho ra vật phẩm đó ở MỘT CẢNH PHÍA TRƯỚC — đừng yêu cầu vật phẩm chưa từng xuất hiện.
+- LOGIC: mọi "→ Cần cờ: X" PHẢI có "→ Cờ: X" tạo cờ đó ở phía trước; "→ Cần không có cờ: X" chỉ dùng khi cờ X chưa từng được tạo trên mọi nhánh dẫn tới lựa chọn đó.
+- LOGIC: mọi "→ Cần <chỉ số> >= N" phải ĐẠT ĐƯỢC dựa trên "Chỉ số khởi đầu" cộng các lần tăng chỉ số ở các cảnh phía trước — đừng đặt ngưỡng cao hơn mức tối đa có thể đạt.
 - Niên đại làm giàu TỰ ĐỘNG theo Vốn: chạm mốc vốn thì đế chế bước sang niên đại mới (1995 mồ hôi vốn → 1999 cổ phiếu vàng → 2003 đất vàng → ...) và thu thêm khoản tiền MỘT LẦN — "tiền đẻ ra tiền". Có sự kiện thăng niên đại thì nêu rõ trong văn bản hoặc "→ Cơ hội:".
 - "→ Vốn +N/-N" là lời/lỗ tiền — NHỚ trừ tiền khi làm ăn thất bại, để lỗ gần ngưỡng phá sản tạo kịch tính. "→ Danh vọng +N", "→ Sức khỏe +N"... là chỉ số phụ (tên tự do, hệ thống tự nhận).
 - "→ Cơ hội: <tiêu đề> | <nội dung>" là tin nội bộ/dự án/phi vụ. Đặt NGAY DƯỚI "## CẢNH N" (trước lựa chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì bật NGAY SAU KHI chọn. Mỗi cảnh/lựa chọn tối đa 1 dòng này. Tiêu đề và nội dung cách nhau bằng dấu " | " (có khoảng trắng 2 bên). Muốn xuống dòng trong nội dung thì gõ "\\n" (gạch chéo ngược + n), KHÔNG xuống dòng thật.

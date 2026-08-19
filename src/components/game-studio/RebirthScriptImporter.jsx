@@ -3,8 +3,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Wand2, Loader2, AlertTriangle, Copy, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { Bot, Wand2, Loader2, AlertTriangle, Copy, ClipboardList, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { parseRebirthScript } from "@/lib/gameStudio/rebirthScriptParser";
+import { fixScriptWithAI, verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateRebirthScriptFromPrompt } from "@/lib/gameStudio/rebirthScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -74,115 +75,105 @@ function jumpToWarning(textareaRef, script, warning) {
 // ("Xưởng Offline"), SystemScriptImporter.jsx/systemScriptParser.js ("Xưởng
 // Hệ Thống") hay PalaceScriptImporter.jsx/palaceScriptParser.js ("Xưởng Cung
 // Đấu"), sửa file này không ảnh hưởng gì tới các xưởng đó.
-// Dưới đây là KỊCH BẢN MẪU HOÀN CHỈNH, viết không dấu #/##/** như người dùng
-// thường gõ, dán y vậy vẫn chạy — phủ đủ mọi cơ chế của xưởng này:
-// Vốn (chỉ số sinh tử → niên đại làm giàu), Danh vọng, "→ Cơ hội:" (tin nội
-// bộ/dự án), Cờ truyện (hợp đồng đã chốt), Vật phẩm (giấy tờ/nguyên liệu),
-// và nhiều kết thúc khác nhau.
-const CHEAT_SHEET = `Tay Trắng Trọng Sinh
-Thể loại: Trọng Sinh Làm Giàu
-Chỉ số sinh tử: Vốn < 5, Sức khỏe < 1
-Chỉ số khởi đầu: Vốn = 50, Sức khỏe = 3, Danh vọng = 2
-Thông báo thua cuộc: Phá Sản | Vốn cạn kiệt, nhà xưởng bị siết nợ. Nhưng trọng sinh một lần nữa...?
-Thang thời đại: 1995 · Vốn mồ hôi = 0 (+0) | 1999 · Cổ phiếu vàng = 60 (+5) | 2003 · Đất vàng = 200 (+10) | 2007 · Đế chế = 600 (+20) | 2011 · Huyền thoại = 1500 (+35)
+// Dưới đây là KỊCH BẢN MẪU DẠNG CHUNG (giống Xưởng Công Lược) — chỉ để nắm CÚ
+// PHÁP của xưởng này: Vốn (chỉ số sinh tử → niên đại làm giàu), Danh vọng,
+// "→ Cơ hội:" (tin nội bộ/dự án), Cờ truyện (hợp đồng đã chốt), Vật phẩm
+// (giấy tờ/nguyên liệu), và nhiều kết thúc khác nhau. Nội dung là CHỖ TRỐNG —
+// gõ đè tên truyện, nhân vật, cảnh của BẠN vào để viết truyện MỚI, đừng chép
+// theo đúng 1 cốt truyện duy nhất nào cả.
+const CHEAT_SHEET = `Trọng Sinh — Tên truyện
+Thể loại: ...
+Chỉ số sinh tử: Vốn < 5, Sức khỏe < 1   (tuỳ chọn — tụt xuống ngưỡng là PHÁ SẢN/Game Over.
+                                          Chỉ số ĐẦU TIÊN nên là "Vốn" vì niên đại làm giàu
+                                          được tính từ nó. Khai nhiều chỉ số cách nhau dấu phẩy.)
+Chỉ số khởi đầu: Vốn = 50, Sức khỏe = 3 (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
+                                          không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
+                                          tính là "chết" ngay từ đầu game!)
+Thông báo thua cuộc: Phá Sản | Vốn cạn kiệt, nhà xưởng bị siết nợ.
+                                          (tuỳ chọn — đổi chữ hiện khi phá sản vì "Chỉ số
+                                           sinh tử" ở trên, thay cho "GAME OVER" mặc định.
+                                           Bỏ qua dòng này thì vẫn hiện chữ mặc định như cũ.)
+Thang thời đại: 1995 · Mồ hôi = 0 (+0) | 1999 · Cổ phiếu vàng = 60 (+5) | 2003 · Đất vàng = 200 (+10) | 2007 · Đế chế = 600 (+20) | 2011 · Huyền thoại = 1500 (+35)
+                                          (tuỳ chọn — mốc vốn để đế chế thăng niên đại, cách
+                                           nhau dấu "|", thu nhập (+N) cộng MỘT LẦN khi thăng
+                                           niên đại. Bỏ qua thì dùng mặc định.)
 
 GIỚI THIỆU
-→ Cơ hội: THOÁT KIẾP PHÁ SẢN | Năm 2011, công ty của bạn sắp sập. Một cơn ngất — và bạn tỉnh dậy ở năm 1995, khi trái tim bạn vẫn là một kẻ từng thấy tương lai.
-Năm 1995, không một ai biết trước cuộc cách mạng công nghệ, cơn sốt đất, hay đỉnh cao cổ phiếu ngân hàng. Còn bạn — biết tất cả. Chỉ cần 50 đồng vốn mồ hôi, bạn sẽ xây lại cả một đế chế.
+→ Cơ hội: THOÁT KIẾP PHÁ SẢN | Lời chào mở đầu, mời người chơi bắt đầu.
+Văn bản mở đầu — khởi nghiệp tay trắng, 1-2 đoạn, có thể có lời thoại trong ngoặc kép.
 
-CẢNH 1 — Mùa cà phê đầu tiên
-→ Cơ hội: CƠN SỐT CÀ PHÊ | Giá cà phê thế giới sắp tăng gấp ba sau vụ hạn hán, còn nguyên liệu trong nước đang rẻ như cho.
-Trên phố nhỏ, bà Năm mở kho cà phê thô. Bạn nhớ rõ báo cáo thị trường năm 96 — lời to nếu kịp gom hàng.
+CẢNH 1 — Tên cảnh
+→ Cơ hội: TÊN TIN NỘI BỘ | Tin nội bộ/dự án/phi vụ — sự kiện chung của thương trường.
+                                       (tuỳ chọn — đặt NGAY DƯỚI dòng CẢNH thì bật bảng
+                                        thông báo khi VÀO cảnh)
+Diễn biến của cảnh — cơ hội làm giàu nhờ kiến thức tương lai.
 
-A — Xuống toàn bộ vốn mua cà phê
+A — Lời lựa chọn ngắn
 → Vốn +20
-→ Cờ: ký được hợp đồng cà phê
-→ Cơ hội: HỢP ĐỒNG CÀ PHÊ | Đã ký mua 10 tấn cà phê thô. Giá thế giới tăng, bạn lời gấp đôi.
+→ Cờ: ký được hợp đồng đầu tiên
+→ Cơ hội: KẾT QUẢ PHI VỤ | Công bố kết quả ngay sau khi chọn (đặt BÊN TRONG lựa chọn).
 
-B — Mua một nửa, giữ lại tiền đất
-→ Vốn +5
-→ Vật phẩm: Sổ ghi chép quy hoạch đất
+B — Lời lựa chọn khác
+→ Cần Vốn >= 40
+→ Vốn -10
+→ Vật phẩm: Giấy tờ đất nền
 → Đến cảnh 2
 
-C — Đi vay ngân hàng mua cả kho
-→ Cần Danh vọng >= 2
-→ Vốn +30
-→ Cờ: ký được hợp đồng cà phê
-→ Cơ hội: CÒNG LƯNG TRẢ NỢ | Vay nặng lãi để mua cả kho cà phê. Lời lớn, nhưng chỉ cần một cú lỡ nhịp là mất trắng.
+CẢNH 2 — Tên cảnh
+Diễn biến của cảnh.
 
-CẢNH 2 — Cổ phiếu ngân hàng 1999
-→ Cơ hội: CỔ PHIẾU NGÂN HÀNG | Thị trường chứng khoán vừa ra đời. Cổ phiếu ngân hàng Đông Á sắp bùng nổ gấp mười lần.
-Trước cái bàn gỗ cũ kỹ của phòng giao dịch, bạn nhớ từng con số trong cuốn tài chính từng đọc.
-
-A — Đổ tiền mua cổ phiếu Đông Á
-→ Cần Vốn >= 60
-→ Vốn +50
-→ Cơ hội: CỔ PHIẾU BÙNG NỔ | Cổ phiếu Đông Á tăng 10 lần đúng như bạn dự đoán. Thị trường nhốn nháo gọi bạn là "thần đồng chứng khoán".
-
-B — Mua rồi bán lướt sóng
-→ Vốn +15
-→ Danh vọng +3
-→ Cơ hội: TIN ĐỒN NHÀ ĐẦU TƯ | Nhà đầu tư bắt đầu để mắt tới bạn.
-
-C — Giữ tiền mặt chờ đất vàng
-→ Vật phẩm: Sổ ghi chép quy hoạch đất
-→ Đến cảnh 3
-
-CẢNH 3 — Cơn sốt đất 2003
-→ Cơ hội: ĐẤT VÀNG QUẬN 3 | Quy hoạch mở đường nội đô sắp công bố, giá đất Quận 3 sẽ tăng chóng mặt.
-Ông Tám cần bán gấp lô đất mặt tiền. Bạn biết chính xác con phố này 10 năm sau sẽ là gì.
-
-A — Cầm sổ quy hoạch mua cả lô đất
-→ Cần vật phẩm: Sổ ghi chép quy hoạch đất
-→ Vốn +200
-→ Cờ: sở hữu lô đất Quận 3
-→ Cơ hội: LÔ ĐẤT MẶT TIỀN | Giá lô đất tăng gấp 20 lần. Bạn thành người giàu có trong giới địa ốc.
-
-B — Mua dùm ông Tám với giá thấp
-→ Cần Vốn >= 200
-→ Vốn +100
-→ Danh vọng +5
-→ Cờ: sở hữu lô đất Quận 3
-
-C — Bỏ qua, ôm cổ phiếu cho tới 2007
-→ Cờ: ôm cổ phiếu dài hạn
-→ Đến cảnh 4
-
-CẢNH 4 — Đỉnh cao 2007
-→ Cơ hội: BONG BÓNG CHỨNG KHOÁN | Năm 2007, cổ phiếu đạt đỉnh lịch sử — nhưng cuối năm sẽ sụp đổ. Bạn phải thoát hàng đúng lúc.
-Bàn tay bạn run run trên điện thoại bàn. Toàn bộ số tiền đang gấp mười lần ban đầu.
-
-A — Rút toàn bộ tiền khỏi thị trường
-→ Cần cờ: ôm cổ phiếu dài hạn
+A — Lựa chọn táo bạo
+→ Cần cờ: ký được hợp đồng đầu tiên
 → Vốn +300
-→ Cơ hội: THOÁT HÀNG ĐÚNG LÚC | Bạn rút đúng trước đợt khủng hoảng. Người ta gọi bạn là thiên tài, kẻ khác gọi là ma may mắn.
+→ Cơ hội: THĂNG NIÊN ĐẠI | Chạm mốc vốn, đế chế bước sang niên đại mới và thu thêm khoản tiền MỘT LẦN.
 
-B — Mua thêm đất dự án nghỉ dưỡng
-→ Vốn +150
-→ Cờ: sở hữu khu nghỉ dưỡng
+B — Lựa chọn an toàn
+→ Cần vật phẩm: Giấy tờ đất nền
+→ Vốn +50
+→ Kết thúc truong_thanh
+
+CẢNH 3 — Tên cảnh
+→ Cơ hội: CƠN SỐT THỊ TRƯỜNG | Sự kiện bước ngoặt lớn của thập kỷ.
+Diễn biến quyết định.
+
+A — Liều đánh lớn
+→ Cần Vốn >= 200
+→ Vốn +500
 → Kết thúc de_che
 
-C — Liều đánh gấp ba
-→ Vốn -300
-→ Kết thúc pha_san
+B — Dừng lại đúng lúc
+→ Vốn +100
+→ Kết thúc an_yen
 
 KẾT THÚC de_che — Đế Chế Vĩ Đại [TRUE_END]
-Từ 50 đồng vốn mồ hôi, bạn sở hữu đất vàng, cổ phiếu, khu nghỉ dưỡng — một đế chế tài chính trải khắp ba thập kỷ. Năm 2011, bạn nhìn lại, nụ cười nhẹ: lần này, không phá sản nữa.
+Văn bản kết thúc.
 
-KẾT THÚC pha_san — Tai Thỏ Về Tay Người [BAD_END]
-Tham lam quá đà, bạn không thoát hàng kịp khủng hoảng. Vốn theo cổ phiếu bốc hơi, nhà xưởng bị siết nợ. Năm 2011, bạn lại đứng trước cửa công ty sắp sập — lần này, còn ai cho bạn trọng sinh lần nữa?`
+KẾT THÚC truong_thanh — Trưởng Thành [GOOD_END]
+Văn bản kết thúc.
+
+KẾT THÚC an_yen — An Yên [NORMAL_END]
+Văn bản kết thúc.
+
+Ghi chú:
+- Mỗi cảnh nên có 2-4 lựa chọn. Không ghi "→ Đến cảnh N"/"→ Kết thúc <nhãn>" thì tự sang CẢNH kế tiếp.
+- "→ Cần Vốn >= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều kiện — lựa chọn trước quyết định lựa chọn sau. Muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn khoá "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
+- "→ Vốn +N/-N" là lời/lỗ tiền. "→ Danh vọng +N", "→ Sức khỏe +N"... là chỉ số phụ (tên tự do, hệ thống tự nhận).
+- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END / BAD_END.
+- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" CHỈ trỏ tới cảnh/kết thúc CÓ THẬT trong kịch bản.`;
 
 const CHEAT_SHEET_NOTES = `CÁCH DÙNG:
+- Đây là MẪU CÚ PHÁP, không phải 1 truyện hoàn chỉnh — thay mọi chữ "Tên truyện",
+  "Tên cảnh", "Diễn biến của cảnh", "Văn bản kết thúc" bằng nội dung của bạn.
 - Mỗi lựa chọn nên có 1 dòng "→ Đến cảnh N" hoặc "→ Kết thúc <nhãn>". Bỏ qua thì
-  tự sang CẢNH kế tiếp. Trong bản mẫu, chọn B ở CẢNH 2 sẽ đi thẳng tới CẢNH 3 —
-  còn chọn C ở CẢNH 1 thì MẤT cơ hội lấy "Sổ ghi chép quy hoạch đất".
-- "→ Cần Vốn >= N", "→ Cần cờ:", "→ Cần vật phẩm:", "→ Cần Danh vọng >= N" khoá
-  lựa chọn nếu chưa đủ điều kiện — lựa chọn trước quyết định lựa chọn sau.
+  tự sang CẢNH kế tiếp. Có thể bỏ "→ Đến cảnh 2" ở lựa chọn A của CẢNH 1 để xem
+  cách cảnh tự nối tiếp nhau.
+- "→ Cần Vốn >= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều
+  kiện — lựa chọn trước quyết định lựa chọn sau.
 - "→ Cơ hội: TIÊU ĐỀ | Nội dung" bật bảng thông báo tin nội bộ/phi vụ. NIÊN ĐẠI
   làm giàu tự tính từ Vốn (chạm mốc "1999 · Cổ phiếu vàng = 60" thì đế chế thăng
   niên đại và cộng thêm khoản thu nhập một lần: "tiền đẻ ra tiền").
 - "→ Vốn -N" là lỗ vốn — đừng ngại làm lỗ sát ngưỡng phá sản ("Vốn < 5") để căng
-  thẳng đúng chất chốn thương trường.`
+  thẳng đúng chất chốn thương trường.`;
 
 
 export default function RebirthScriptImporter({ gameData, setGameData, onGenerated }) {
@@ -263,7 +254,59 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
     }
   };
 
-  const handleProduce = () => {
+  
+  const handleAIFix = async () => {
+    if (!script.trim()) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    let parseWarnings;
+    try {
+      parseWarnings = parseRebirthScript(script, gameData.meta).warnings || [];
+    } catch (e) {
+      toast({ variant: "destructive", title: "Kịch bản có lỗi cú pháp", description: e.message || "Sửa lỗi cú pháp trước, rồi bấm Kiểm Tra." });
+      return;
+    }
+    if (parseWarnings.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
+    setAiLoading(true);
+    try {
+      const fixed = await fixScriptWithAI(CHEAT_SHEET, script, parseWarnings);
+      setScript(fixed);
+      setChecked(false);
+      toast({ title: "AI đã sửa xong", description: "Kiểm tra lại kịch bản rồi bấm Sản Xuất Game." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi sửa kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
+  const handleAIWriteVerified = async () => {
+    if (!aiInput.trim()) { toast({ variant: "destructive", title: "Thiếu nội dung", description: "Nhập ý tưởng hoặc dán nội dung chương truyện." }); return; }
+    setAiLoading(true);
+    try {
+      const draft = await generateRebirthScriptFromPrompt({ mode: aiMode, input: aiInput, length: aiLength });
+      setScript(draft);
+      const report = await verifyAndFixScript({
+        cheatSheet: CHEAT_SHEET,
+        parseFn: (txt) => parseRebirthScript(txt, gameData.meta),
+        script: draft,
+        maxRounds: 3,
+      });
+      setScript(report.script);
+      setWarnings(report.warnings || []);
+      setChecked(true);
+      if (report.clean) {
+        toast({ title: "Kịch bản chuẩn hoàn tất", description: report.rounds > 0 ? `Đã tự sửa ${report.rounds} lượt. 0 lỗi — sẵn sàng Sản Xuất Game.` : "0 lỗi ngay từ đầu — sẵn sàng Sản Xuất Game." });
+      } else {
+        toast({ variant: "destructive", title: "Vẫn còn lỗi sau khi sửa", description: `Còn ${report.warnings.length} lỗi — xem bên dưới và sửa tay hoặc bấm "Sửa lỗi logic bằng AI".` });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lỗi viết kịch bản", description: e.message || "Thử lại." });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+const handleProduce = () => {
     if (!script.trim()) {
       toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
       return;
@@ -271,6 +314,7 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
     setProducing(true);
     try {
       const result = parseRebirthScript(script, gameData.meta);
+      result.meta = { ...(result.meta || {}), sourceScript: script };
       setGameData(result);
       setWarnings(result.warnings || []);
       setChecked(true);
@@ -285,6 +329,28 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
       setProducing(false);
     }
   };
+  const loadFromSaved = () => {
+    const saved = gameData?.meta?.sourceScript;
+    if (!saved) {
+      toast({ variant: "destructive", title: "Chưa có kịch bản gốc", description: "Sản xuất 1 kịch bản trước (game sẽ lưu bản gốc), hoặc dán kịch bản rồi bấm Sản Xuất Game." });
+      return;
+    }
+    setScript(saved);
+    setChecked(false);
+    toast({ title: "Đã lấy lại kịch bản gốc", description: "Kịch bản văn bản đã được dán vào ô bên dưới để chỉnh sửa." });
+  };
+
+  const copyScript = async () => {
+    const text = gameData?.meta?.sourceScript || script;
+    if (!text) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Đã sao chép kịch bản", description: "Kịch bản dạng văn bản đã vào clipboard." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Không sao chép được", description: err.message });
+    }
+  };
+
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-emerald-500/20">
@@ -356,6 +422,10 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
               {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Wand2 size={14} className="mr-1.5" />}
               {aiLoading ? "AI đang viết..." : "Viết kịch bản bằng AI"}
             </Button>
+            <Button size="sm" onClick={handleAIWriteVerified} disabled={aiLoading} variant="outline" className="w-full">
+              {aiLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <CheckCircle2 size={14} className="mr-1.5" />}
+              {aiLoading ? "Đang viết & tự sửa lỗi..." : "Viết Kịch Bản Chuẩn (tự kiểm tra & sửa đến khi hết lỗi)"}
+            </Button>
           </div>
         )}
       </div>
@@ -375,7 +445,25 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
                 <Icon size={12} /> {label}
               </button>
             ))}
-          </div>
+          
+            <button
+              type="button"
+              onClick={loadFromSaved}
+              disabled={!gameData?.meta?.sourceScript}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Lấy lại kịch bản văn bản đã dùng để sản xuất game hiện tại, để chỉnh sửa tiếp"
+            >
+              <ClipboardList size={12} /> Lấy lại kịch bản
+            </button>
+            <button
+              type="button"
+              onClick={copyScript}
+              disabled={!gameData?.meta?.sourceScript && !script}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Sao chép toàn bộ kịch bản văn bản ra clipboard"
+            >
+              <Copy size={12} /> Sao chép kịch bản
+            </button></div>
         </div>
         <p className="text-[10px] text-muted-foreground">Đặt con trỏ vào chỗ muốn chèn trong kịch bản rồi bấm nút tương ứng ở trên — phần cần điền sẽ được bôi đen sẵn để gõ đè lên.</p>
         <Textarea
@@ -388,7 +476,12 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
         />
       </div>
 
-      <div className="flex gap-2">
+      
+      <div className="flex gap-2 flex-wrap">
+        <Button onClick={handleAIFix} disabled={aiLoading} variant="outline" className="px-3">
+          {aiLoading ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Wand2 size={16} className="mr-2" />}
+          {aiLoading ? "AI đang sửa..." : "Sửa lỗi logic bằng AI"}
+        </Button>
         <Button onClick={handleCheck} disabled={checking} variant="outline" className="flex-1">
           {checking ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ClipboardCheck size={16} className="mr-2" />}
           {checking ? "Đang kiểm tra..." : "Kiểm Tra Kịch Bản"}
