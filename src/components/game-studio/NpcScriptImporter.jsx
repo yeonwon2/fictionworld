@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ClipboardList, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { parseNpcScript } from "@/lib/gameStudio/npcScriptParser";
-import { fixScriptWithAI, verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
+import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateNpcScriptFromPrompt } from "@/lib/gameStudio/npcScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
 import FileUrlInput from "@/components/FileUrlInput";
@@ -249,6 +249,7 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
   };
 
   
+  
   const handleAIFix = async () => {
     if (!script.trim()) { toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Viết hoặc dán kịch bản trước." }); return; }
     let parseWarnings;
@@ -261,16 +262,29 @@ export default function NpcScriptImporter({ gameData, setGameData, onGenerated }
     if (parseWarnings.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
     setAiLoading(true);
     try {
-      const fixed = await fixScriptWithAI(CHEAT_SHEET, script, parseWarnings);
-      setScript(fixed);
-      setChecked(false);
-      toast({ title: "AI đã sửa xong", description: "Kiểm tra lại kịch bản rồi bấm Sản Xuất Game." });
+      const report = await verifyAndFixScript({
+        cheatSheet: CHEAT_SHEET,
+        parseFn: (txt) => parseNpcScript(txt, gameData.meta),
+        script,
+        maxRounds: 3,
+      });
+      setScript(report.script);
+      setWarnings(report.warnings || []);
+      setChecked(true);
+      if (report.clean) {
+        toast({ title: "AI đã sửa sạch", description: report.improved ? `Đã tự sửa ${report.rounds} lượt. 0 lỗi — sẵn sàng Sản Xuất Game.` : "0 lỗi — sẵn sàng Sản Xuất Game." });
+      } else if (report.improved) {
+        toast({ variant: "destructive", title: "Đã giảm bớt lỗi", description: `Còn ${report.warnings.length} lỗi (từ ${parseWarnings.length} ban đầu) — xem cảnh báo bên dưới và sửa tay.` });
+      } else {
+        toast({ variant: "destructive", title: "AI không sửa được tốt hơn", description: "Hệ thống giữ nguyên bản gốc (không tệ hơn). Sửa tay theo các cảnh báo bên dưới, hoặc bấm Kiểm Tra để xem chi tiết." });
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Lỗi sửa kịch bản", description: e.message || "Thử lại." });
     } finally {
       setAiLoading(false);
     }
   };
+
 
 
   const handleAIWriteVerified = async () => {
