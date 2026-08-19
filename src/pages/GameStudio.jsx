@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
@@ -11,6 +11,7 @@ import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import ThemeWorkshop from "@/components/game-studio/ThemeWorkshop";
+import PromptHandbook from "@/components/game-studio/PromptHandbook";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { newEmptyGame } from "@/lib/gameStudio/rpgThemes";
 import { listGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
@@ -36,7 +37,7 @@ const WORKSHOP_TABS = [
 ];
 const ALL_TABS = [...MAIN_TABS, ...WORKSHOP_TABS];
 
-function GameLibrary({ onOpen, onOpenThemeWorkshop }) {
+function GameLibrary({ onOpen, onOpenThemeWorkshop, onOpenPromptHandbook }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -84,6 +85,12 @@ function GameLibrary({ onOpen, onOpenThemeWorkshop }) {
           <p className="text-muted-foreground text-sm mt-1">Xưởng sản xuất game nhập vai AI — cho LilyHub.</p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onOpenPromptHandbook}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent transition"
+          >
+            <NotebookText className="w-4 h-4" /> Sổ Tay AI
+          </button>
           <button
             onClick={onOpenThemeWorkshop}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent transition"
@@ -374,7 +381,7 @@ function GameEditor({ gameId, onBack }) {
 
 export default function GameStudio() {
   const [activeGameId, setActiveGameId] = useState(null);
-  const [view, setView] = useState("library"); // "library" | "theme-workshop"
+  const [view, setView] = useState("library"); // "library" | "theme-workshop" | "prompt-handbook"
 
   if (activeGameId) {
     return <GameEditor gameId={activeGameId} onBack={() => setActiveGameId(null)} />;
@@ -382,5 +389,8 @@ export default function GameStudio() {
   if (view === "theme-workshop") {
     return <ThemeWorkshop onBack={() => setView("library")} />;
   }
-  return <GameLibrary onOpen={setActiveGameId} onOpenThemeWorkshop={() => setView("theme-workshop")} />;
+  if (view === "prompt-handbook") {
+    return <PromptHandbook onBack={() => setView("library")} />;
+  }
+  return <GameLibrary onOpen={setActiveGameId} onOpenThemeWorkshop={() => setView("theme-workshop")} onOpenPromptHandbook={() => setView("prompt-handbook")} />;
 }
