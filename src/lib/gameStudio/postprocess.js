@@ -10,6 +10,11 @@ const cleanStr = (v) => (v == null || v === "null" || v === "" || v === "none" |
 const cleanNum = (v) => (typeof v === "number" && !isNaN(v)) ? v : null;
 const cleanStrArr = (v) => Array.isArray(v) ? v.map(String).filter((x) => x && x !== "null") : [];
 
+// Cảnh báo dạng gợi ý chất lượng (vật phẩm/cờ mồ côi, điều kiện thừa) — không
+// chặn đường chơi được, khác với lỗi thật. Dùng chung ở UI (tách danh sách
+// hiển thị) và ở fixScriptWithAI.js (không đưa gợi ý vào vòng AI tự sửa).
+export const isSuggestionWarning = (w) => typeof w === "string" && w.startsWith("[GỢI Ý]");
+
 function cleanPopup(p) {
   if (!p || typeof p !== "object") return null;
   const t = cleanStr(p.title);
@@ -422,6 +427,17 @@ function simulatePlaytest(nodesMap, statsConfig) {
   const nodeHasMove = new Set();     // nodeId có ít nhất 1 trạng thái có lựa chọn khả dụng
   const blockedNodes = new Map();    // nodeId -> ví dụ lý do khoá (cho thông báo)
 
+  // Theo dõi từng yêu cầu (vật phẩm/cờ) trên từng lựa chọn qua MỌI trạng thái
+  // từng chạm tới nó — nếu yêu cầu không BAO GIỜ fail trong suốt mô phỏng, nó
+  // là điều kiện thừa (luôn đúng sẵn trước khi cần, không cản được ai thật sự).
+  const reqTrack = new Map(); // "nodeId::ci::type" -> {pass, fail, nodeId, choiceText, type, reqKey}
+  const trackReq = (nodeId, ci, choiceText, type, reqKey, ok) => {
+    const k = nodeId + "::" + ci + "::" + type;
+    let r = reqTrack.get(k);
+    if (!r) { r = { pass: 0, fail: 0, nodeId, choiceText, type, reqKey }; reqTrack.set(k, r); }
+    if (ok) r.pass++; else r.fail++;
+  };
+
   // Các cạnh vào mỗi node (kèm tóm tắt yêu cầu của lựa chọn đó) — dùng để chỉ
   // cho người viết biết CHÍNH XÁC lựa chọn nào chặn đường vào một cảnh.
   const inEdges = {};
@@ -497,6 +513,12 @@ function simulatePlaytest(nodesMap, statsConfig) {
 
     if (node.isEnding) continue; // kết thúc hợp lệ
 
+    (node.choices || []).forEach((c, ci) => {
+      if (c.requiresItem) trackReq(st.nodeId, ci, c.text, "item", c.requiresItem, st.items.has(c.requiresItem));
+      if (c.requiresFlag) trackReq(st.nodeId, ci, c.text, "flag", c.requiresFlag, st.flags.has(c.requiresFlag));
+      if (c.requiresFlagAbsent) trackReq(st.nodeId, ci, c.text, "flagAbsent", c.requiresFlagAbsent, !st.flags.has(c.requiresFlagAbsent));
+    });
+
     const avail = (node.choices || []).filter((c) => choiceAvailable(c, st));
     if (avail.length) {
       nodeHasMove.add(st.nodeId);
@@ -568,6 +590,23 @@ function simulatePlaytest(nodesMap, statsConfig) {
     }
   }
 
+  // Điều kiện THỪA: yêu cầu vật phẩm/cờ trên 1 lựa chọn nhưng qua toàn bộ mô
+  // phỏng, mọi trạng thái từng chạm tới lựa chọn này đều ĐÃ có sẵn thứ đó rồi
+  // — tức yêu cầu không bao giờ thực sự chặn ai (đã "xuất hiện trước khi cần"
+  // trên mọi đường đi thật). Không phải lỗi chặn đường chơi nên chỉ là gợi ý.
+  // Lưu ý: `pass` đếm số TRẠNG THÁI ĐÃ KHỬ TRÙNG (`visited`) từng chạm lựa
+  // chọn này, không phải số đường đi — 2 nhánh khác nhau hội tụ về cùng 1
+  // trạng thái (cùng đồ/cờ/chỉ số) chỉ tính 1 lần. Vì vậy KHÔNG đặt ngưỡng
+  // pass≥2: fail=0 (chưa từng thấy trạng thái nào thiếu) đã là bằng chứng đủ
+  // — kể cả với kịch bản 1 đường thẳng, đây vẫn là sự thật (yêu cầu không đổi
+  // được kết quả gì), chỉ là mức độ đáng chú ý thấp hơn nên vẫn để dạng gợi ý.
+  for (const r of reqTrack.values()) {
+    if (r.fail === 0 && r.pass >= 1) {
+      const label = r.type === "item" ? `vật phẩm "${r.reqKey}"` : r.type === "flag" ? `cờ "${r.reqKey}"` : `KHÔNG có cờ "${r.reqKey}"`;
+      warnings.push(`[GỢI Ý] Cảnh "${r.nodeId}" — lựa chọn "${r.choiceText || "(không có chữ)"}": yêu cầu ${label}, nhưng qua mô phỏng chạy thử, MỌI cách tới được lựa chọn này đều đã thoả điều kiện từ trước — yêu cầu này chưa từng thực sự chặn ai, có thể là điều kiện thừa. Nếu cố ý giữ lại (phòng khi kịch bản mở rộng sau này thêm đường khác) thì bỏ qua cảnh báo này.`);
+    }
+  }
+
   return warnings;
 }
 
@@ -592,7 +631,7 @@ function analyzeLogic(nodesMap, statsConfig) {
   const startValues = {};
   for (const sc of (statsConfig || [])) startValues[sc.key] = typeof sc.default === "number" ? sc.default : 0;
 
-  const note = (map, key, val, loc) => { if (!val) return; map[key] = (map[key] || []).concat(loc); };
+  const note = (map, key, loc) => { if (!key) return; map[key] = (map[key] || []).concat(loc); };
 
   for (const n of Object.values(nodesMap)) {
     if (n.grantItem) { itemsGranted.add(n.grantItem); note(itemSources, n.grantItem, n.id); }
@@ -608,15 +647,25 @@ function analyzeLogic(nodesMap, statsConfig) {
     }
   }
 
+  const itemsRequired = new Set();
+  const flagsRequired = new Set();
+
   for (const n of Object.values(nodesMap)) {
     for (const c of (n.choices || [])) {
       const where = `Cảnh "${n.id}" — lựa chọn "${c.text || "(không có chữ)"}"`;
-      if (c.requiresItem && !itemsGranted.has(c.requiresItem)) {
-        warnings.push(`${where}: yêu cầu vật phẩm "${c.requiresItem}" nhưng KHÔNG có lựa chọn nào cho vật phẩm này (không thấy dòng "→ Vật phẩm: ${c.requiresItem}" ở phía trước). Thêm lựa chọn cho vật phẩm trước cảnh này, hoặc bỏ yêu cầu.`);
+      if (c.requiresItem) {
+        itemsRequired.add(c.requiresItem);
+        if (!itemsGranted.has(c.requiresItem)) {
+          warnings.push(`${where}: yêu cầu vật phẩm "${c.requiresItem}" nhưng KHÔNG có lựa chọn nào cho vật phẩm này (không thấy dòng "→ Vật phẩm: ${c.requiresItem}" ở phía trước). Thêm lựa chọn cho vật phẩm trước cảnh này, hoặc bỏ yêu cầu.`);
+        }
       }
-      if (c.requiresFlag && !flagsGranted.has(c.requiresFlag)) {
-        warnings.push(`${where}: yêu cầu cờ "${c.requiresFlag}" nhưng KHÔNG có lựa chọn nào tạo cờ này (không thấy dòng "→ Cờ: ${c.requiresFlag}" ở phía trước). Thêm lựa chọn tạo cờ trước cảnh này, hoặc bỏ yêu cầu.`);
+      if (c.requiresFlag) {
+        flagsRequired.add(c.requiresFlag);
+        if (!flagsGranted.has(c.requiresFlag)) {
+          warnings.push(`${where}: yêu cầu cờ "${c.requiresFlag}" nhưng KHÔNG có lựa chọn nào tạo cờ này (không thấy dòng "→ Cờ: ${c.requiresFlag}" ở phía trước). Thêm lựa chọn tạo cờ trước cảnh này, hoặc bỏ yêu cầu.`);
+        }
       }
+      if (c.requiresFlagAbsent) flagsRequired.add(c.requiresFlagAbsent);
       for (const [k, need] of Object.entries(c.statRequirements || {})) {
         const start = startValues[k] ?? 0;
         const maxReach = start + (statGains[k] || 0);
@@ -633,5 +682,23 @@ function analyzeLogic(nodesMap, statsConfig) {
       }
     }
   }
+
+  // Vật phẩm/cờ MỒ CÔI: được cấp ở đâu đó nhưng chẳng lựa chọn nào từng dùng
+  // tới (không "→ Cần vật phẩm"/"→ Cần cờ" nào tham chiếu) — không phải lỗi
+  // chặn đường chơi, chỉ là dấu hiệu quên nối hoặc vật phẩm thừa. Gắn nhãn
+  // [GỢI Ý] để phân biệt với lỗi thật, và để không bị đưa vào vòng AI tự sửa.
+  for (const item of itemsGranted) {
+    if (!itemsRequired.has(item)) {
+      const locs = (itemSources[item] || []).map((id) => `"${id}"`).join(", ");
+      warnings.push(`[GỢI Ý] Vật phẩm "${item}" (cấp ở cảnh ${locs}) không được bất kỳ lựa chọn nào yêu cầu ("→ Cần vật phẩm: ${item}") — có thể là vật phẩm mồ côi, thừa, không có tác dụng gì trong kịch bản. Nếu cố ý (vật phẩm sưu tầm/trang trí) thì bỏ qua cảnh báo này.`);
+    }
+  }
+  for (const flag of flagsGranted) {
+    if (!flagsRequired.has(flag)) {
+      const locs = (flagSources[flag] || []).map((id) => `"${id}"`).join(", ");
+      warnings.push(`[GỢI Ý] Cờ "${flag}" (tạo ở cảnh ${locs}) không được bất kỳ lựa chọn nào kiểm tra ("→ Cần cờ: ${flag}" hoặc "→ Cần không có cờ: ${flag}") — có thể là cờ mồ côi, thừa, không ảnh hưởng gì tới mạch truyện.`);
+    }
+  }
+
   return warnings;
 }

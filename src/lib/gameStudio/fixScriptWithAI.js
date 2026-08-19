@@ -9,6 +9,7 @@
 //     hơn bản gốc.
 
 import { aiCall } from "@/lib/aiCall";
+import { isSuggestionWarning } from "./postprocess";
 
 const CHECKLIST = `
 QUY TẮC SỬA (bắt buộc, tuân thủ CHÍNH XÁC):
@@ -30,30 +31,65 @@ QUY TẮC SỬA (bắt buộc, tuân thủ CHÍNH XÁC):
 5. Giữ NGUYÊN phần không bị lỗi — chép lại y hệt, không cải biên, không thêm mô tả.
 `;
 
+const SCRIPT_MARKER = "===KỊCH BẢN===";
+const EXPLAIN_MARKER = "===GIẢI THÍCH===";
+
+// Định dạng phân tách bằng dấu mốc văn bản thường (không phải JSON) — cùng lý
+// do với scriptWriter.js: đơn giản, không bị lỗi cắt cụt/escape như JSON khi
+// kịch bản dài. Nếu AI lỡ không theo đúng định dạng (thiếu 1 trong 2 mốc),
+// coi toàn bộ phản hồi là kịch bản và bỏ qua phần giải thích — không để 1 câu
+// trả lời sai định dạng làm mất luôn kết quả sửa.
+function parseFixResponse(raw) {
+  const text = String(raw || "").trim();
+  const si = text.indexOf(SCRIPT_MARKER);
+  const ei = text.indexOf(EXPLAIN_MARKER);
+  if (si === -1 || ei === -1 || ei < si) {
+    return { script: text.replace(SCRIPT_MARKER, "").trim(), explanations: [] };
+  }
+  const script = text.slice(si + SCRIPT_MARKER.length, ei).trim();
+  const explainRaw = text.slice(ei + EXPLAIN_MARKER.length).trim();
+  const explanations = explainRaw
+    .split("\n")
+    .map((l) => l.replace(/^[-•]\s*/, "").trim())
+    .filter(Boolean);
+  return { script, explanations };
+}
+
 /**
  * Nhờ AI sửa kịch bản theo danh sách lỗi đã phát hiện (1 lượt gọi).
  * @param {string} cheatSheet - kịch bản mẫu cú pháp của xưởng.
  * @param {string} script - kịch bản đang cần sửa.
  * @param {string[]} warnings - danh sách lỗi/cảnh báo cần xử lý.
- * @returns {Promise<string>} toàn bộ kịch bản sau khi sửa.
+ * @returns {Promise<{script:string, explanations:string[]}>} kịch bản đã sửa
+ *   + giải thích ngắn (1 dòng/lỗi) AI đã sửa thế nào, để người viết học được
+ *   thay vì chỉ nhận bản đã sửa mà không hiểu vì sao.
  */
 export async function fixScriptWithAI(cheatSheet, script, warnings) {
   const prompt = `Bạn là biên kịch game nhập vai. Sửa kịch bản dưới đây để HẾT các lỗi logic.\n\n` +
     `KỊCH BẢN MẪU ĐÚNG CÚ PHÁP:"""${cheatSheet}"""\n\n` +
     `KỊCH BẢN CẦN SỬA:"""${script}"""\n\n` +
     `DANH SÁCH LỖI:\n` + warnings.map((w) => " - " + w).join("\n") + "\n\n" + CHECKLIST +
-    `\nTrả về TOÀN BỘ kịch bản đã sửa theo đúng cú pháp mẫu. KHÔNG thêm lời dẫn/giải thích trước hoặc sau.`;
+    `\nTrả về ĐÚNG định dạng sau, không thêm gì khác ngoài 2 mục này:\n\n` +
+    `${SCRIPT_MARKER}\n(toàn bộ kịch bản đã sửa theo đúng cú pháp mẫu)\n\n` +
+    `${EXPLAIN_MARKER}\n(mỗi lỗi trong DANH SÁCH LỖI 1 dòng, dạng "- <tóm tắt lỗi>: <đã sửa thế nào>", theo đúng thứ tự đã liệt kê)`;
 
   const text = await aiCall(prompt);
-  return String(text || "").trim();
+  return parseFixResponse(text);
 }
 
+// Gợi ý chất lượng (isSuggestionWarning, vd vật phẩm/cờ mồ côi, điều kiện
+// thừa) KHÔNG phải lỗi chặn đường chơi được. Không đưa vào danh sách gửi AI
+// sửa (AI có thể "sửa" bằng cách xoá mất một thiết kế cố ý), và không tính
+// vào "còn lỗi hay không" — nếu không thì một kịch bản chỉ còn gợi ý sẽ không
+// bao giờ đạt trạng thái "sạch".
 function safeWarnings(parseFn, script) {
   try {
     const parsed = parseFn(script);
-    return { list: parsed.warnings || [], count: (parsed.warnings || []).length };
+    const list = parsed.warnings || [];
+    const blocking = list.filter((w) => !isSuggestionWarning(w));
+    return { list, blocking, count: blocking.length };
   } catch {
-    return { list: [], count: Infinity }; // lỗi cú pháp nghiêm trọng → coi như "rất tệ"
+    return { list: [], blocking: [], count: Infinity }; // lỗi cú pháp nghiêm trọng → coi như "rất tệ"
   }
 }
 
@@ -67,29 +103,46 @@ function safeWarnings(parseFn, script) {
  * @param {(script:string)=>object} p.parseFn - hàm parse kịch bản trả { warnings }.
  * @param {string} p.script - kịch bản cần được kiểm tra/sửa.
  * @param {number} [p.maxRounds=3] - số vòng sửa tối đa.
- * @returns {Promise<{script:string, warnings:string[], clean:boolean, rounds:number, improved:boolean}>}
+ * @param {string[]} [p.focusWarnings] - nếu có, CHỈ nhờ AI sửa đúng các lỗi
+ *   này (người viết tự chọn từng lỗi muốn AI đụng vào) — các lỗi khác không
+ *   được gửi cho AI và tiến độ được đo trên đúng tập con này, dù `clean` cuối
+ *   cùng vẫn phản ánh TOÀN BỘ kịch bản (còn lỗi khác chưa chọn thì vẫn chưa
+ *   "sạch"). Không truyền = sửa hết mọi lỗi (hành vi cũ).
+ * @returns {Promise<{script:string, warnings:string[], clean:boolean, rounds:number, improved:boolean, explanations:string[], originalScript:string}>}
+ *   `originalScript` là bản TRƯỚC khi sửa — dùng để hiển thị diff trước/sau ở UI.
  */
-export async function verifyAndFixScript({ cheatSheet, parseFn, script, maxRounds = 3 }) {
+export async function verifyAndFixScript({ cheatSheet, parseFn, script, maxRounds = 3, focusWarnings }) {
   let best = script;
   let bestInfo = safeWarnings(parseFn, script);
-  const report = { script: best, warnings: bestInfo.list, clean: bestInfo.count === 0, rounds: 0, improved: false };
-  if (report.clean) return report;
+  const focusSet = focusWarnings && focusWarnings.length ? new Set(focusWarnings) : null;
+  const targetList = (info) => (focusSet ? info.blocking.filter((w) => focusSet.has(w)) : info.blocking);
+
+  const explanations = [];
+  const report = {
+    script: best, warnings: bestInfo.list, clean: bestInfo.count === 0,
+    rounds: 0, improved: false, explanations, originalScript: script,
+  };
+  if (targetList(bestInfo).length === 0) return report;
+
   for (let i = 0; i < maxRounds; i++) {
+    const toSend = targetList(bestInfo);
+    if (toSend.length === 0) break;
     let fixed;
     try {
-      fixed = await fixScriptWithAI(cheatSheet, best, bestInfo.list);
+      fixed = await fixScriptWithAI(cheatSheet, best, toSend);
     } catch {
       break; // gọi AI lỗi (thiếu key...) → dừng, giữ bản tốt nhất
     }
-    const info = safeWarnings(parseFn, fixed);
-    if (info.count < bestInfo.count) {
-      best = fixed;
+    const info = safeWarnings(parseFn, fixed.script);
+    if (targetList(info).length < toSend.length) {
+      best = fixed.script;
       bestInfo = info;
       report.improved = true;
       report.rounds = i + 1;
-      if (info.count === 0) break;
+      if (fixed.explanations.length) explanations.push(...fixed.explanations);
+      if (targetList(info).length === 0) break;
     }
-    // nếu lần này không tốt hơn: bỏ kết quả, thử lại từ bản tốt nhất ở vòng sau
+    // nếu lần này không tốt hơn (trên tập lỗi đang nhắm tới): bỏ kết quả, thử lại từ bản tốt nhất ở vòng sau
   }
   report.script = best;
   report.warnings = bestInfo.list;

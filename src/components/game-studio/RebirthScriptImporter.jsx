@@ -3,11 +3,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Wand2, Loader2, AlertTriangle, Copy, ClipboardList, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { Bot, Wand2, Loader2, AlertTriangle, Copy, ClipboardList, Check, MessageSquarePlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Lightbulb } from "lucide-react";
 import { parseRebirthScript } from "@/lib/gameStudio/rebirthScriptParser";
+import { isSuggestionWarning } from "@/lib/gameStudio/postprocess";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateRebirthScriptFromPrompt } from "@/lib/gameStudio/rebirthScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
+import AiFixReview from "./AiFixReview";
 
 // Chèn 1 đoạn cú pháp mẫu ngay tại vị trí con trỏ trong ô kịch bản — dùng cho
 // các nút "+ Thêm ..." bên dưới. Nếu snippet có 1 đoạn trùng "placeholder",
@@ -188,8 +190,18 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState(false);
   const [cheatSheetCopied, setCheatSheetCopied] = useState(false);
+  const [selectedErrors, setSelectedErrors] = useState(new Set());
+  const [aiFixPreview, setAiFixPreview] = useState(null);
   const textareaRef = useRef(null);
   const { toast } = useToast();
+
+  const toggleError = (w) => {
+    setSelectedErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(w)) next.delete(w); else next.add(w);
+      return next;
+    });
+  };
 
   const insertSnippet = (snippet, placeholder) => insertSnippetAtCursor({ textareaRef, script, setScript, snippet, placeholder });
 
@@ -238,10 +250,15 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
     setChecking(true);
     try {
       const result = parseRebirthScript(script, gameData.meta);
-      setWarnings(result.warnings || []);
+      const allWarnings = result.warnings || [];
+      const blockingCount = allWarnings.filter((w) => !isSuggestionWarning(w)).length;
+      const suggestionCount = allWarnings.length - blockingCount;
+      setWarnings(allWarnings);
       setChecked(true);
-      if (result.warnings?.length) {
-        toast({ variant: "destructive", title: `Tìm thấy ${result.warnings.length} lỗi/cảnh báo`, description: "Xem chi tiết bên dưới rồi sửa lại trong ô kịch bản." });
+      if (blockingCount > 0) {
+        toast({ variant: "destructive", title: `Tìm thấy ${blockingCount} lỗi`, description: `Xem chi tiết bên dưới rồi sửa lại trong ô kịch bản.${suggestionCount ? ` (kèm ${suggestionCount} gợi ý cải thiện)` : ""}` });
+      } else if (suggestionCount > 0) {
+        toast({ title: "Không có lỗi chặn đường chơi", description: `Kịch bản sẵn sàng để sản xuất — có ${suggestionCount} gợi ý cải thiện, xem bên dưới.` });
       } else {
         toast({ title: "Không phát hiện lỗi nào!", description: "Kịch bản sẵn sàng để sản xuất." });
       }
@@ -265,7 +282,10 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
       toast({ variant: "destructive", title: "Kịch bản có lỗi cú pháp", description: e.message || "Sửa lỗi cú pháp trước, rồi bấm Kiểm Tra." });
       return;
     }
-    if (parseWarnings.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
+    const blockingList = parseWarnings.filter((w) => !isSuggestionWarning(w));
+    if (blockingList.length === 0) { toast({ title: "Không có lỗi logic", description: "Kịch bản đã sạch, không cần sửa." }); return; }
+    const chosen = blockingList.filter((w) => selectedErrors.has(w));
+    const focusWarnings = chosen.length > 0 ? chosen : undefined;
     setAiLoading(true);
     try {
       const report = await verifyAndFixScript({
@@ -273,16 +293,13 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
         parseFn: (txt) => parseRebirthScript(txt, gameData.meta),
         script,
         maxRounds: 3,
+        focusWarnings,
       });
-      setScript(report.script);
-      setWarnings(report.warnings || []);
-      setChecked(true);
-      if (report.clean) {
-        toast({ title: "AI đã sửa sạch", description: report.improved ? `Đã tự sửa ${report.rounds} lượt. 0 lỗi — sẵn sàng Sản Xuất Game.` : "0 lỗi — sẵn sàng Sản Xuất Game." });
-      } else if (report.improved) {
-        toast({ variant: "destructive", title: "Đã giảm bớt lỗi", description: `Còn ${report.warnings.length} lỗi (từ ${parseWarnings.length} ban đầu) — xem cảnh báo bên dưới và sửa tay.` });
+      if (report.script === script) {
+        toast({ variant: "destructive", title: "AI không sửa được", description: "Không tìm được cách sửa an toàn cho lỗi đã chọn — sửa tay theo cảnh báo bên dưới." });
       } else {
-        toast({ variant: "destructive", title: "AI không sửa được tốt hơn", description: "Hệ thống giữ nguyên bản gốc (không tệ hơn). Sửa tay theo các cảnh báo bên dưới, hoặc bấm Kiểm Tra để xem chi tiết." });
+        setAiFixPreview({ before: script, after: report.script, explanations: report.explanations, stillHasErrors: !report.clean });
+        toast({ title: focusWarnings ? `AI đã sửa ${chosen.length} lỗi đã chọn` : "AI đã đề xuất bản sửa", description: "Xem trước diff bên dưới rồi bấm Áp dụng." });
       }
     } catch (e) {
       toast({ variant: "destructive", title: "Lỗi sửa kịch bản", description: e.message || "Thử lại." });
@@ -290,6 +307,20 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
       setAiLoading(false);
     }
   };
+
+  const applyAiFix = () => {
+    if (!aiFixPreview) return;
+    const nextScript = aiFixPreview.after;
+    setScript(nextScript);
+    try {
+      setWarnings(parseRebirthScript(nextScript, gameData.meta).warnings || []);
+      setChecked(true);
+    } catch { /* lỗi cú pháp nghiêm trọng — để nút Kiểm Tra báo lại */ }
+    setSelectedErrors(new Set());
+    setAiFixPreview(null);
+  };
+
+  const discardAiFix = () => setAiFixPreview(null);
 
 
 
@@ -365,6 +396,8 @@ const handleProduce = () => {
     }
   };
 
+  const blockingWarnings = warnings.filter((w) => !isSuggestionWarning(w));
+  const suggestionWarnings = warnings.filter(isSuggestionWarning);
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border border-emerald-500/20">
@@ -495,7 +528,7 @@ const handleProduce = () => {
       <div className="flex gap-2 flex-wrap">
         <Button onClick={handleAIFix} disabled={aiLoading} variant="outline" className="px-3">
           {aiLoading ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Wand2 size={16} className="mr-2" />}
-          {aiLoading ? "AI đang sửa..." : "Sửa lỗi logic bằng AI"}
+          {aiLoading ? "AI đang sửa..." : selectedErrors.size > 0 ? `Sửa ${selectedErrors.size} lỗi đã chọn bằng AI` : "Sửa lỗi logic bằng AI"}
         </Button>
         <Button onClick={handleCheck} disabled={checking} variant="outline" className="flex-1">
           {checking ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ClipboardCheck size={16} className="mr-2" />}
@@ -507,25 +540,63 @@ const handleProduce = () => {
         </Button>
       </div>
 
-      {checked && warnings.length === 0 && (
+      {checked && blockingWarnings.length === 0 && (
         <div className="text-[11px] rounded-lg p-2.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 font-semibold">
-          <CheckCircle2 size={12} /> Không phát hiện lỗi nào — kịch bản sẵn sàng để sản xuất.
+          <CheckCircle2 size={12} /> Không có lỗi chặn đường chơi — kịch bản sẵn sàng để sản xuất.
         </div>
       )}
 
-      {warnings.length > 0 && (
+      {blockingWarnings.length > 0 && (
         <div className="text-[11px] rounded-lg p-2.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> {warnings.length} lỗi/cảnh báo — bấm vào 1 dòng để nhảy tới + bôi đen đúng chỗ sai trong ô kịch bản:</div>
-          <ul className="list-disc list-inside space-y-0.5">
-            {warnings.map((w, i) => {
+          <div className="flex items-center justify-between gap-2 flex-wrap font-semibold">
+            <span className="flex items-center gap-1.5"><AlertTriangle size={12} /> {blockingWarnings.length} lỗi — tick chọn lỗi muốn AI sửa (bỏ trống = sửa tất cả), hoặc bấm vào chữ để nhảy tới + bôi đen đúng chỗ sai:</span>
+            {selectedErrors.size > 0 && (
+              <button type="button" onClick={() => setSelectedErrors(new Set())} className="underline decoration-dotted font-normal">Bỏ chọn tất cả</button>
+            )}
+          </div>
+          <ul className="space-y-0.5">
+            {blockingWarnings.map((w, i) => {
               const clickable = resolveWarningPosition(script, w) !== null;
               return (
-                <li key={i}>
+                <li key={i} className="flex items-start gap-1.5">
+                  <input type="checkbox" className="mt-0.5" checked={selectedErrors.has(w)} onChange={() => toggleError(w)} />
                   {clickable ? (
                     <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-amber-500/50 hover:decoration-solid hover:text-amber-800 dark:hover:text-amber-300">
                       {w}
                     </button>
-                  ) : w}
+                  ) : <span>{w}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {aiFixPreview && (
+        <AiFixReview
+          before={aiFixPreview.before}
+          after={aiFixPreview.after}
+          explanations={aiFixPreview.explanations}
+          stillHasErrors={aiFixPreview.stillHasErrors}
+          onApply={applyAiFix}
+          onDiscard={discardAiFix}
+        />
+      )}
+
+      {suggestionWarnings.length > 0 && (
+        <div className="text-[11px] rounded-lg p-2.5 bg-sky-500/10 text-sky-700 dark:text-sky-400 space-y-1">
+          <div className="flex items-center gap-1.5 font-semibold"><Lightbulb size={12} /> {suggestionWarnings.length} gợi ý cải thiện (không chặn chơi được):</div>
+          <ul className="list-disc list-inside space-y-0.5">
+            {suggestionWarnings.map((w, i) => {
+              const text = w.replace(/^\[GỢI Ý\]\s*/, "");
+              const clickable = resolveWarningPosition(script, w) !== null;
+              return (
+                <li key={i}>
+                  {clickable ? (
+                    <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-sky-500/50 hover:decoration-solid hover:text-sky-800 dark:hover:text-sky-300">
+                      {text}
+                    </button>
+                  ) : text}
                 </li>
               );
             })}
