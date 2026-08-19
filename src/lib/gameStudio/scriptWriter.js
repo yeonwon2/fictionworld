@@ -4,6 +4,7 @@
 // gọi aiCall duy nhất là đủ, không cần chia batch như đường AI-JSON.
 
 import { aiCall } from "@/lib/aiCall";
+import { generateLongByChunks } from "./longScriptWriter";
 
 const SYNTAX_GUIDE = `
 CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdown khác):
@@ -58,6 +59,7 @@ QUY TẮC:
 function lengthToSceneCount(length) {
   if (length === "short") return 6;
   if (length === "long") return 14;
+  if (length === "xl") return 60;
   return 10;
 }
 
@@ -66,7 +68,7 @@ function lengthToSceneCount(length) {
  * @param {Object} p
  * @param {'idea'|'chapter'} p.mode - 'idea': input là 1 ý tưởng/cảnh ngắn; 'chapter': input là nội dung chương truyện để chuyển thể.
  * @param {string} p.input
- * @param {'short'|'medium'|'long'} [p.length]
+ * @param {'short'|'medium'|'long'|'xl'} [p.length]
  * @returns {Promise<string>} kịch bản dạng text, sẵn sàng dán vào Xưởng Offline (nên cho người dùng xem/sửa trước khi sản xuất).
  */
 export async function generateScriptFromPrompt({ mode, input, length }) {
@@ -77,6 +79,15 @@ export async function generateScriptFromPrompt({ mode, input, length }) {
     mode === "chapter"
       ? `Dưới đây là nội dung một chương truyện. Hãy CHUYỂN THỂ nó thành kịch bản game nhập vai phân nhánh khoảng ${sceneCount} cảnh — giữ đúng tinh thần/nhân vật/bối cảnh của chương truyện, nhưng thêm các điểm rẽ nhánh (lựa chọn) hợp lý mà chương gốc không có, để người chơi thực sự quyết định được diễn biến.\n\nNỘI DUNG CHƯƠNG TRUYỆN:\n"""${input}"""`
       : `Từ ý tưởng/cảnh mở đầu sau, hãy sáng tác một kịch bản game nhập vai phân nhánh HOÀN CHỈNH khoảng ${sceneCount} cảnh, nhiều kết thúc khác nhau.\n\nÝ TƯỞNG:\n"""${input}"""`;
+
+  if (length === "xl") {
+    return generateLongByChunks({
+      buildTask: (prompt) => aiCall(`Bạn là một biên kịch game nhập vai chuyên nghiệp. ` + prompt).then((t) => String(t || "").trim()),
+      baseTask: task,
+      syntaxGuide: SYNTAX_GUIDE,
+      totalScenes: sceneCount,
+    });
+  }
 
   const prompt = `Bạn là một biên kịch game nhập vai chuyên nghiệp. ${task}\n\n${SYNTAX_GUIDE}\n\nChỉ trả về đúng nội dung kịch bản theo cú pháp trên, không thêm lời dẫn/giải thích nào khác trước hoặc sau.`;
 

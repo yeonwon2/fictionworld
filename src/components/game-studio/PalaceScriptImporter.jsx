@@ -422,6 +422,7 @@ const handleProduce = () => {
                     <SelectItem value="short">Ngắn (~6 cảnh)</SelectItem>
                     <SelectItem value="medium">Trung bình (~10 cảnh)</SelectItem>
                     <SelectItem value="long">Dài (~14 cảnh)</SelectItem>
+                    <SelectItem value="xl">Siêu dài (~60 cảnh)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

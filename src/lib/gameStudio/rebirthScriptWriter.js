@@ -3,6 +3,7 @@
 // ("Xưởng Cung Đấu") và các xưởng khác.
 
 import { aiCall } from "@/lib/aiCall";
+import { generateLongByChunks } from "./longScriptWriter";
 
 const SYNTAX_GUIDE = `
 CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdown khác):
@@ -64,6 +65,7 @@ QUY TẮC:
 function lengthToSceneCount(length) {
   if (length === "short") return 6;
   if (length === "long") return 14;
+  if (length === "xl") return 60;
   return 10;
 }
 
@@ -72,7 +74,7 @@ function lengthToSceneCount(length) {
  * @param {Object} p
  * @param {'idea'|'chapter'} p.mode
  * @param {string} p.input
- * @param {'short'|'medium'|'long'} [p.length]
+ * @param {'short'|'medium'|'long'|'xl'} [p.length]
  * @returns {Promise<string>}
  */
 export async function generateRebirthScriptFromPrompt({ mode, input, length }) {
@@ -83,6 +85,16 @@ export async function generateRebirthScriptFromPrompt({ mode, input, length }) {
     mode === "chapter"
       ? `Dưới đây là nội dung một chương truyện thể loại "Trọng Sinh Làm Giàu" (nhân vật chính trọng sinh về quá khứ, dùng kiến thức tương lai để làm giàu). Hãy CHUYỂN THỂ nó thành kịch bản game nhập vai phân nhánh khoảng ${sceneCount} cảnh — giữ đúng tinh thần/nhân vật/bối cảnh, thêm các điểm rẽ nhánh hợp lý (phi vụ thắng hay thua, lời hay lỗ vốn), và lồng ghép các hiệu ứng cơ hội/cờ truyện/vật phẩm đúng như phong cách "Trọng Sinh Làm Giàu".\n\nNỘI DUNG CHƯƠNG TRUYỆN:\n"""${input}"""`
       : `Từ ý tưởng/cảnh mở đầu sau, hãy sáng tác một kịch bản game nhập vai phân nhánh thể loại "Trọng Sinh Làm Giàu" HOÀN CHỈNH khoảng ${sceneCount} cảnh, nhiều kết thúc khác nhau — nhân vật chính trọng sinh về quá khứ và dùng hiểu biết tương lai để khởi nghiệp, đầu tư, xây đế chế tài chính.\n\nÝ TƯỞNG:\n"""${input}"""`;
+
+  if (length === "xl") {
+    const baseTask = `chuyên viết thể loại "Trọng Sinh Làm Giàu". ${task}`;
+    return generateLongByChunks({
+      buildTask: (prompt) => aiCall(`Bạn là một biên kịch game nhập vai chuyên nghiệp. ${prompt}`).then((t) => String(t || "").trim()),
+      baseTask,
+      syntaxGuide: SYNTAX_GUIDE,
+      totalScenes: sceneCount,
+    });
+  }
 
   const prompt = `Bạn là một biên kịch game nhập vai chuyên nghiệp, chuyên viết thể loại "Trọng Sinh Làm Giàu". ${task}\n\n${SYNTAX_GUIDE}\n\nChỉ trả về đúng nội dung kịch bản theo cú pháp trên, không thêm lời dẫn/giải thích nào khác trước hoặc sau.`;
 

@@ -3,6 +3,7 @@
 // "Xưởng Offline" (không import, không chia sẻ gì cả).
 
 import { aiCall } from "@/lib/aiCall";
+import { generateLongByChunks } from "./longScriptWriter";
 
 const SYNTAX_GUIDE = `
 CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdown khác):
@@ -56,6 +57,7 @@ QUY TẮC:
 function lengthToSceneCount(length) {
   if (length === "short") return 6;
   if (length === "long") return 14;
+  if (length === "xl") return 60;
   return 10;
 }
 
@@ -64,7 +66,7 @@ function lengthToSceneCount(length) {
  * @param {Object} p
  * @param {'idea'|'chapter'} p.mode
  * @param {string} p.input
- * @param {'short'|'medium'|'long'} [p.length]
+ * @param {'short'|'medium'|'long'|'xl'} [p.length]
  * @returns {Promise<string>}
  */
 export async function generateSystemScriptFromPrompt({ mode, input, length }) {
@@ -75,6 +77,15 @@ export async function generateSystemScriptFromPrompt({ mode, input, length }) {
     mode === "chapter"
       ? `Dưới đây là nội dung một chương truyện thể loại "Hệ Thống" (trọng sinh/xuyên không có một hệ thống dẫn dắt nhân vật chính). Hãy CHUYỂN THỂ nó thành kịch bản game nhập vai phân nhánh khoảng ${sceneCount} cảnh — giữ đúng tinh thần/nhân vật/bối cảnh, thêm các điểm rẽ nhánh hợp lý, và lồng ghép hệ thống nhắc nhở/phạt/thưởng đúng như phong cách "Hệ Thống".\n\nNỘI DUNG CHƯƠNG TRUYỆN:\n"""${input}"""`
       : `Từ ý tưởng/cảnh mở đầu sau, hãy sáng tác một kịch bản game nhập vai phân nhánh thể loại "Hệ Thống" (có một hệ thống/AI dẫn dắt, nhắc nhở, phạt/thưởng nhân vật chính) HOÀN CHỈNH khoảng ${sceneCount} cảnh, nhiều kết thúc khác nhau.\n\nÝ TƯỞNG:\n"""${input}"""`;
+
+  if (length === "xl") {
+    return generateLongByChunks({
+      buildTask: (prompt) => aiCall(`Bạn là một biên kịch game nhập vai chuyên nghiệp, chuyên viết thể loại "Hệ Thống". ` + prompt).then((t) => String(t || "").trim()),
+      baseTask: task,
+      syntaxGuide: SYNTAX_GUIDE,
+      totalScenes: sceneCount,
+    });
+  }
 
   const prompt = `Bạn là một biên kịch game nhập vai chuyên nghiệp, chuyên viết thể loại "Hệ Thống". ${task}\n\n${SYNTAX_GUIDE}\n\nChỉ trả về đúng nội dung kịch bản theo cú pháp trên, không thêm lời dẫn/giải thích nào khác trước hoặc sau.`;
 

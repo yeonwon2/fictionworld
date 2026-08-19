@@ -3,6 +3,7 @@
 // ("Xưởng Offline") và systemScriptWriter.js ("Xưởng Hệ Thống").
 
 import { aiCall } from "@/lib/aiCall";
+import { generateLongByChunks } from "./longScriptWriter";
 
 const SYNTAX_GUIDE = `
 CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdown khác):
@@ -65,6 +66,7 @@ QUY TẮC:
 function lengthToSceneCount(length) {
   if (length === "short") return 6;
   if (length === "long") return 14;
+  if (length === "xl") return 60;
   return 10;
 }
 
@@ -73,7 +75,7 @@ function lengthToSceneCount(length) {
  * @param {Object} p
  * @param {'idea'|'chapter'} p.mode
  * @param {string} p.input
- * @param {'short'|'medium'|'long'} [p.length]
+ * @param {'short'|'medium'|'long'|'xl'} [p.length]
  * @returns {Promise<string>}
  */
 export async function generatePalaceScriptFromPrompt({ mode, input, length }) {
@@ -84,6 +86,15 @@ export async function generatePalaceScriptFromPrompt({ mode, input, length }) {
     mode === "chapter"
       ? `Dưới đây là nội dung một chương truyện thể loại "Cung Đấu" (nữ chính là phi tần trong hậu cung). Hãy CHUYỂN THỂ nó thành kịch bản game nhập vai phân nhánh khoảng ${sceneCount} cảnh — giữ đúng tinh thần/nhân vật/bối cảnh, thêm các điểm rẽ nhánh hợp lý (được sủng ái hay thất sủng, thắng hay thua mưu kế), và lồng ghép các hiệu ứng hảo cảm phe phái/cờ truyện/vật phẩm đúng như phong cách "Cung Đấu".\n\nNỘI DUNG CHƯƠNG TRUYỆN:\n"""${input}"""`
       : `Từ ý tưởng/cảnh mở đầu sau, hãy sáng tác một kịch bản game nhập vai phân nhánh thể loại "Cung Đấu" HOÀN CHỈNH khoảng ${sceneCount} cảnh, nhiều kết thúc khác nhau — nhân vật chính là phi tần, xoay quanh Sủng Ái của Hoàng thượng, mưu kế giữa các phi tần, phe phái trong cung.\n\nÝ TƯỞNG:\n"""${input}"""`;
+
+  if (length === "xl") {
+    return generateLongByChunks({
+      buildTask: (prompt) => aiCall(`Bạn là một biên kịch game nhập vai chuyên nghiệp, chuyên viết thể loại "Cung Đấu". ` + prompt).then((t) => String(t || "").trim()),
+      baseTask: task,
+      syntaxGuide: SYNTAX_GUIDE,
+      totalScenes: sceneCount,
+    });
+  }
 
   const prompt = `Bạn là một biên kịch game nhập vai chuyên nghiệp, chuyên viết thể loại "Cung Đấu". ${task}\n\n${SYNTAX_GUIDE}\n\nChỉ trả về đúng nội dung kịch bản theo cú pháp trên, không thêm lời dẫn/giải thích nào khác trước hoặc sau.`;
 

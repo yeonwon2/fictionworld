@@ -3,6 +3,7 @@
 // "Xưởng NPC". Vì đầu ra là text tự nhiên, 1 lệnh gọi aiCall duy nhất là đủ.
 
 import { aiCall } from "@/lib/aiCall";
+import { generateLongByChunks } from "./longScriptWriter";
 
 const SYNTAX_GUIDE = `
 CÚ PHÁP BẮT BUỘC (tuân thủ CHÍNH XÁC, không thêm ký hiệu markdown khác):
@@ -62,6 +63,7 @@ QUY TẮC:
 function lengthToSceneCount(length) {
   if (length === "short") return 5;
   if (length === "long") return 9;
+  if (length === "xl") return 40;
   return 7;
 }
 
@@ -70,7 +72,7 @@ function lengthToSceneCount(length) {
  * @param {Object} p
  * @param {'idea'|'chapter'} p.mode - 'idea': input là ý tưởng/bối cảnh + danh sách nhân vật muốn theo đuổi; 'chapter': input là nội dung chương truyện để chuyển thể thành 1 tuyến công lược.
  * @param {string} p.input
- * @param {'short'|'medium'|'long'} [p.length]
+ * @param {'short'|'medium'|'long'|'xl'} [p.length]
  * @returns {Promise<string>} kịch bản dạng text, sẵn sàng dán vào Xưởng NPC (nên cho người dùng xem/sửa trước khi sản xuất).
  */
 export async function generateNpcScriptFromPrompt({ mode, input, length }) {
@@ -81,6 +83,15 @@ export async function generateNpcScriptFromPrompt({ mode, input, length }) {
     mode === "chapter"
       ? `Dưới đây là nội dung một chương truyện có nhiều nhân vật tiềm năng làm đối tượng theo đuổi. Hãy CHUYỂN THỂ nó thành kịch bản game "Công Lược" (otome/dating sim) — mỗi nhân vật nam/nữ chính đáng chú ý trong chương trở thành 1 tuyến "NHÂN VẬT" độc lập, khoảng ${sceneCount} cảnh mỗi tuyến, giữ đúng tinh thần/tính cách của họ nhưng thêm các điểm rẽ nhánh (lựa chọn tăng/giảm Thiện cảm) mà chương gốc không có.\n\nNỘI DUNG CHƯƠNG TRUYỆN:\n"""${input}"""`
       : `Từ ý tưởng/bối cảnh sau (kèm danh sách nhân vật muốn đưa vào làm đối tượng theo đuổi, nếu có), hãy sáng tác một kịch bản game "Công Lược" (otome/dating sim) HOÀN CHỈNH — mỗi nhân vật là 1 tuyến "NHÂN VẬT" độc lập khoảng ${sceneCount} cảnh, đều có kết thúc thành đôi và kết thúc thất bại riêng.\n\nÝ TƯỞNG:\n"""${input}"""`;
+
+  if (length === "xl") {
+    return generateLongByChunks({
+      buildTask: (prompt) => aiCall(`Bạn là một biên kịch game otome/dating sim chuyên nghiệp, giỏi xây dựng nhiều tuyến tình cảm song song với tính cách nhân vật rõ nét. ` + prompt).then((t) => String(t || "").trim()),
+      baseTask: task,
+      syntaxGuide: SYNTAX_GUIDE,
+      totalScenes: sceneCount,
+    });
+  }
 
   const prompt = `Bạn là một biên kịch game otome/dating sim chuyên nghiệp, giỏi xây dựng nhiều tuyến tình cảm song song với tính cách nhân vật rõ nét. ${task}\n\n${SYNTAX_GUIDE}\n\nChỉ trả về đúng nội dung kịch bản theo cú pháp trên, không thêm lời dẫn/giải thích nào khác trước hoặc sau.`;
 
