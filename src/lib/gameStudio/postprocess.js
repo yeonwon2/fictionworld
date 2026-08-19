@@ -15,6 +15,32 @@ const cleanStrArr = (v) => Array.isArray(v) ? v.map(String).filter((x) => x && x
 // hiển thị) và ở fixScriptWithAI.js (không đưa gợi ý vào vòng AI tự sửa).
 export const isSuggestionWarning = (w) => typeof w === "string" && w.startsWith("[GỢI Ý]");
 
+// Phân loại 1 dòng gợi ý để UI gộp nhóm thay vì liệt kê phẳng — kịch bản dài
+// (60+ cảnh) dễ ra hàng chục cờ/vật phẩm mồ côi cùng lúc, đọc từng dòng không
+// thực tế. Ba nhóm khớp đúng 3 dạng câu do analyzeLogic()/simulatePlaytest()
+// sinh ra (xem 2 hàm đó) — đổi câu chữ ở đó thì phải sửa cả đây.
+export const SUGGESTION_CATEGORIES = {
+  orphanItem: {
+    label: "vật phẩm mồ côi",
+    hint: 'Những vật phẩm này không mở khoá bất kỳ lựa chọn nào ("→ Cần vật phẩm"). Nếu bạn chỉ dùng để mô tả/thưởng cho vui thì bỏ qua — chỉ đáng sửa nếu bạn ĐỊNH dùng nó để mở khoá 1 lựa chọn/kết thúc mà quên nối.',
+  },
+  orphanFlag: {
+    label: "cờ mồ côi",
+    hint: 'Những cờ này không khoá bất kỳ lựa chọn nào ("→ Cần cờ"/"→ Cần không có cờ"). Lưu ý: cờ CHỈ hiện cho người chơi thấy khi thể loại game là "Dị Giới" (Isekai) — ngoài ra cờ hoàn toàn vô hình, chỉ dùng để khoá/mở lựa chọn. Nếu bạn chỉ dùng cờ để đánh dấu diễn biến thì bỏ qua toàn bộ — chỉ đáng sửa nếu định dùng nó mở 1 kết thúc/cảnh riêng mà quên nối.',
+  },
+  redundantReq: {
+    label: "điều kiện thừa",
+    hint: "Những yêu cầu này qua mô phỏng chạy thử chưa từng thực sự chặn ai (luôn đúng sẵn trước khi tới) — có thể bỏ yêu cầu đi cho gọn, hoặc giữ nguyên nếu định mở rộng thêm nhánh khác sau này.",
+  },
+};
+
+export function categorizeSuggestion(w) {
+  const text = String(w || "").replace(/^\[GỢI Ý\]\s*/, "");
+  if (text.startsWith('Vật phẩm "')) return "orphanItem";
+  if (text.startsWith('Cờ "')) return "orphanFlag";
+  return "redundantReq";
+}
+
 function cleanPopup(p) {
   if (!p || typeof p !== "object") return null;
   const t = cleanStr(p.title);

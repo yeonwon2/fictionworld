@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bot, Heart, Wand2, Loader2, AlertTriangle, Copy, Check, ClipboardList, ImageIcon, UserPlus, ListPlus, GitBranchPlus, FlagTriangleRight, ClipboardCheck, CheckCircle2, Lightbulb } from "lucide-react";
 import { parseNpcScript } from "@/lib/gameStudio/npcScriptParser";
-import { isSuggestionWarning } from "@/lib/gameStudio/postprocess";
+import { isSuggestionWarning, categorizeSuggestion, SUGGESTION_CATEGORIES } from "@/lib/gameStudio/postprocess";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
 import { generateNpcScriptFromPrompt } from "@/lib/gameStudio/npcScriptWriter";
 import { useToast } from "@/components/ui/use-toast";
@@ -597,23 +597,35 @@ const handleProduce = () => {
       )}
 
       {suggestionWarnings.length > 0 && (
-        <div className="text-[11px] rounded-lg p-2.5 bg-sky-500/10 text-sky-700 dark:text-sky-400 space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold"><Lightbulb size={12} /> {suggestionWarnings.length} gợi ý cải thiện (không chặn chơi được):</div>
-          <ul className="list-disc list-inside space-y-0.5">
-            {suggestionWarnings.map((w, i) => {
-              const text = w.replace(/^\[GỢI Ý\]\s*/, "");
-              const clickable = resolveWarningPosition(script, w) !== null;
-              return (
-                <li key={i}>
-                  {clickable ? (
-                    <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-sky-500/50 hover:decoration-solid hover:text-sky-800 dark:hover:text-sky-300">
-                      {text}
-                    </button>
-                  ) : text}
-                </li>
-              );
-            })}
-          </ul>
+        <div className="text-[11px] rounded-lg p-2.5 bg-sky-500/10 text-sky-700 dark:text-sky-400 space-y-2">
+          <div className="flex items-center gap-1.5 font-semibold"><Lightbulb size={12} /> {suggestionWarnings.length} gợi ý cải thiện (không chặn chơi được, không bắt buộc sửa) — bấm mở từng nhóm:</div>
+          {Object.entries(SUGGESTION_CATEGORIES).map(([key, meta]) => {
+            const items = suggestionWarnings.filter((w) => categorizeSuggestion(w) === key);
+            if (items.length === 0) return null;
+            return (
+              <details key={key} className="rounded-md border border-sky-500/20 bg-background/40">
+                <summary className="cursor-pointer select-none px-2 py-1.5 font-medium">{items.length} {meta.label}</summary>
+                <div className="px-2 pb-2 space-y-1.5">
+                  <p className="italic text-sky-700/80 dark:text-sky-400/80">{meta.hint}</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {items.map((w, i) => {
+                      const text = w.replace(/^\[GỢI Ý\]\s*/, "");
+                      const clickable = resolveWarningPosition(script, w) !== null;
+                      return (
+                        <li key={i}>
+                          {clickable ? (
+                            <button type="button" onClick={() => jumpToWarning(textareaRef, script, w)} className="text-left underline decoration-dotted decoration-sky-500/50 hover:decoration-solid hover:text-sky-800 dark:hover:text-sky-300">
+                              {text}
+                            </button>
+                          ) : text}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </details>
+            );
+          })}
         </div>
       )}
     </section>
