@@ -191,11 +191,26 @@ create table if not exists public.custom_themes (
 );
 create index if not exists custom_themes_updated_at_idx on public.custom_themes (updated_at desc);
 
+-- Xưởng Viết Truyện: bộ tài liệu sống (bible) của mỗi bộ truyện — quy tắc viết,
+-- thế giới quan, nhân vật, quan hệ, đại cương, phục bút, timeline, tóm tắt hiện tại.
+-- doc_key là mã cố định; (story_id, doc_key) unique để mỗi truyện chỉ có 1 bản.
+create table if not exists public.writer_docs (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  doc_key text not null,
+  title text not null default 'Tài liệu',
+  content text not null default '',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (story_id, doc_key)
+);
+create index if not exists writer_docs_story_id_idx on public.writer_docs (story_id);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -209,7 +224,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

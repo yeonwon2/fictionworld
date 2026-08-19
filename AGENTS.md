@@ -11,6 +11,7 @@ Start with `README.md` for local setup and environment variables.
 - `src/`: frontend application source.
 - `src/lib/supabase.js`: Supabase client (reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 - `src/lib/worldcrud.js`: single funnel for all data access — every Supabase query for the app's entities goes through here (column-scoped selects, image compression on upload, old-image cleanup). Extend this file rather than calling `supabase.from(...)` directly from a page/component.
+- `src/lib/writingFactory/`: Xưởng Viết Truyện — `prompts.js` (bible/chương/rollup/team prompt builders), `bibleBuilder.js` (dựng text bible từ dữ liệu Story Bible).
 - `src/lib/AuthContext.jsx`: Supabase Auth session/profile state.
 - `supabase/migration.sql`: full schema + RLS + storage bucket — the source of truth for the database shape. Any schema change should be added here too (and re-run by the user in the Supabase SQL Editor — no automated migration runner in this project).
 - `base44/entities/*.jsonc`: leftover from the Base44 scaffold, kept only as human-readable field documentation. Not read by the app at runtime.

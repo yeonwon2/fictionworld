@@ -180,6 +180,41 @@ export async function deleteChapter(id) {
   return deleteRow("chapters", id);
 }
 
+// ---------- Xưởng Viết Truyện (writer_docs) — bộ tài liệu sống theo bộ truyện ----------
+// doc_key cố định: quy_tac_viet | the_gioi | nhan_vat | quan_he | dai_cuong | fuc_but | timeline | tom_tat_hien_tai
+const WRITER_DOC_COLUMNS = "id, story_id, doc_key, title, content, updated_at, created_at";
+
+export async function listWriterDocs(storyId) {
+  let q = supabase.from("writer_docs").select(WRITER_DOC_COLUMNS).order("doc_key", { ascending: true });
+  if (storyId) q = q.eq("story_id", storyId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getWriterDoc(storyId, docKey) {
+  const { data, error } = await supabase
+    .from("writer_docs")
+    .select(WRITER_DOC_COLUMNS)
+    .eq("story_id", storyId)
+    .eq("doc_key", docKey)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function upsertWriterDoc(storyId, docKey, data) {
+  const payload = { story_id: storyId, doc_key: docKey, ...data };
+  const { data: row, error } = await supabase.from("writer_docs").upsert(payload, { onConflict: "story_id,doc_key" }).select().single();
+  if (error) throw error;
+  return row;
+}
+
+export async function deleteWriterDoc(storyId, docKey) {
+  const { error } = await supabase.from("writer_docs").delete().eq("story_id", storyId).eq("doc_key", docKey);
+  if (error) throw error;
+}
+
 // ---------- Xưởng Game (Game) ----------
 // listGames() chỉ trả cột nhẹ (KHÔNG có nodes/meta) — dùng cho thư viện/danh
 // sách game. Gọi getGame(id) riêng khi mở một game cụ thể để chơi/sửa/xuất —

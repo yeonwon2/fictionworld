@@ -18,6 +18,7 @@ import Workspace from '@/pages/Workspace';
 import StoryMatrix from '@/pages/StoryMatrix';
 import Worldbook from '@/pages/Worldbook';
 import AICreative from '@/pages/AICreative';
+import WritingFactory from '@/pages/WritingFactory';
 import GameStudio from '@/pages/GameStudio';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
           <Route path="/cot-truyen" element={<StoryMatrix />} />
           <Route path="/so-tay-the-gioi" element={<Worldbook />} />
           <Route path="/sang-tac-ai" element={<AICreative />} />
+          <Route path="/xuong-viet-truyen" element={<WritingFactory />} />
           <Route path="/xuong-game" element={<GameStudio />} />
         </Route>
       </Route>
