@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
@@ -8,6 +8,7 @@ import NpcScriptImporter from "@/components/game-studio/NpcScriptImporter";
 import PalaceScriptImporter from "@/components/game-studio/PalaceScriptImporter";
 import RebirthScriptImporter from "@/components/game-studio/RebirthScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
+import RouteExplorerTab from "@/components/game-studio/RouteExplorerTab";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import ThemeWorkshop from "@/components/game-studio/ThemeWorkshop";
@@ -26,6 +27,7 @@ import { useToast } from "@/components/ui/use-toast";
 // nhầm — thay vì xếp thẳng hàng từng xưởng.
 const MAIN_TABS = [
   { id: "play", label: "Trải Nghiệm Game", short: "Chơi", icon: Gamepad2 },
+  { id: "routes", label: "Tuyến Chơi & Vấn Đề", short: "Tuyến", icon: GitBranch },
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
 const WORKSHOP_TABS = [
@@ -274,6 +276,11 @@ function GameEditor({ gameId, onBack }) {
         {tab === "play" && (
           <div className="max-w-3xl mx-auto">
             <GamePlayer key={playKey} gameData={gameData} onExit={onBack} />
+          </div>
+        )}
+        {tab === "routes" && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <RouteExplorerTab gameData={gameData} setGameData={handleChange} />
           </div>
         )}
         {tab === "studio" && (
