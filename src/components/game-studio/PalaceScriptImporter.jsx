@@ -84,21 +84,81 @@ function jumpToWarning(textareaRef, script, warning) {
 // thông báo hoàng cung), thăng chức, và nhiều kết thúc khác nhau. Nội dung là
 // CHỖ TRỐNG — gõ đè tên truyện, nhân vật, cảnh của BẠN vào để viết truyện MỚI,
 // đừng chép theo đúng 1 cốt truyện duy nhất nào cả.
-const CHEAT_SHEET = `Cung Đấu — Tên truyện
+const CHEAT_SHEET = `KHÔNG CẦN gõ #, ##, ** hay bất kỳ ký hiệu Markdown nào — hệ thống nhận diện
+qua TỪ KHOÁ (CẢNH, KẾT THÚC, GIỚI THIỆU, chữ A/B/C...). Có hay không có mấy
+dấu đó đều đọc đúng như nhau, cứ viết tự nhiên.
+
+── 1. THÔNG TIN CHUNG (đặt ở đầu kịch bản, trước GIỚI THIỆU) ──
+Cung Đấu — Tên truyện
 Thể loại: ...
-Chỉ số sinh tử: Sủng Ái < 10, Thế Lực < 5   (tuỳ chọn — tụt xuống ngưỡng là bị phế truất/
-                                              Game Over. Chỉ số ĐẦU TIÊN nên là "Sủng Ái" vì
-                                              cấp bậc tần phi tính từ nó.)
-Chỉ số khởi đầu: Sủng Ái = 30, Thế Lực = 8  (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
-                                              không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
-                                              tính là "chết" ngay từ đầu game!)
-Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả, cả tính mạng lẫn ngôi vị.
-                                              (tuỳ chọn — đổi chữ hiện khi chết vì "Chỉ số
-                                               sinh tử" ở trên, thay cho "GAME OVER" mặc định.
-                                               Bỏ qua dòng này thì vẫn hiện chữ mặc định như cũ.)
+Chỉ số sinh tử: Sủng Ái < 10, Thế Lực < 5   [tuỳ chọn — chỉ số nào tụt dưới
+                                              ngưỡng thì bị phế truất/Game
+                                              Over. Chỉ số ĐẦU TIÊN nên là
+                                              "Sủng Ái" vì cấp bậc tần phi
+                                              tính từ nó]
+Chỉ số khởi đầu: Sủng Ái = 30, Thế Lực = 8  [BẮT BUỘC nếu có dòng "Chỉ số
+                                              sinh tử" ở trên — bỏ qua thì
+                                              chỉ số mặc định bắt đầu ở 0 và
+                                              bị tính "chết" ngay!]
+Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả.
+                                              [tuỳ chọn — thay cho "GAME
+                                               OVER" mặc định]
 Cấp bậc hậu cung: Thường Tại / Quý Nhân / Tần / Quý Tần / Phi / Quý Phi / Hoàng Quý Phi / Hoàng Hậu
-                                              (tuỳ chọn — thứ tự cấp bậc từ THẤP đến CAO, cách
-                                               nhau dấu "/". Bỏ qua thì dùng mặc định.)
+                                              [tuỳ chọn — thứ tự cấp bậc từ
+                                               THẤP đến CAO, cách nhau "/".
+                                               Bỏ qua thì dùng mặc định]
+
+── 2. CẤU TRÚC CẢNH ──
+GIỚI THIỆU
+→ Chỉ dụ: <tiêu đề> | <nội dung>      [tuỳ chọn — bật bảng thông báo hoàng
+                                        cung ngay khi mở game]
+Văn bản mở đầu.
+
+CẢNH 1 — Tên cảnh
+→ Chỉ dụ: <tiêu đề> | <nội dung>      [tuỳ chọn — đặt NGAY DƯỚI dòng CẢNH,
+                                        TRƯỚC lựa chọn A, thì bật khi VÀO cảnh]
+Diễn biến của cảnh.
+
+A — Lời lựa chọn
+→ (các dòng hiệu ứng — xem bảng bên dưới)
+→ Đến cảnh 2
+
+CẢNH 2 — ...
+...
+
+KẾT THÚC <nhãn> — Tên kết thúc [LOẠI_KẾT_THÚC]
+Văn bản kết thúc.
+
+── 3. BẢNG HIỆU ỨNG "→ ..." (đặt bên trong 1 lựa chọn A/B/C) ──
+→ Sủng Ái +N / -N                cộng/trừ chỉ số chính (mọi tên chỉ số khác
+                                  cũng dùng cú pháp này, vd "→ Thế Lực -3")
+→ Cần Sủng Ái >= N / <= N        khoá lựa chọn tới khi đạt ngưỡng
+→ Hảo cảm <tên NPC> +N / -N      cộng/trừ hảo cảm RIÊNG với 1 nhân vật (vd
+                                  "→ Hảo cảm Thái Hậu +10") — khác chỉ số
+                                  chính, mỗi NPC có thang điểm độc lập
+→ Cần hảo cảm <tên NPC> >= N / <= N   khoá tới khi đạt hảo cảm với NPC đó
+→ Cờ: <tên cờ>                   bật 1 "cờ truyện" (nhớ lựa chọn đã qua)
+→ Cần cờ: <tên cờ>               khoá tới khi cờ đó đã bật
+→ Cần không có cờ: <tên cờ>      khoá NẾU cờ đó đã bật (làm nhánh đối lập)
+→ Vật phẩm: <tên vật phẩm>       cho vật phẩm
+→ Cần vật phẩm: <tên vật phẩm>   khoá tới khi có vật phẩm đó
+→ Chỉ dụ: <tiêu đề> | <nội dung>   bật bảng thông báo NGAY SAU KHI chọn
+                                  (dùng cho phong thưởng/trừng phạt) — tối
+                                  đa 1 dòng này mỗi lựa chọn
+→ Đến cảnh N                     dẫn sang CẢNH N (N phải có thật ở dưới)
+→ Kết thúc <nhãn>                dẫn tới KẾT THÚC <nhãn> (nhãn phải khớp y hệt)
+
+Không ghi "→ Đến cảnh"/"→ Kết thúc" thì lựa chọn tự động sang CẢNH kế tiếp
+theo đúng thứ tự viết trong văn bản. Cấp bậc tần phi TỰ TÍNH từ Sủng Ái (mỗi
+15 điểm trên mức khởi đầu thăng 1 cấp) — không cần dòng hiệu ứng riêng.
+
+── 4. VÍ DỤ ĐẦY ĐỦ ──
+Cung Đấu — Tên truyện
+Thể loại: ...
+Chỉ số sinh tử: Sủng Ái < 10, Thế Lực < 5
+Chỉ số khởi đầu: Sủng Ái = 30, Thế Lực = 8
+Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả, cả tính mạng lẫn ngôi vị.
+Cấp bậc hậu cung: Thường Tại / Quý Nhân / Tần / Quý Tần / Phi / Quý Phi / Hoàng Quý Phi / Hoàng Hậu
 
 GIỚI THIỆU
 → Chỉ dụ: CHIẾU VÀO CUNG | Hoàng thượng triệu nàng nhập cung, ban tước vị Thường Tại.
@@ -114,29 +174,29 @@ A — Lời lựa chọn khôn khéo
 
 B — Lời lựa chọn mạo hiểm
 → Sủng Ái +5
-→ Hảo cảm Quý Phi +10
 → Cờ: nắm được bí mật của Quý Phi
-→ Đến cảnh 3
-
-C — Đứng im quan sát
-→ Thế Lực +5
-→ Cờ: đã ghi nhớ thói quen của Thái Hậu
 → Đến cảnh 2
 
 CẢNH 2 — Tên cảnh
 Diễn biến của cảnh.
 
 A — Lựa chọn dựa vào mối quan hệ
-→ Cần hảo cảm Thái Hậu >= 20
+→ Cần hảo cảm Thái Hậu >= 10
 → Sủng Ái +15
 → Vật phẩm: Lòng trung thành của cung nữ
 → Chỉ dụ: PHONG THƯỞNG | Sủng Ái vượt ngưỡng, nàng được thăng cấp bậc mới.
+→ Đến cảnh 3
 
 B — Lựa chọn trả đũa kẻ thù
 → Cần cờ: nắm được bí mật của Quý Phi
 → Sủng Ái +10
 → Thế Lực -3
-→ Kết thúc song_toan
+→ Đến cảnh 3
+
+C — Án binh bất động
+→ Cần không có cờ: nắm được bí mật của Quý Phi
+→ Thế Lực +5
+→ Đến cảnh 3
 
 CẢNH 3 — Tên cảnh
 → Chỉ dụ: TỐ GIÁN | Kẻ thù dựng chuyện tố cáo nàng, cần chứng cứ để tự minh oan.
@@ -154,26 +214,26 @@ B — Nhẫn nhịn chờ thời cơ
 KẾT THÚC ngai_vang — Ngôi Vị Cao Nhất [TRUE_END]
 Văn bản kết thúc.
 
-KẾT THÚC song_toan — Cùng Sống Sót [GOOD_END]
-Văn bản kết thúc.
-
 KẾT THÚC an_yen — Bình Yên [NORMAL_END]
 Văn bản kết thúc.
 
-Ghi chú:
-- Mỗi cảnh nên có 2-4 lựa chọn. Không ghi "→ Đến cảnh N"/"→ Kết thúc <nhãn>" thì tự sang CẢNH kế tiếp.
-- "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều kiện. Muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn khoá "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
-- "→ Chỉ dụ: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng CẢNH thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG lựa chọn thì bật NGAY SAU KHI chọn.
-- Cấp bậc tần phi tự tính từ Sủng Ái (mỗi 15 điểm trên Sủng Ái khởi đầu thăng 1 cấp).
-- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END / BAD_END.
-- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" CHỈ trỏ tới cảnh/kết thúc CÓ THẬT trong kịch bản.`;
+── 5. QUY TẮC QUAN TRỌNG ──
+- Mỗi cảnh nên có 2-4 lựa chọn, và nên có ÍT NHẤT 1 lựa chọn không bị khoá
+  điều kiện gì — tránh trường hợp người chơi tới 1 cảnh mà mọi lựa chọn đều
+  bị khoá (kẹt cứng giữa chừng).
+- Loại kết thúc trong [ ] chỉ được 1 trong 4: TRUE_END / GOOD_END /
+  NORMAL_END / BAD_END (bỏ qua thì mặc định NORMAL_END).
+- KHÔNG viết rẽ nhánh kiểu "Nếu... thì Đến..." trong 1 lựa chọn — muốn rẽ
+  nhánh theo điều kiện, viết 2 lựa chọn riêng, khoá đối lập nhau bằng "Cần
+  cờ:"/"Cần không có cờ:" (xem CẢNH 2 lựa chọn B/C trong ví dụ).
+- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" chỉ được trỏ tới cảnh/kết thúc CÓ THẬT
+  trong kịch bản.`;
 
 const CHEAT_SHEET_NOTES = `CÁCH DÙNG:
 - Đây là MẪU CÚ PHÁP, không phải 1 truyện hoàn chỉnh — thay mọi chữ "Tên truyện",
   "Tên cảnh", "Diễn biến của cảnh", "Văn bản kết thúc" bằng nội dung của bạn.
 - Mỗi lựa chọn nên có 1 dòng "→ Đến cảnh N" hoặc "→ Kết thúc <nhãn>". Bỏ qua thì
-  tự sang CẢNH kế tiếp. Có thể bỏ "→ Đến cảnh 3" ở lựa chọn B của CẢNH 1 để xem
-  cách cảnh tự nối tiếp nhau.
+  tự sang CẢNH kế tiếp.
 - "→ Cần hảo cảm <tên> >= N" / "<= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa
   chọn nếu chưa đủ điều kiện — chính là chỗ lựa chọn trước quyết định lựa chọn sau.
 - "→ Chỉ dụ: TIÊU ĐỀ | Nội dung" bật bảng thông báo hoàng cung. Cấp bậc tần phi

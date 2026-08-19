@@ -84,46 +84,93 @@ function jumpToWarning(textareaRef, script, warning) {
 
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/SystemScriptImporter.jsx
 // hay parser của 2 xưởng đó, sửa file này không ảnh hưởng gì tới 2 xưởng kia.
-const CHEAT_SHEET = `KHÔNG CẦN gõ dấu #, ##, ** gì cả — hệ thống nhận diện qua TỪ KHOÁ (NHÂN VẬT,
-CẢNH, KẾT THÚC, GIỚI THIỆU, chữ cái A/B/C...), có hay không có mấy dấu đó đều
-đọc đúng như nhau.
+const CHEAT_SHEET = `KHÔNG CẦN gõ #, ##, ** hay bất kỳ ký hiệu Markdown nào — hệ thống nhận diện
+qua TỪ KHOÁ (NHÂN VẬT, CẢNH, KẾT THÚC, GIỚI THIỆU, chữ A/B/C...). Có hay
+không có mấy dấu đó đều đọc đúng như nhau, cứ viết tự nhiên.
 
+── 1. THÔNG TIN CHUNG (đặt ở đầu kịch bản, trước GIỚI THIỆU) ──
+Tên truyện
+Thể loại: ...
+Chỉ số sinh tử: Thiện cảm < 10        [tuỳ chọn — chỉ số nào tụt dưới ngưỡng
+                                        này thì Game Over ngay]
+Chỉ số khởi đầu: Thiện cảm = 20       [BẮT BUỘC nếu có dòng "Chỉ số sinh tử"
+                                        ở trên — bỏ qua thì chỉ số mặc định
+                                        bắt đầu ở 0 và bị tính "chết" ngay!]
+Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả.
+                                       [tuỳ chọn — thay cho "GAME OVER" mặc
+                                        định khi chết vì "Chỉ số sinh tử"]
+
+── 2. MỖI NHÂN VẬT LÀ 1 TUYẾN TRUYỆN ĐỘC LẬP ──
+GIỚI THIỆU
+Bạn muốn theo đuổi ai?                [văn bản màn hình chọn nhân vật — bỏ
+                                        qua thì tự dùng câu này]
+
+NHÂN VẬT Tên nhân vật — Mô tả ngắn
+→ Ảnh: https://...                    [tuỳ chọn — BẮT BUỘC đặt ngay dưới
+                                        dòng NHÂN VẬT, TRƯỚC cảnh đầu tiên]
+
+CẢNH 1 — Tên cảnh
+Diễn biến của cảnh.
+
+A — Lời lựa chọn
+→ (các dòng hiệu ứng — xem bảng bên dưới)
+→ Đến cảnh 2
+
+CẢNH 2 — ...
+...
+
+KẾT THÚC <nhãn> — Tên kết thúc [LOẠI_KẾT_THÚC]
+Văn bản kết thúc.
+
+NHÂN VẬT Nhân vật thứ 2 — Mô tả ngắn
+CẢNH 1 — ...                          [số cảnh TỰ RESET về 1 — "Đến cảnh
+...                                     N"/"Kết thúc <nhãn>" chỉ có hiệu lực
+                                        TRONG PHẠM VI khối NHÂN VẬT đang viết]
+
+── 3. BẢNG HIỆU ỨNG "→ ..." (đặt bên trong 1 lựa chọn A/B/C) ──
+→ Thiện cảm +N / -N              cộng/trừ điểm chỉ số (tên chỉ số tự đặt,
+                                  hệ thống tự nhận qua "+N"/"-N")
+→ Cần Thiện cảm >= N / <= N      khoá lựa chọn tới khi đạt ngưỡng
+→ Cờ: <tên cờ>                   bật 1 "cờ truyện" (nhớ lựa chọn đã qua)
+→ Cần cờ: <tên cờ>               khoá tới khi cờ đó đã bật
+→ Cần không có cờ: <tên cờ>      khoá NẾU cờ đó đã bật (làm nhánh đối lập)
+→ Vật phẩm: <tên vật phẩm>       cho vật phẩm
+→ Cần vật phẩm: <tên vật phẩm>   khoá tới khi có vật phẩm đó
+→ Đến cảnh N                     dẫn sang CẢNH N cùng nhân vật (N phải có
+                                  thật ở dưới)
+→ Kết thúc <nhãn>                dẫn tới KẾT THÚC <nhãn> cùng nhân vật (nhãn
+                                  phải khớp y hệt)
+
+Không ghi "→ Đến cảnh"/"→ Kết thúc" thì lựa chọn tự động sang CẢNH kế tiếp
+theo đúng thứ tự viết trong văn bản.
+
+── 4. VÍ DỤ ĐẦY ĐỦ ──
 Công lược — Tên truyện
 Thể loại: ...
-Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — ác cảm quá mức là thất bại)
-Chỉ số khởi đầu: Thiện cảm = 20       (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở
-                                       trên — nếu không khai, mặc định bắt
-                                       đầu ở 0 và sẽ bị tính là "chết" ngay!)
+Chỉ số sinh tử: Thiện cảm < 10
+Chỉ số khởi đầu: Thiện cảm = 20
 Thông báo thua cuộc: Bị Phế Truất | Nàng đã đánh mất tất cả, cả tính mạng lẫn ngôi vị.
-                                      (tuỳ chọn — đổi chữ hiện khi chết vì
-                                       "Chỉ số sinh tử" ở trên, thay cho
-                                       "GAME OVER" mặc định. Bỏ qua dòng này
-                                       thì vẫn hiện chữ mặc định như cũ.)
 
 GIỚI THIỆU
-Bạn muốn theo đuổi ai?                (văn bản hiện trên màn hình chọn nhân
-                                       vật — bỏ qua thì tự dùng câu này)
+Bạn muốn theo đuổi ai?
 
 NHÂN VẬT Thẩm Cố Uyên — Lạnh lùng · Khó gần
-→ Ảnh: https://...                    (tuỳ chọn — ảnh đại diện trên thẻ chọn,
-                                       đặt NGAY DƯỚI dòng NHÂN VẬT)
+→ Ảnh: https://...
 
 CẢNH 1 — Lần đầu gặp gỡ
 Diễn biến của cảnh.
 
 A — Chủ động bắt chuyện
-→ Thiện cảm +5
+→ Thiện cảm +50
 → Đến cảnh 2
 
 B — Giữ khoảng cách
 → Thiện cảm -3
 → Đến cảnh 2
 
-CẢNH 2 — Bắt đầu chú ý đến bạn
-...
-
-CẢNH 8 — Tỏ tình
-Khoảnh khắc quyết định.
+CẢNH 2 — Tỏ tình
+Khoảnh khắc quyết định (thực tế nên có thêm vài cảnh xây dựng quan hệ trước
+khi tới đây — ví dụ này rút gọn để tập trung vào cú pháp).
 
 A — Nói lời yêu
 → Cần Thiện cảm >= 60
@@ -139,23 +186,29 @@ KẾT THÚC chia_xa — Chia xa [BAD_END]
 Văn bản kết thúc.
 
 NHÂN VẬT Minh Châu — Kiêu ngạo · Hay ghen
-CẢNH 1 — ...                          (số cảnh TỰ RESET về 1 — mỗi nhân vật
-...                                    là 1 tuyến hoàn toàn độc lập, "Đến cảnh
-                                       N"/"Kết thúc <nhãn>" chỉ có hiệu lực
-                                       TRONG PHẠM VI khối NHÂN VẬT đang viết)
+CẢNH 1 — Gặp gỡ tình cờ
+Diễn biến của cảnh.
 
-Ghi chú:
+A — Trêu chọc đáp trả
+→ Thiện cảm +5
+→ Kết thúc vui
+
+KẾT THÚC vui — Vui vẻ [GOOD_END]
+Văn bản kết thúc.
+
+── 5. QUY TẮC QUAN TRỌNG ──
 - Người chơi chỉ thấy màn hình thẻ bài "Bạn muốn theo đuổi ai?" ở đầu game —
   chọn ai thì CHỈ tuyến của người đó chạy tiếp, không cần tính điểm những
   người còn lại.
 - Nên dùng CHUNG tên chỉ số "Thiện cảm" cho mọi nhân vật (chỉ 1 tuyến chạy
   tại 1 thời điểm nên dùng chung 1 thang điểm là đủ).
-- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END
-  / BAD_END (bỏ qua [ ] thì mặc định NORMAL_END).
-- Không có rẽ nhánh kiểu "Nếu... thì Đến..." trong 1 lựa chọn — muốn rẽ
+- Loại kết thúc trong [ ] chỉ được 1 trong 4: TRUE_END / GOOD_END /
+  NORMAL_END / BAD_END (bỏ qua thì mặc định NORMAL_END).
+- KHÔNG viết rẽ nhánh kiểu "Nếu... thì Đến..." trong 1 lựa chọn — muốn rẽ
   nhánh theo điều kiện, viết 2 lựa chọn riêng, mỗi cái khoá bằng "Cần cờ:"/
   "Cần không có cờ:" hoặc "Cần Thiện cảm >= N" đối lập nhau.
-- Vẫn có thể gõ #, ##, ### , ** như trước nếu bạn thích đọc có màu mè hơn.`;
+- Vẫn có thể gõ #, ##, ### , ** như trước nếu bạn thích đọc có màu mè hơn —
+  có hay không đều được, tuỳ bạn.`;
 
 export default function NpcScriptImporter({ gameData, setGameData, onGenerated }) {
   const [script, setScript] = useState("");

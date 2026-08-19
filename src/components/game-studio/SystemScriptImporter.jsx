@@ -83,20 +83,71 @@ function jumpToWarning(textareaRef, script, warning) {
 
 // Xưởng RIÊNG BIỆT — không import gì từ ScriptImporter.jsx/scriptParser.js
 // của "Xưởng Offline", sửa file này không ảnh hưởng gì tới xưởng đó.
-const CHEAT_SHEET = `KHÔNG CẦN gõ dấu #, ##, ** gì cả — hệ thống nhận diện qua TỪ KHOÁ (CẢNH,
-KẾT THÚC, GIỚI THIỆU, chữ cái A/B/C...), có hay không có mấy dấu đó đều đọc
-đúng như nhau. Ví dụ dưới đây viết hoàn toàn không dấu, dán y vậy vẫn chạy:
+const CHEAT_SHEET = `KHÔNG CẦN gõ #, ##, ** hay bất kỳ ký hiệu Markdown nào — hệ thống nhận diện
+qua TỪ KHOÁ (CẢNH, KẾT THÚC, GIỚI THIỆU, chữ A/B/C...). Có hay không có mấy
+dấu đó đều đọc đúng như nhau, cứ viết tự nhiên.
 
+── 1. THÔNG TIN CHUNG (đặt ở đầu kịch bản, trước GIỚI THIỆU) ──
 Tên game
 Thể loại: ...
-Chỉ số sinh tử: Thiện cảm < 10        (tuỳ chọn — chỉ số này tụt dưới 10 là Game Over ngay)
-Chỉ số khởi đầu: Thiện cảm = 20       (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
-                                       không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
-                                       tính là "chết" ngay từ đầu game!)
+Chỉ số sinh tử: Thiện cảm < 10        [tuỳ chọn — chỉ số nào tụt dưới ngưỡng
+                                        này thì Game Over ngay]
+Chỉ số khởi đầu: Thiện cảm = 20       [BẮT BUỘC nếu có dòng "Chỉ số sinh tử"
+                                        ở trên — bỏ qua thì chỉ số mặc định
+                                        bắt đầu ở 0 và bị tính "chết" ngay!]
+Thông báo thua cuộc: Ký Chủ Ngừng Hoạt Động | Hệ thống đã ngắt kết nối.
+                                       [tuỳ chọn — thay cho "GAME OVER" mặc
+                                        định khi chết vì "Chỉ số sinh tử"]
+
+── 2. CẤU TRÚC CẢNH ──
+GIỚI THIỆU
+→ Hệ thống: <tiêu đề> | <nội dung>    [tuỳ chọn — bật bảng thông báo hệ
+                                        thống ngay khi mở game]
+Văn bản mở đầu.
+
+CẢNH 1 — Tên cảnh
+→ Hệ thống: <tiêu đề> | <nội dung>    [tuỳ chọn — đặt NGAY DƯỚI dòng CẢNH,
+                                        TRƯỚC lựa chọn A, thì bật khi VÀO cảnh]
+Diễn biến của cảnh.
+
+A — Lời lựa chọn
+→ (các dòng hiệu ứng — xem bảng bên dưới)
+→ Đến cảnh 2
+
+CẢNH 2 — ...
+...
+
+KẾT THÚC <nhãn> — Tên kết thúc [LOẠI_KẾT_THÚC]
+Văn bản kết thúc.
+
+── 3. BẢNG HIỆU ỨNG "→ ..." (đặt bên trong 1 lựa chọn A/B/C) ──
+→ Thiện cảm +N / -N              cộng/trừ điểm chỉ số (tên chỉ số tự đặt,
+                                  hệ thống tự nhận qua "+N"/"-N")
+→ Cần Thiện cảm >= N / <= N      khoá lựa chọn tới khi đạt ngưỡng
+→ Cờ: <tên cờ>                   bật 1 "cờ truyện" (nhớ lựa chọn đã qua)
+→ Cần cờ: <tên cờ>               khoá tới khi cờ đó đã bật
+→ Cần không có cờ: <tên cờ>      khoá NẾU cờ đó đã bật (làm nhánh đối lập)
+→ Vật phẩm: <tên vật phẩm>       cho vật phẩm
+→ Cần vật phẩm: <tên vật phẩm>   khoá tới khi có vật phẩm đó
+→ Hệ thống: <tiêu đề> | <nội dung>   bật bảng thông báo NGAY SAU KHI chọn
+                                  (dùng cho phạt/thưởng) — tối đa 1 dòng này
+                                  mỗi lựa chọn, tiêu đề/nội dung cách nhau
+                                  dấu "|"; muốn xuống dòng trong nội dung thì
+                                  gõ "\\n" ngay trong câu, KHÔNG bấm Enter thật
+→ Đến cảnh N                     dẫn sang CẢNH N (N phải có thật ở dưới)
+→ Kết thúc <nhãn>                dẫn tới KẾT THÚC <nhãn> (nhãn phải khớp y
+                                  hệt) — hoặc viết tắt "→ Đến <nhãn>" cũng
+                                  được, miễn nhãn không bắt đầu bằng "cảnh "
+
+Không ghi "→ Đến cảnh"/"→ Kết thúc" thì lựa chọn tự động sang CẢNH kế tiếp
+theo đúng thứ tự viết trong văn bản.
+
+── 4. VÍ DỤ ĐẦY ĐỦ ──
+Tên game
+Thể loại: ...
+Chỉ số sinh tử: Thiện cảm < 10
+Chỉ số khởi đầu: Thiện cảm = 20
 Thông báo thua cuộc: Ký Chủ Ngừng Hoạt Động | Nhiệm vụ thất bại, hệ thống đã ngắt kết nối.
-                                      (tuỳ chọn — đổi chữ hiện khi chết vì "Chỉ số sinh
-                                       tử" ở trên, thay cho "GAME OVER" mặc định. Bỏ qua
-                                       dòng này thì vẫn hiện chữ mặc định như cũ.)
 
 GIỚI THIỆU
 → Hệ thống: HỆ THỐNG SỐ 01 | Xin chào ký chủ! Chào mừng ký chủ đến với thế giới này...
@@ -109,33 +160,31 @@ Diễn biến của cảnh.
 A — Lựa chọn phạm luật hệ thống
 → Thiện cảm -10
 → Hệ thống: CẢNH BÁO | Ký chủ đã làm lệch cốt truyện, bị phạt chích điện, trừ 10 thiện cảm!
+→ Đến cảnh 2
 
 B — Lựa chọn đúng cốt truyện
 → Thiện cảm +15
-→ Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện!\nThưởng 15 điểm thiện cảm.
-                               (muốn xuống dòng trong nội dung thì gõ "\n" như trên,
-                                KHÔNG bấm Enter thật vì cả dòng phải nằm trên 1 dòng)
-→ Đến cảnh 2                  (số 2 PHẢI có cảnh "CẢNH 2" thật ở dưới, không thì báo lỗi)
+→ Hệ thống: PHẦN THƯỞNG | Ký chủ đã hoàn thành đúng cốt truyện!\\nThưởng 15 điểm thiện cảm.
+→ Đến cảnh 2
 
-CẢNH 2 — ...
-...
+CẢNH 2 — Kết truyện
+Diễn biến của cảnh (thực tế nên có thêm vài cảnh trước khi tới đây — ví dụ
+này rút gọn để tập trung vào cú pháp).
+
+A — Hoàn thành nhiệm vụ
+→ Kết thúc nhan_ket_thuc
 
 KẾT THÚC nhan_ket_thuc — Tên kết thúc [TRUE_END]
 Văn bản kết thúc.
 
-Ghi chú:
-- "→ Hệ thống: <tiêu đề> | <nội dung>" đặt NGAY DƯỚI dòng "CẢNH N" (trước lựa
-  chọn A) thì bật bảng thông báo khi VÀO cảnh; đặt BÊN TRONG 1 lựa chọn thì
-  bật NGAY SAU KHI chọn (dùng cho phạt/thưởng). Mỗi cảnh/lựa chọn tối đa 1
-  dòng này. Tiêu đề và nội dung cách nhau bằng dấu "|". Muốn xuống dòng
-  trong nội dung thì gõ "\n" ngay trong câu (không bấm Enter thật).
-- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END /
-  BAD_END (bỏ qua [ ] thì mặc định NORMAL_END). Không có rẽ nhánh kiểu "Nếu...
-  thì Đến..." trong 1 lựa chọn — muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn
-  riêng, mỗi cái khoá bằng "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
-- "→ Đến <nhãn kết thúc>" (không cần gõ chữ "Kết thúc") cũng được, vd
-  "→ Đến true_end" — miễn nhãn đó KHÔNG bắt đầu bằng "cảnh " (để không nhầm
-  với "→ Đến cảnh N").
+── 5. QUY TẮC QUAN TRỌNG ──
+- Loại kết thúc trong [ ] chỉ được 1 trong 4: TRUE_END / GOOD_END /
+  NORMAL_END / BAD_END (bỏ qua thì mặc định NORMAL_END).
+- KHÔNG viết rẽ nhánh kiểu "Nếu... thì Đến..." trong 1 lựa chọn — muốn rẽ
+  nhánh theo điều kiện, viết 2 lựa chọn riêng, mỗi cái khoá bằng "Cần cờ:"/
+  "Cần không có cờ:" hoặc "Cần Thiện cảm >= N" đối lập nhau.
+- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" chỉ được trỏ tới cảnh/kết thúc CÓ THẬT
+  trong kịch bản.
 - Vẫn có thể gõ #, ##, ** như trước nếu bạn thích đọc có màu mè hơn — có hay
   không có đều được, tuỳ bạn.`;
 

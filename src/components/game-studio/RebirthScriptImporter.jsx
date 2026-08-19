@@ -84,22 +84,85 @@ function jumpToWarning(textareaRef, script, warning) {
 // (giấy tờ/nguyên liệu), và nhiều kết thúc khác nhau. Nội dung là CHỖ TRỐNG —
 // gõ đè tên truyện, nhân vật, cảnh của BẠN vào để viết truyện MỚI, đừng chép
 // theo đúng 1 cốt truyện duy nhất nào cả.
-const CHEAT_SHEET = `Trọng Sinh — Tên truyện
+const CHEAT_SHEET = `KHÔNG CẦN gõ #, ##, ** hay bất kỳ ký hiệu Markdown nào — hệ thống nhận diện
+qua TỪ KHOÁ (CẢNH, KẾT THÚC, GIỚI THIỆU, chữ A/B/C...). Có hay không có mấy
+dấu đó đều đọc đúng như nhau, cứ viết tự nhiên.
+
+── 1. THÔNG TIN CHUNG (đặt ở đầu kịch bản, trước GIỚI THIỆU) ──
+Trọng Sinh — Tên truyện
 Thể loại: ...
-Chỉ số sinh tử: Vốn < 5, Sức khỏe < 1   (tuỳ chọn — tụt xuống ngưỡng là PHÁ SẢN/Game Over.
-                                          Chỉ số ĐẦU TIÊN nên là "Vốn" vì niên đại làm giàu
-                                          được tính từ nó. Khai nhiều chỉ số cách nhau dấu phẩy.)
-Chỉ số khởi đầu: Vốn = 50, Sức khỏe = 3 (QUAN TRỌNG nếu có "Chỉ số sinh tử" ở trên — nếu
-                                          không khai, chỉ số mặc định bắt đầu ở 0 và sẽ bị
-                                          tính là "chết" ngay từ đầu game!)
-Thông báo thua cuộc: Phá Sản | Vốn cạn kiệt, nhà xưởng bị siết nợ.
-                                          (tuỳ chọn — đổi chữ hiện khi phá sản vì "Chỉ số
-                                           sinh tử" ở trên, thay cho "GAME OVER" mặc định.
-                                           Bỏ qua dòng này thì vẫn hiện chữ mặc định như cũ.)
+Chỉ số sinh tử: Vốn < 5, Sức khỏe < 1   [tuỳ chọn — chỉ số nào tụt dưới
+                                          ngưỡng thì PHÁ SẢN/Game Over. Chỉ
+                                          số ĐẦU TIÊN nên là "Vốn" vì niên
+                                          đại làm giàu tính từ nó]
+Chỉ số khởi đầu: Vốn = 50, Sức khỏe = 3 [BẮT BUỘC nếu có dòng "Chỉ số sinh
+                                          tử" ở trên — bỏ qua thì chỉ số mặc
+                                          định bắt đầu ở 0 và bị tính "chết"
+                                          ngay!]
+Thông báo thua cuộc: Phá Sản | Nhà xưởng bị siết nợ.
+                                          [tuỳ chọn — thay cho "GAME OVER"
+                                           mặc định]
 Thang thời đại: 1995 · Mồ hôi = 0 (+0) | 1999 · Cổ phiếu vàng = 60 (+5) | 2003 · Đất vàng = 200 (+10) | 2007 · Đế chế = 600 (+20) | 2011 · Huyền thoại = 1500 (+35)
-                                          (tuỳ chọn — mốc vốn để đế chế thăng niên đại, cách
-                                           nhau dấu "|", thu nhập (+N) cộng MỘT LẦN khi thăng
-                                           niên đại. Bỏ qua thì dùng mặc định.)
+                                          [tuỳ chọn — mốc Vốn để đế chế
+                                           thăng niên đại, cách nhau "|",
+                                           thu nhập (+N) cộng MỘT LẦN khi
+                                           thăng. Bỏ qua thì dùng mặc định]
+
+── 2. CẤU TRÚC CẢNH ──
+GIỚI THIỆU
+→ Cơ hội: <tiêu đề> | <nội dung>      [tuỳ chọn — bật bảng thông báo tin
+                                        nội bộ ngay khi mở game]
+Văn bản mở đầu.
+
+CẢNH 1 — Tên cảnh
+→ Cơ hội: <tiêu đề> | <nội dung>      [tuỳ chọn — đặt NGAY DƯỚI dòng CẢNH,
+                                        TRƯỚC lựa chọn A, thì bật khi VÀO cảnh]
+Diễn biến của cảnh.
+
+A — Lời lựa chọn
+→ (các dòng hiệu ứng — xem bảng bên dưới)
+→ Đến cảnh 2
+
+CẢNH 2 — ...
+...
+
+KẾT THÚC <nhãn> — Tên kết thúc [LOẠI_KẾT_THÚC]
+Văn bản kết thúc.
+
+── 3. BẢNG HIỆU ỨNG "→ ..." (đặt bên trong 1 lựa chọn A/B/C) ──
+→ Vốn +N / -N                    lời/lỗ tiền (chỉ số chính, niên đại tính
+                                  từ đây)
+→ Cần Vốn >= N / <= N            khoá lựa chọn tới khi đạt ngưỡng
+→ <Chỉ số khác> +N / -N          chỉ số phụ tự do (vd "→ Danh vọng +5",
+                                  "→ Sức khỏe -2") — tên tự đặt, hệ thống
+                                  tự nhận qua "+N"/"-N"
+→ Hảo cảm <tên nhân vật> +N / -N   cộng/trừ hảo cảm RIÊNG với 1 nhân vật
+                                  (đối tác, người thân...) — khác chỉ số
+                                  chính, mỗi người có thang điểm độc lập
+→ Cần hảo cảm <tên nhân vật> >= N / <= N   khoá tới khi đạt hảo cảm đó
+→ Cờ: <tên cờ>                   bật 1 "cờ truyện" (nhớ lựa chọn đã qua)
+→ Cần cờ: <tên cờ>               khoá tới khi cờ đó đã bật
+→ Cần không có cờ: <tên cờ>      khoá NẾU cờ đó đã bật (làm nhánh đối lập)
+→ Vật phẩm: <tên vật phẩm>       cho vật phẩm (giấy tờ, hợp đồng...)
+→ Cần vật phẩm: <tên vật phẩm>   khoá tới khi có vật phẩm đó
+→ Cơ hội: <tiêu đề> | <nội dung>   bật bảng thông báo NGAY SAU KHI chọn
+                                  (dùng cho kết quả phi vụ/thăng niên đại)
+                                  — tối đa 1 dòng này mỗi lựa chọn
+→ Đến cảnh N                     dẫn sang CẢNH N (N phải có thật ở dưới)
+→ Kết thúc <nhãn>                dẫn tới KẾT THÚC <nhãn> (nhãn phải khớp y hệt)
+
+Không ghi "→ Đến cảnh"/"→ Kết thúc" thì lựa chọn tự động sang CẢNH kế tiếp
+theo đúng thứ tự viết trong văn bản. Niên đại làm giàu TỰ TÍNH từ Vốn (chạm
+mốc trong "Thang thời đại" là tự thăng + cộng thu nhập một lần) — không cần
+dòng hiệu ứng riêng.
+
+── 4. VÍ DỤ ĐẦY ĐỦ ──
+Trọng Sinh — Tên truyện
+Thể loại: ...
+Chỉ số sinh tử: Vốn < 5, Sức khỏe < 1
+Chỉ số khởi đầu: Vốn = 50, Sức khỏe = 3
+Thông báo thua cuộc: Phá Sản | Vốn cạn kiệt, nhà xưởng bị siết nợ.
+Thang thời đại: 1995 · Mồ hôi = 0 (+0) | 1999 · Cổ phiếu vàng = 60 (+5) | 2003 · Đất vàng = 200 (+10) | 2007 · Đế chế = 600 (+20) | 2011 · Huyền thoại = 1500 (+35)
 
 GIỚI THIỆU
 → Cơ hội: THOÁT KIẾP PHÁ SẢN | Lời chào mở đầu, mời người chơi bắt đầu.
@@ -107,14 +170,13 @@ Văn bản mở đầu — khởi nghiệp tay trắng, 1-2 đoạn, có thể c
 
 CẢNH 1 — Tên cảnh
 → Cơ hội: TÊN TIN NỘI BỘ | Tin nội bộ/dự án/phi vụ — sự kiện chung của thương trường.
-                                       (tuỳ chọn — đặt NGAY DƯỚI dòng CẢNH thì bật bảng
-                                        thông báo khi VÀO cảnh)
 Diễn biến của cảnh — cơ hội làm giàu nhờ kiến thức tương lai.
 
 A — Lời lựa chọn ngắn
 → Vốn +20
+→ Hảo cảm Đối tác +10
 → Cờ: ký được hợp đồng đầu tiên
-→ Cơ hội: KẾT QUẢ PHI VỤ | Công bố kết quả ngay sau khi chọn (đặt BÊN TRONG lựa chọn).
+→ Cơ hội: KẾT QUẢ PHI VỤ | Công bố kết quả ngay sau khi chọn.
 
 B — Lời lựa chọn khác
 → Cần Vốn >= 40
@@ -128,9 +190,14 @@ Diễn biến của cảnh.
 A — Lựa chọn táo bạo
 → Cần cờ: ký được hợp đồng đầu tiên
 → Vốn +300
-→ Cơ hội: THĂNG NIÊN ĐẠI | Chạm mốc vốn, đế chế bước sang niên đại mới và thu thêm khoản tiền MỘT LẦN.
+→ Cơ hội: THĂNG NIÊN ĐẠI | Chạm mốc vốn, đế chế bước sang niên đại mới.
 
-B — Lựa chọn an toàn
+B — Lựa chọn dựa vào đối tác
+→ Cần hảo cảm Đối tác >= 10
+→ Vốn +80
+→ Đến cảnh 3
+
+C — Lựa chọn an toàn
 → Cần vật phẩm: Giấy tờ đất nền
 → Vốn +50
 → Kết thúc truong_thanh
@@ -157,19 +224,25 @@ Văn bản kết thúc.
 KẾT THÚC an_yen — An Yên [NORMAL_END]
 Văn bản kết thúc.
 
-Ghi chú:
-- Mỗi cảnh nên có 2-4 lựa chọn. Không ghi "→ Đến cảnh N"/"→ Kết thúc <nhãn>" thì tự sang CẢNH kế tiếp.
-- "→ Cần Vốn >= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều kiện — lựa chọn trước quyết định lựa chọn sau. Muốn rẽ nhánh theo điều kiện, viết 2 lựa chọn khoá "Cần cờ:"/"Cần không có cờ:" đối lập nhau.
-- "→ Vốn +N/-N" là lời/lỗ tiền. "→ Danh vọng +N", "→ Sức khỏe +N"... là chỉ số phụ (tên tự do, hệ thống tự nhận).
-- Loại kết thúc trong [ ] CHỈ được 1 trong 4: TRUE_END / GOOD_END / NORMAL_END / BAD_END.
-- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" CHỈ trỏ tới cảnh/kết thúc CÓ THẬT trong kịch bản.`;
+── 5. QUY TẮC QUAN TRỌNG ──
+- Mỗi cảnh nên có 2-4 lựa chọn, và nên có ÍT NHẤT 1 lựa chọn không bị khoá
+  điều kiện gì — tránh trường hợp người chơi tới 1 cảnh mà mọi lựa chọn đều
+  bị khoá (kẹt cứng giữa chừng).
+- "→ Vốn -N" là lỗ vốn — đừng ngại làm lỗ sát ngưỡng phá sản ("Vốn < 5") để
+  căng thẳng đúng chất chốn thương trường.
+- Loại kết thúc trong [ ] chỉ được 1 trong 4: TRUE_END / GOOD_END /
+  NORMAL_END / BAD_END (bỏ qua thì mặc định NORMAL_END).
+- KHÔNG viết rẽ nhánh kiểu "Nếu... thì Đến..." trong 1 lựa chọn — muốn rẽ
+  nhánh theo điều kiện, viết 2 lựa chọn riêng, khoá đối lập nhau bằng "Cần
+  cờ:"/"Cần không có cờ:".
+- "→ Đến cảnh N"/"→ Kết thúc <nhãn>" chỉ được trỏ tới cảnh/kết thúc CÓ THẬT
+  trong kịch bản.`;
 
 const CHEAT_SHEET_NOTES = `CÁCH DÙNG:
 - Đây là MẪU CÚ PHÁP, không phải 1 truyện hoàn chỉnh — thay mọi chữ "Tên truyện",
   "Tên cảnh", "Diễn biến của cảnh", "Văn bản kết thúc" bằng nội dung của bạn.
 - Mỗi lựa chọn nên có 1 dòng "→ Đến cảnh N" hoặc "→ Kết thúc <nhãn>". Bỏ qua thì
-  tự sang CẢNH kế tiếp. Có thể bỏ "→ Đến cảnh 2" ở lựa chọn A của CẢNH 1 để xem
-  cách cảnh tự nối tiếp nhau.
+  tự sang CẢNH kế tiếp.
 - "→ Cần Vốn >= N", "→ Cần cờ:", "→ Cần vật phẩm:" khoá lựa chọn nếu chưa đủ điều
   kiện — lựa chọn trước quyết định lựa chọn sau.
 - "→ Cơ hội: TIÊU ĐỀ | Nội dung" bật bảng thông báo tin nội bộ/phi vụ. NIÊN ĐẠI
