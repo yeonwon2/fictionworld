@@ -308,7 +308,8 @@ export default function GamePlayer({ gameData, onExit }) {
       }
     }
     if (c.systemPoints) systemPoints = rt.systemPoints + c.systemPoints;
-    if (c.grantFlag && !flags.includes(c.grantFlag)) { flags.push(c.grantFlag); ev.push(['•', 'Kích hoạt hiệu ứng Cánh bướm: ' + c.grantFlag]); }
+    if (c.grantFlags) { for (const gf of c.grantFlags) if (!flags.includes(gf)) { flags.push(gf); ev.push(['•', 'Kích hoạt hiệu ứng Cánh bướm: ' + gf]); } }
+    else if (c.grantFlag && !flags.includes(c.grantFlag)) { flags.push(c.grantFlag); ev.push(['•', 'Kích hoạt hiệu ứng Cánh bướm: ' + c.grantFlag]); }
     if (c.grantItem && !inventory.includes(c.grantItem) && canCarryMore(inventory.length)) { inventory.push(c.grantItem); ev.push(['•', 'Nhặt được: ' + c.grantItem]); }
     if (c.removeItem) inventory = inventory.filter((x) => x !== c.removeItem);
     if (c.unlockSkill && !skills.includes(c.unlockSkill)) { skills.push(c.unlockSkill); ev.push(['•', 'Mở khóa kỹ năng: ' + c.unlockSkill]); }

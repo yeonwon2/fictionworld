@@ -183,6 +183,8 @@ export function normalizeAndRepair(rawNodesMap, statKeys, minDepth, options = {}
       c.requiresFlag = cleanStr(c.requiresFlag);
       c.requiresFlagAbsent = cleanStr(c.requiresFlagAbsent);
       c.grantFlag = cleanStr(c.grantFlag);
+      if (c.grantFlags) c.grantFlags = cleanStrArr(c.grantFlags);
+      else if (c.grantFlag) c.grantFlags = [c.grantFlag];
       c.grantItem = cleanStr(c.grantItem);
       c.removeItem = cleanStr(c.removeItem);
       c.completeQuestId = cleanStr(c.completeQuestId);
@@ -458,7 +460,7 @@ function simulatePlaytest(nodesMap, statsConfig) {
         const st = makeState(c.targetNodeId, { ...startStats }, new Set(sg.items), new Set(sg.flags), {});
         // phần thưởng từ chọn nhân vật ở start_node (grantItem/grantFlag trên lựa chọn)
         if (c.grantItem) st.items.add(c.grantItem);
-        if (c.grantFlag) st.flags.add(c.grantFlag);
+        for (const gf of (c.grantFlags || [])) st.flags.add(gf);
         pushState(st);
       }
     }
@@ -489,7 +491,7 @@ function simulatePlaytest(nodesMap, statsConfig) {
         if (c.grantItem) items.add(c.grantItem);
         if (c.removeItem) items.delete(c.removeItem);
         const flags = new Set(st.flags);
-        if (c.grantFlag) flags.add(c.grantFlag);
+        for (const gf of (c.grantFlags || [])) flags.add(gf);
         const affinity = { ...st.npcAffinity };
         if (c.npcAffinity) for (const n in c.npcAffinity) affinity[n] = (affinity[n] || 0) + c.npcAffinity[n];
         // Lựa chọn xúc xắc/chiến đấu: người chơi luôn bấm được (dù kết quả thắng/thua) —
@@ -579,6 +581,7 @@ function analyzeLogic(nodesMap, statsConfig) {
     for (const c of (n.choices || [])) {
       if (c.grantItem) { itemsGranted.add(c.grantItem); note(itemSources, c.grantItem, n.id); }
       if (c.grantFlag) { flagsGranted.add(c.grantFlag); note(flagSources, c.grantFlag, n.id); }
+      for (const gf of (c.grantFlags || [])) { flagsGranted.add(gf); note(flagSources, gf, n.id); }
       for (const [k, v] of Object.entries(c.statModifiers || {})) {
         if (typeof v === "number" && v > 0) statGains[k] = (statGains[k] || 0) + v;
         else if (typeof v === "number" && v < 0) statLoses[k] = (statLoses[k] || 0) + v;

@@ -216,7 +216,13 @@ export function parseScript(scriptText, baseMeta = {}) {
       return;
     }
     let m;
-    if ((m = raw.match(RE_EFF_FLAG))) { target.grantFlag = m[1].trim(); return; }
+    if ((m = raw.match(RE_EFF_FLAG))) { {
+      const f = m[1].trim();
+      if (!target.grantFlags) target.grantFlags = [];
+      if (!target.grantFlags.includes(f)) target.grantFlags.push(f);
+      if (!target.grantFlag) target.grantFlag = f;
+      return;
+    } }
     if ((m = raw.match(RE_EFF_REQ_NOT_FLAG))) { target.requiresFlagAbsent = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_REQ_FLAG))) { target.requiresFlag = m[1].trim(); return; }
     if ((m = raw.match(RE_EFF_ITEM))) { target.grantItem = m[1].trim(); return; }

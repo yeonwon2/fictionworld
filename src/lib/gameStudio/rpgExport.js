@@ -270,7 +270,7 @@ const ENGINE_JS = [
   '    var ev=[]; var exp=state.exp, rankIndex=state.rankIndex, systemPoints=state.systemPoints; var inv=state.inventory.slice(), flags=state.flags.slice(), skills=state.skills.slice(); var quests=Object.assign({}, state.quests); var npcAffinity=Object.assign({}, state.npcAffinity);',
   '    if(c.exp){ exp=state.exp+c.exp; var ranks=litrpg.ranks||[]; var per=litrpg.expPerRank||100; while(exp>=per && rankIndex<ranks.length-1){ exp-=per; rankIndex++; ev.push(["⚡","Đột phá Cảnh giới! Đạt "+ranks[rankIndex]]); } }',
   '    if(c.systemPoints){ systemPoints=state.systemPoints+c.systemPoints; }',
-  '    if(c.grantFlag && flags.indexOf(c.grantFlag)<0){ flags.push(c.grantFlag); ev.push(["🦋","Kích hoạt hiệu ứng Cánh bướm: "+c.grantFlag]); }',
+  '    if(c.grantFlags){ for(var fi=0; fi<c.grantFlags.length; fi++){ if(flags.indexOf(c.grantFlags[fi])<0){ flags.push(c.grantFlags[fi]); ev.push(["🦋","Kích hoạt hiệu ứng Cánh bướm: "+c.grantFlags[fi]]); } } } else if(c.grantFlag && flags.indexOf(c.grantFlag)<0){ flags.push(c.grantFlag); ev.push(["🦋","Kích hoạt hiệu ứng Cánh bướm: "+c.grantFlag]); }',
   '    if(c.grantItem && inv.indexOf(c.grantItem)<0 && canCarryMore(inv.length)){ inv.push(c.grantItem); ev.push(["📦","Nhặt được: "+c.grantItem]); }',
   '    if(c.removeItem){ inv=inv.filter(function(x){ return x!==c.removeItem; }); }',
   '    if(c.unlockSkill && skills.indexOf(c.unlockSkill)<0){ skills.push(c.unlockSkill); ev.push(["✨","Mở khóa kỹ năng: "+c.unlockSkill]); }',
