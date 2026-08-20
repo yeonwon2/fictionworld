@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookOpen, BookMarked, Archive } from "lucide-react";
+import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
@@ -11,6 +11,7 @@ import {
   listEvents,
   listGlossary,
   listChapters,
+  getChapter,
 } from "@/lib/worldcrud";
 import { buildDirectionBlock } from "@/lib/directionUtils";
 import { buildExistingStoryData } from "@/lib/writingFactory/bibleBuilder";
@@ -21,6 +22,19 @@ import {
   DOC_DEFS,
   DOC_DEFS_BY_KEY,
 } from "@/lib/writingFactory/prompts";
+import {
+  buildBibleMarkdown,
+  buildStoryMarkdown,
+  buildStoryTxt,
+  buildStoryHtml,
+  buildEpubBlob,
+  buildFullJson,
+  downloadMarkdown,
+  downloadTxt,
+  downloadHtml,
+  downloadEpub,
+  downloadJson,
+} from "@/lib/writingFactory/exporters";
 import DocTree from "@/components/writing-factory/DocTree";
 import DocEditor from "@/components/writing-factory/DocEditor";
 import ChapterWriter from "@/components/writing-factory/ChapterWriter";
@@ -35,18 +49,6 @@ const TABS = [
   { key: "rollup", label: "Cập Nhật Bible", icon: RefreshCw },
   { key: "team", label: "Team AI", icon: Bot },
 ];
-
-function downloadTextFile(filename, text) {
-  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 500);
-}
 
 // Xưởng Viết Truyện — workspace mô hình "xưởng" kiểu tác giả web-novel Trung Quốc:
 // 1 bộ tài liệu bible sống + viết chương bám bible + rollup tự cập nhật + team AI theo vai.
@@ -188,34 +190,62 @@ export default function WritingFactory() {
     setExporting(true);
     setError("");
     try {
-      const storyName = (currentStory?.name || "truyen").replace(/[\\/:*?"<>|]/g, "_");
-      const blocks = [];
-      if (mode === "bible" || mode === "all") {
-        const docBlocks = DOC_DEFS.map((d) => {
-          const doc = docsByKey[d.key];
-          if (!doc?.content?.trim()) return null;
-          return `# ${d.title} (${d.file})\n\n${doc.content.trim()}`;
-        }).filter(Boolean);
-        if (docBlocks.length) blocks.push(`# BỘ TÀI LIỆU XƯỞNG (bible)\n\n` + docBlocks.join("\n\n---\n\n"));
-      }
-      if (mode === "chapters" || mode === "all") {
-        const list = (await listChapters(currentStoryId)) || [];
-        list.sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0));
-        const chBlocks = list.map(
-          (c) => `# ${c.chapter_number != null ? `Chương ${c.chapter_number}: ` : ""}${c.title}\n\n${(c.content || "").trim()}`
-        );
-        if (chBlocks.length) {
-          if (blocks.length) blocks.push(`# TRUYỆN (các chương — dùng để đăng)\n\n`);
-          blocks.push(chBlocks.join("\n\n---\n\n"));
+      const base = (currentStory?.name || "truyen").replace(/[\\/:*?"<>|]/g, "_");
+      const author = "";
+      // listChapters chỉ trả cột nhẹ — cần lấy content từng chương.
+      const lite = (await listChapters(currentStoryId)) || [];
+      lite.sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0));
+      const chapters = [];
+      for (const c of lite) {
+        try {
+          const row = await getChapter(c.id);
+          chapters.push(row);
+        } catch {
+          chapters.push(c);
         }
       }
-      const text = blocks.join("\n");
-      if (!text.trim()) {
-        setError("Không có nội dung để tải.");
-        return;
+
+      if (mode === "bible") {
+        const md = buildBibleMarkdown(docsByKey);
+        if (!md.trim()) throw new Error("Bộ tài liệu trống.");
+        downloadMarkdown(`${base}_BO_TAI_LIEU.md`, md);
+      } else if (mode === "bible-json") {
+        downloadJson(`${base}_BO_TAI_LIEU.json`, {
+          type: "fictionworld_bible",
+          story: { name: currentStory?.name },
+          bible: Object.fromEntries(
+            DOC_DEFS.map((d) => [d.key, { title: d.title, file: d.file, content: docsByKey?.[d.key]?.content || "" }])
+          ),
+          exported_at: new Date().toISOString(),
+        });
+      } else if (mode === "chapters-txt") {
+        const txt = buildStoryTxt(chapters, currentStory?.name);
+        if (!txt.trim()) throw new Error("Chưa có chương nào.");
+        downloadTxt(`${base}_TRUYEN.txt`, txt);
+      } else if (mode === "chapters-html") {
+        const html = buildStoryHtml({ storyName: currentStory?.name, author, chapters });
+        downloadHtml(`${base}_TRUYEN.html`, html);
+      } else if (mode === "chapters-epub") {
+        if (!chapters.length) throw new Error("Chưa có chương nào.");
+        const blob = await buildEpubBlob({ storyName: currentStory?.name, author, chapters });
+        downloadEpub(`${base}.epub`, blob);
+      } else if (mode === "chapters-md") {
+        const md = buildStoryMarkdown(chapters);
+        if (!md.trim()) throw new Error("Chưa có chương nào.");
+        downloadMarkdown(`${base}_TRUYEN.md`, md);
+      } else if (mode === "all") {
+        const md = [buildBibleMarkdown(docsByKey), buildStoryMarkdown(chapters)].filter(Boolean).join("\n\n# TRUYỆN\n\n");
+        if (!md.trim()) throw new Error("Không có nội dung để tải.");
+        downloadMarkdown(`${base}_TOAN_BO.md`, md);
+      } else if (mode === "all-json") {
+        const json = buildFullJson({
+          storyName: currentStory?.name,
+          author,
+          docsByKey,
+          chapters,
+        });
+        downloadJson(`${base}_TOAN_BO.json`, json);
       }
-      const suffix = mode === "bible" ? "_BO_TAI_LIEU" : mode === "chapters" ? "_TRUYEN" : "_TOAN_BO";
-      downloadTextFile(`${storyName}${suffix}.md`, text);
       setExportOpen(false);
       setStatus("Đã tải file về máy.");
     } catch (e) {
@@ -257,25 +287,74 @@ export default function WritingFactory() {
           {exportOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
-              <div className="absolute left-0 top-full mt-1 z-40 w-72 rounded-xl border border-border bg-card shadow-xl p-1.5">
-                <button
-                  onClick={() => handleExport("bible")}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
-                >
-                  <BookOpen className="w-4 h-4 text-primary shrink-0" /> Tải bộ tài liệu (bible)
-                </button>
-                <button
-                  onClick={() => handleExport("chapters")}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
-                >
-                  <BookMarked className="w-4 h-4 text-primary shrink-0" /> Tải truyện (các chương — để đăng)
-                </button>
-                <button
-                  onClick={() => handleExport("all")}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
-                >
-                  <Archive className="w-4 h-4 text-primary shrink-0" /> Tải toàn bộ (bible + truyện)
-                </button>
+              <div className="absolute left-0 top-full mt-1 z-40 w-[380px] rounded-xl border border-border bg-card shadow-xl p-2">
+                <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Bộ tài liệu (bible) — cho AI / soạn thảo</div>
+                <div className="flex gap-1.5 px-2 pb-1">
+                  <button
+                    onClick={() => handleExport("bible")}
+                    disabled={exporting}
+                    className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-primary" /> .md
+                  </button>
+                  <button
+                    onClick={() => handleExport("bible-json")}
+                    disabled={exporting}
+                    className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileCode2 className="w-3.5 h-3.5 text-primary" /> .json
+                  </button>
+                </div>
+
+                <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Truyện — để đăng / đọc</div>
+                <div className="flex gap-1.5 px-2 pb-1 flex-wrap">
+                  <button
+                    onClick={() => handleExport("chapters-txt")}
+                    disabled={exporting}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-primary" /> .txt
+                  </button>
+                  <button
+                    onClick={() => handleExport("chapters-html")}
+                    disabled={exporting}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileType2 className="w-3.5 h-3.5 text-primary" /> .html
+                  </button>
+                  <button
+                    onClick={() => handleExport("chapters-epub")}
+                    disabled={exporting}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <BookMarked className="w-3.5 h-3.5 text-primary" /> .epub
+                  </button>
+                  <button
+                    onClick={() => handleExport("chapters-md")}
+                    disabled={exporting}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-primary" /> .md
+                  </button>
+                </div>
+
+                <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Toàn bộ (bible + truyện)</div>
+                <div className="flex gap-1.5 px-2 pb-1">
+                  <button
+                    onClick={() => handleExport("all")}
+                    disabled={exporting}
+                    className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-primary" /> .md
+                  </button>
+                  <button
+                    onClick={() => handleExport("all-json")}
+                    disabled={exporting}
+                    className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <FileCode2 className="w-3.5 h-3.5 text-primary" /> .json
+                  </button>
+                </div>
               </div>
             </>
           )}
