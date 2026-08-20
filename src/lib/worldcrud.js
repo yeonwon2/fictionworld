@@ -215,6 +215,40 @@ export async function deleteWriterDoc(storyId, docKey) {
   if (error) throw error;
 }
 
+// ---------- Snapshot bible (writer_doc_snapshots) ----------
+export async function createWriterDocSnapshot(storyId, docKey, { title, content, label }) {
+  const { data: row, error } = await supabase
+    .from("writer_doc_snapshots")
+    .insert({ story_id: storyId, doc_key: docKey, title, content, label })
+    .select()
+    .single();
+  if (error) throw error;
+  return row;
+}
+
+export async function listWriterDocSnapshots(storyId, docKey, limit = 20) {
+  const { data, error } = await supabase
+    .from("writer_doc_snapshots")
+    .select("id, story_id, doc_key, title, label, created_at")
+    .eq("story_id", storyId)
+    .eq("doc_key", docKey)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getWriterDocSnapshot(id) {
+  const { data, error } = await supabase.from("writer_doc_snapshots").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteWriterDocSnapshot(id) {
+  const { error } = await supabase.from("writer_doc_snapshots").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- Xưởng Game (Game) ----------
 // listGames() chỉ trả cột nhẹ (KHÔNG có nodes/meta) — dùng cho thư viện/danh
 // sách game. Gọi getGame(id) riêng khi mở một game cụ thể để chơi/sửa/xuất —

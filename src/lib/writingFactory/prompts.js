@@ -25,6 +25,7 @@ export const DOC_DEFS = [
   { key: "dai_cuong", file: "04_DAI_CUONG.md", title: "Đại Cương", role: "Đại cương sư", icon: "outline" },
   { key: "fuc_but", file: "05_FUC_BUT.md", title: "Phục Bút", role: "Phục bút quản lý", icon: "flag" },
   { key: "timeline", file: "06_TIMELINE.md", title: "Timeline", role: "Thời tuyến", icon: "clock" },
+  { key: "trang_thai_nhan_vat", file: "07_TRANG_THAI_NHAN_VAT.md", title: "Trạng Thái Nhân Vật", role: "Quản lý nhân vật", icon: "user" },
   { key: "tom_tat_hien_tai", file: "summaries/tom_tat_hien_tai.md", title: "Tóm Tắt Hiện Tại", role: "Biên tập nhất quán", icon: "summary" },
 ];
 
@@ -80,7 +81,7 @@ export const TEAM_ROLE_BY_KEY = Object.fromEntries(TEAM_ROLES.map((r) => [r.key,
 
 // ---------- Bộ khung chung: dựng block "toàn bộ bible" để nhồi vào prompt ----------
 export function buildBibleBlock(docsByKey) {
-  const order = ["quy_tac_viet", "the_gioi", "nhan_vat", "quan_he", "dai_cuong", "fuc_but", "timeline", "tom_tat_hien_tai"];
+  const order = ["quy_tac_viet", "the_gioi", "nhan_vat", "quan_he", "dai_cuong", "fuc_but", "timeline", "trang_thai_nhan_vat", "tom_tat_hien_tai"];
   const parts = [];
   for (const key of order) {
     const def = DOC_DEFS_BY_KEY[key];
@@ -113,6 +114,7 @@ Hãy trả về TOÀN BỘ 8 tài liệu, MỖI tài liệu là một chuỗi Ma
 - 04_DAI_CUONG: đại cương — tổng số chương dự kiến, các arc (tên, từ-chương-đến-chương, bước ngoặt chính), đại cương sự kiện cho vài chương đầu.
 - 05_FUC_BUT: sổ phục bút — danh sách phục bút nên cài (mô tả, thời điểm cài, dự kiến hồi đáp, trạng thái "đang treo").
 - 06_TIMELINE: dòng thời gian các sự kiện đã xác lập (sự kiện, thời điểm, nơi, nhân vật liên quan).
+- 07_TRANG_THAI_NHAN_VAT: trạng thái sống của từng nhân vật NGAY BÂY GIỜ — địa điểm hiện tại, hành động đang làm, tâm lý, vật phẩm, bí mật đã biết, thương tích/địa vị mới nhất (dùng Markdown, mỗi nhân vật 1 mục '### Tên').
 - summaries/tom_tat_hien_tai.md: tóm tắt hiện tại — trạng thái câu chuyện NGAY BÂY GIỜ (nhân vật đang ở đâu, đang làm gì, xung đột đang leo thang thế nào) để viết chương tiếp theo không lệch.
 
 Trả JSON đúng schema: { docs: { quy_tac_viet: string, the_gioi: string, nhan_vat: string, quan_he: string, dai_cuong: string, fuc_but: string, timeline: string, tom_tat_hien_tai: string } }.`;
@@ -151,6 +153,8 @@ export function buildDocGenPrompt({ key, genre, idea, existingBible, currentDoc,
       "Soạn sổ phục bút: mỗi phục bút có mô tả, thời điểm cài, dự kiến hồi đáp, trạng thái (chưa cài / đã cài / đang treo / đã hồi đáp).",
     timeline:
       "Soạn timeline: các sự kiện đã xác lập theo thứ tự thời gian — sự kiện, thời điểm, nơi, nhân vật liên quan.",
+    trang_thai_nhan_vat:
+      "Soạn trạng thái nhân vật sống: mỗi nhân vật một mục ### Tên — địa điểm hiện tại, hành động đang làm, tâm lý, vật phẩm, bí mật đã biết, thương tích/địa vị mới nhất. Không phải hồ sơ tĩnh — là trạng thái HIỆN TẠI thay đổi theo chương.",
     tom_tat_hien_tai:
       "Soạn tóm tắt hiện tại: trạng thái câu chuyện NGAY BÂY GIỜ — nhân vật đang ở đâu, đang làm gì, xung đột đang leo thang thế nào — để viết chương tiếp theo không lệch.",
   };
@@ -172,6 +176,52 @@ ${note?.trim() || "(không có — tự làm cho hay và đầy đủ)"}
 Chỉ trả nội dung Markdown của tài liệu này, không thêm lời dẫn ngoài.`;
 }
 
+// ---------- Scene Beat Planner (细纲): lên beats trước khi viết văn ----------
+export function buildBeatPlannerPrompt({
+  genre,
+  chapterTitle,
+  chapterNumber,
+  chapterGoal,
+  bibleText,
+  prevTail,
+  orientation,
+}) {
+  return `Bạn là biên kịch của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Trước khi viết văn, hãy lên DÀN BEATS (细纲) cho chương — 5–8 beats, mỗi beat 1 câu súc tích, rõ ràng hành động/cảm xúc/kết quả.
+
+# BỘ TÀI LIỆU XƯỞNG (bible)
+${bibleText}
+
+# Chương cần lên beats
+- Tiêu đề: ${chapterTitle || "(chưa có)"}
+- Số chương: ${chapterNumber || "(chưa có)"}
+- Mục tiêu: ${chapterGoal?.trim() || "(chưa có — dựa vào đại cương + tóm tắt hiện tại)"}
+
+# Đoạn cuối chương trước (để nối mạch)
+${prevTail?.trim() || "(chưa có — viết như mở đầu)"}
+
+${orientation?.trim() ? `# Định hướng của tác giả\n${orientation.trim()}` : ""}
+
+# Yêu cầu beats
+- Bắt đầu beat đầu tiên phải NỐI TIẾP đoạn cuối chương trước (không đứt mạch).
+- Mỗi beat phải có XUNG ĐỘT hoặc THÔNG TIN MỚI, không chỉ mô tả không khí.
+- Beats cuối phải để lại MÓC TREO (hook) hoặc khoảnh khắc cảm xúc mạnh.
+- Nhân vật hành động ĐÚNG tính cách trong 02_NHAN_VAT, xưng hô ĐÚNG 03_QUAN_HE.
+- Nếu hợp lý, 1 beat nên cài phục bút mới hoặc hồi đáp phục bút đang treo.
+
+Trả JSON đúng schema: { beats: [string] } — mảng 5–8 beats, mỗi beat 1 câu.`;
+}
+
+export const BEAT_PLANNER_SCHEMA = {
+  type: "object",
+  properties: {
+    beats: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+  required: ["beats"],
+};
+
 // ---------- Viết chương bám bible ----------
 export function buildWriteChapterPrompt({
   genre,
@@ -181,6 +231,7 @@ export function buildWriteChapterPrompt({
   bibleText,
   prevTail,
   orientation,
+  beats,
 }) {
   return `Bạn là tác giả chính của một xưởng viết tiểu thuyết. ${genreStyleLine(genre)} TUYỆT ĐỐI không giải thích meta — chỉ viết văn chương hoàn chỉnh.
 
@@ -193,12 +244,15 @@ ${chapterGoal?.trim() || "(chưa có — hãy viết chương nối tiếp tự 
 # Đoạn cuối chương trước (nối mạch, giữ tông)
 ${prevTail?.trim() ? prevTail.trim() : "(chưa có — viết như mở đầu)"}
 
+${beats?.length ? `# DÀN BEATS ĐÃ DUYỆT (细纲 — bám sát 100% từng beat theo thứ tự)\n${beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : ""}
+
 ${orientation?.trim() ? `# Định hướng thêm của tác giả\n${orientation.trim()}` : ""}
 
 # Yêu cầu bắt buộc
 - Tuân thủ tuyệt đối 00_QUY_TAC_VIET (tông giọng, POV, từ cấm, xưng hô, giới hạn tiết lộ).
 - Nhân vật hành động/đối thoại ĐÚNG hồ sơ trong 02_NHAN_VAT & 03_QUAN_HE (giọng văn, xưng hô đúng từng người).
 - Địa danh, luật lệ, thuật ngữ ĐÚNG 01_THE_GIOI.
+- Trạng thái nhân vật bắt đầu chương phải KHỚP với 07_TRANG_THAI_NHAN_VAT (vị trí, hành động, tâm lý, vật phẩm).
 - Đảm bảo nhịp chương ~800-1200 từ, chia đoạn rõ ràng, kết chương có móc treo (hook) tự nhiên hoặc khoảnh khắc cảm xúc.
 - Nếu hợp lý, cài 1 phục bút mới theo 05_FUC_BUT hoặc hồi đáp một phục bút đang treo.
 - Không mâu thuẫn 06_TIMELINE và summaries/tom_tat_hien_tai.md.
@@ -219,7 +273,8 @@ ${bibleText}
 - 06_TIMELINE: thêm các sự kiện mới của chương vào cuối timeline (đúng thứ tự), cập nhật trạng thái nếu có thay đổi.
 - summaries/tom_tat_hien_tai.md: VIẾT MỚI tóm tắt hiện tại (thay hoàn toàn bản cũ) — nhân vật đang ở đâu, đang làm gì, xung đột leo thang thế nào, móc treo đang treo là gì.
 - 05_FUC_BUT: thêm phục bút MỚI được cài trong chương (đánh dấu "đang treo"), và đánh dấu "đã hồi đáp" cho phục bút nào được hồi đáp trong chương này.
-- 02_NHAN_VAT: cập nhật trạng thái thực tế của nhân vật nếu chương thay đổi đáng kể (thương, thức tỉnh, địa vị, lật mặt, quan hệ...).
+- 07_TRANG_THAI_NHAN_VAT: CẬP NHẬT trạng thái sống của nhân vật sau chương — địa điểm mới, hành động đang làm, tâm lý, vật phẩm mới, bí mật đã biết, thương tích/địa vị mới nhất.
+- 02_NHAN_VAT: cập nhật nếu chương thay đổi đáng kể hồ sơ nhân vật (mục tiêu đổi, bí mật tiết lộ, mối quan hệ quan trọng thay đổi...). TRÊN 03_QUAN_HE nếu chỉ thay đổi thái độ thì không cần.
 - 03_QUAN_HE: cập nhật thái độ/quan hệ nếu chương có thay đổi.
 - 04_DAI_CUONG: đánh dấu tiến độ chương đã viết (ghi chú nhỏ) nếu cần.
 - 00_QUY_TAC_VIET và 01_THE_GIOI: chỉ cập nhật khi chương tiết lộ luật mới/địa danh mới cần ghi nhận.
@@ -270,6 +325,33 @@ export const BIBLE_CONSISTENCY_SCHEMA = {
     },
   },
   required: ["issues"],
+};
+
+// ---------- Voice Consistency: trích giọng văn nhân vật từ chương đã viết ----------
+export function buildVoiceExtractionPrompt({ genre, characterName, chapterContents }) {
+  const excerpts = chapterContents
+    .map((c, i) => `### Chương ${i + 1}\n"""${c}"""`)
+    .join("\n\n");
+  return `Bạn là biên tập giọng văn nhân vật trong xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc các đoạn văn chương dưới đây và TRÍCH ra giọng văn/thoại đặc trưng của nhân vật "${characterName}".
+
+# Các chương đã viết
+${excerpts}
+
+# Yêu cầu trích xuất
+- 5–10 câu THOẠI thực tế nhân vật này từng nói (trích nguyên văn, giữ dấu “ ” nếu có).
+- Ghi chú 1–2 dòng về phong cách nói (VD: lạnh lùng, ngắn gọn, dùng từ cổ trang, hay dùng "ta/ngươi", hay nói mỉa...).
+- Nếu nhân vật không xuất hiện thoại trong các đoạn này, trả về mảng rỗng.
+Trả JSON đúng schema: { name: string, dialogue_samples: [string], voice_notes: string }.`;
+}
+
+export const VOICE_EXTRACTION_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    dialogue_samples: { type: "array", items: { type: "string" } },
+    voice_notes: { type: "string" },
+  },
+  required: ["name", "dialogue_samples", "voice_notes"],
 };
 
 // ---------- Team chat: prompt hệ thống theo vai + context bible ----------

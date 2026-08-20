@@ -76,6 +76,7 @@ create table if not exists public.chapters (
   story_id uuid references public.stories (id) on delete cascade,
   title text not null,
   content text,
+  outline_beats text,
   chapter_number numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -206,11 +207,23 @@ create table if not exists public.writer_docs (
 );
 create index if not exists writer_docs_story_id_idx on public.writer_docs (story_id);
 
+-- Snapshot/version lịch sử của từng tài liệu bible — để quay lại khi AI update sai.
+create table if not exists public.writer_doc_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  doc_key text not null,
+  title text not null default 'Snapshot',
+  content text not null default '',
+  label text,
+  created_at timestamptz not null default now()
+);
+create index if not exists writer_doc_snapshots_story_key_idx on public.writer_doc_snapshots (story_id, doc_key);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -224,7 +237,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

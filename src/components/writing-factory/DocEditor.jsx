@@ -1,11 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Wand2, Loader2, Save, CheckCircle2, Eye, Pencil, X } from "lucide-react";
+import { Wand2, Loader2, Save, CheckCircle2, Eye, Pencil, X, History, RotateCcw, Camera } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { DOC_DEFS_BY_KEY } from "@/lib/writingFactory/prompts";
+import {
+  listWriterDocSnapshots,
+  getWriterDocSnapshot,
+  deleteWriterDocSnapshot,
+} from "@/lib/worldcrud";
 
 // Trình soạn thảo một tài liệu bible: xem / soạn Markdown + hành động AI
-// (sinh lại, rà soát) theo vai chuyên môn của tài liệu đó.
-export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
+// (sinh lại, rà soát) theo vai chuyên môn của tài liệu đó. Có snapshot lịch sử
+// để quay lại phiên bản cũ khi AI update sai.
+export default function DocEditor({ doc, currentStoryId, onSave, saving, onAIGenerate, busy }) {
   const def = DOC_DEFS_BY_KEY[doc?.doc_key] || {};
   const [mode, setMode] = useState("edit"); // "edit" | "preview"
   const [draft, setDraft] = useState(doc?.content || "");
@@ -14,6 +20,12 @@ export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
   const [savedTick, setSavedTick] = useState(false);
   const prevIdRef = useRef(doc?.id);
   const lastServerRef = useRef(doc?.content || "");
+
+  // Version history
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   // Đồng bộ bản nháp với server: đổi tài liệu thì reset hẳn; cùng tài liệu mà
   // nội dung server đổi (AI soạn xong / lưu xong) thì cập nhật, NHƯNG không
@@ -35,6 +47,50 @@ export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
   }, [doc?.id, doc?.content]);
 
   const dirty = (doc?.content || "") !== draft;
+
+  const loadSnapshots = async () => {
+    if (!doc?.doc_key || !currentStoryId) return;
+    setHistoryLoading(true);
+    try {
+      const list = await listWriterDocSnapshots(currentStoryId, doc.doc_key, 20);
+      setSnapshots(list || []);
+    } catch {
+      setSnapshots([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (historyOpen) loadSnapshots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyOpen, doc?.doc_key]);
+
+  const handleRestore = async (snapId) => {
+    if (!snapId) return;
+    setRestoring(true);
+    try {
+      const snap = await getWriterDocSnapshot(snapId);
+      if (snap?.content != null) {
+        setDraft(snap.content);
+        setMode("edit");
+        setHistoryOpen(false);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleDeleteSnapshot = async (snapId) => {
+    try {
+      await deleteWriterDocSnapshot(snapId);
+      setSnapshots((s) => s.filter((x) => x.id !== snapId));
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSave = async () => {
     await onSave(draft);
@@ -75,6 +131,13 @@ export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
             {mode === "edit" ? "Xem trước" : "Soạn"}
           </button>
           <button
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border text-xs hover:bg-muted"
+            title="Lịch sử phiên bản (snapshot)"
+          >
+            <History className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={handleSave}
             disabled={saving || !dirty}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50"
@@ -89,6 +152,56 @@ export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
       {savedTick && (
         <div className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px]">
           <CheckCircle2 className="w-3.5 h-3.5" /> Đã lưu.
+        </div>
+      )}
+
+      {/* Lịch sử phiên bản */}
+      {historyOpen && (
+        <div className="px-4 py-2.5 border-b border-border bg-muted/10 max-h-44 overflow-y-auto">
+          <div className="flex items-center gap-2 mb-2">
+            <History className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold">Lịch sử phiên bản</span>
+            <button
+              onClick={loadSnapshots}
+              disabled={historyLoading}
+              className="ml-auto text-[10px] text-primary hover:underline disabled:opacity-50"
+            >
+              {historyLoading ? "Đang tải..." : "Làm mới"}
+            </button>
+          </div>
+          {snapshots.length === 0 && (
+            <p className="text-[10px] text-muted-foreground italic">
+              Chưa có snapshot nào. Snapshot tự tạo mỗi khi rollup ghi đè tài liệu, hoặc bạn có thể chụp thủ công.
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {snapshots.map((s) => (
+              <li key={s.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
+                <Camera className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-medium truncate">{s.label || "Snapshot"}</div>
+                  <div className="text-[9px] text-muted-foreground">
+                    {new Date(s.created_at).toLocaleString("vi-VN")}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRestore(s.id)}
+                  disabled={restoring}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {restoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                  Khôi phục
+                </button>
+                <button
+                  onClick={() => handleDeleteSnapshot(s.id)}
+                  className="p-1 text-muted-foreground hover:text-destructive text-[10px]"
+                  title="Xoá snapshot"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -138,7 +251,7 @@ export default function DocEditor({ doc, onSave, saving, onAIGenerate, busy }) {
         ) : (
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <p className="text-[11px] text-muted-foreground">
-              Để {def.role} ({def.role}) làm việc với tài liệu này:
+              Để {def.role} làm việc với tài liệu này:
             </p>
             <div className="flex items-center gap-1.5">
               <button

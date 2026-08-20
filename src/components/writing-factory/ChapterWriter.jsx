@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { PenLine, Loader2, Save, ListChecks, ShieldCheck, CheckCircle2, AlertTriangle, Wand2 } from "lucide-react";
+import {
+  PenLine,
+  Loader2,
+  Save,
+  ListChecks,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  Wand2,
+  ListOrdered,
+  RefreshCw,
+  Check,
+  FileText,
+} from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
   listChapters,
@@ -7,12 +20,19 @@ import {
   createChapter,
   updateChapter,
   deleteChapter,
+  upsertWriterDoc,
+  createWriterDocSnapshot,
 } from "@/lib/worldcrud";
 import {
   buildBibleBlock,
   buildWriteChapterPrompt,
+  buildBeatPlannerPrompt,
+  BEAT_PLANNER_SCHEMA,
   buildBibleConsistencyPrompt,
   BIBLE_CONSISTENCY_SCHEMA,
+  buildRollupPrompt,
+  ROLLUP_SCHEMA,
+  DOC_DEFS_BY_KEY,
 } from "@/lib/writingFactory/prompts";
 
 function getLastWords(text, n) {
@@ -23,7 +43,9 @@ function getLastWords(text, n) {
 }
 
 // Viết chương bám Bible — nạp toàn bộ bộ tài liệu xưởng làm ngữ cảnh.
-export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChapterWritten }) {
+// Flow: (1) Lên beats (细纲) → tác giả duyệt/sửa → (2) AI viết prose theo beats
+// → (3) Lưu chương → (4) auto-rollup đề xuất cập nhật bible ngay bên dưới.
+export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChapterWritten, onDocsUpdated }) {
   const [chapters, setChapters] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [title, setTitle] = useState("");
@@ -38,6 +60,17 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [issues, setIssues] = useState(null);
   const [error, setError] = useState("");
 
+  // Beat planner
+  const [beats, setBeats] = useState([]);
+  const [planningBeats, setPlanningBeats] = useState(false);
+  const [beatsApproved, setBeatsApproved] = useState(false);
+
+  // Auto-rollup
+  const [rollingUp, setRollingUp] = useState(false);
+  const [rollupProposal, setRollupProposal] = useState(null);
+  const [rollupSaving, setRollupSaving] = useState(false);
+  const [autoRollup, setAutoRollup] = useState(true);
+
   const load = async () => {
     const list = (await listChapters(currentStoryId)) || [];
     list.sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0));
@@ -47,6 +80,9 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
 
   useEffect(() => {
     setActiveId(null);
+    setBeats([]);
+    setBeatsApproved(false);
+    setRollupProposal(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStoryId]);
@@ -59,11 +95,19 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         setTitle(full.title || "");
         setNumber(full.chapter_number ?? "");
         setContent(full.content || "");
+        try {
+          setBeats(full.outline_beats ? JSON.parse(full.outline_beats) : []);
+        } catch {
+          setBeats([]);
+        }
+        setBeatsApproved(!!full.outline_beats);
       });
     } else {
       setTitle("");
       setNumber(String((chapters?.[chapters.length - 1]?.chapter_number || 0) + 1));
       setContent("");
+      setBeats([]);
+      setBeatsApproved(false);
     }
     return () => {
       cancelled = true;
@@ -81,6 +125,42 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     setActiveId(id || null);
   };
 
+  const handlePlanBeats = async () => {
+    setError("");
+    setPlanningBeats(true);
+    try {
+      const prompt = buildBeatPlannerPrompt({
+        genre,
+        chapterTitle: title,
+        chapterNumber: number,
+        chapterGoal: goal,
+        bibleText,
+        prevTail: prevTail || getLastWords(content, 800),
+        orientation,
+      });
+      const res = await aiCall(prompt, { jsonSchema: BEAT_PLANNER_SCHEMA });
+      setBeats(res?.beats || []);
+      setBeatsApproved(false);
+    } catch (e) {
+      setError("Không thể lên beats: " + (e?.message || "lỗi"));
+    } finally {
+      setPlanningBeats(false);
+    }
+  };
+
+  const updateBeat = (i, value) => {
+    setBeats((bs) => bs.map((b, idx) => (idx === i ? value : b)));
+    setBeatsApproved(false);
+  };
+  const addBeat = () => {
+    setBeats((bs) => [...bs, ""]);
+    setBeatsApproved(false);
+  };
+  const removeBeat = (i) => {
+    setBeats((bs) => bs.filter((_, idx) => idx !== i));
+    setBeatsApproved(false);
+  };
+
   const handleWrite = async () => {
     setError("");
     setIssues(null);
@@ -94,6 +174,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         bibleText,
         prevTail: prevTail || getLastWords(content, 800),
         orientation,
+        beats: beatsApproved ? beats : undefined,
       });
       const res = await aiCall(prompt);
       setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${String(res)}` : String(res)));
@@ -120,6 +201,32 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     }
   };
 
+  const runRollup = async (chapterRow) => {
+    setError("");
+    setRollupProposal(null);
+    setRollingUp(true);
+    try {
+      const prompt = buildRollupPrompt({
+        genre,
+        chapterTitle: chapterRow?.title || title,
+        chapterContent: content,
+        bibleText,
+        pastSummary: docsByKey?.tom_tat_hien_tai?.content || "",
+      });
+      const res = await aiCall(prompt, { jsonSchema: ROLLUP_SCHEMA });
+      const updates = res?.updates || {};
+      const map = {};
+      for (const k of Object.keys(updates)) {
+        map[k] = { old: docsByKey?.[k]?.content || "", new: updates[k], saved: false };
+      }
+      setRollupProposal(map);
+    } catch (e) {
+      setError("Rollup lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setRollingUp(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       setError("Chưa có tên chương.");
@@ -129,15 +236,16 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     setError("");
     try {
       const num = number === "" ? undefined : Number(number);
+      const payload = { title, chapter_number: num, content };
+      if (beats.length) payload.outline_beats = JSON.stringify(beats);
       let saved;
       if (activeId) {
-        saved = await updateChapter(activeId, { title, chapter_number: num, content });
+        saved = await updateChapter(activeId, payload);
       } else {
         saved = await createChapter({
           story_id: currentStoryId,
-          title,
           chapter_number: num ?? chapters.length + 1,
-          content,
+          ...payload,
         });
       }
       setChapters((cs) =>
@@ -145,10 +253,63 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       );
       setActiveId(saved.id);
       onChapterWritten?.(saved);
+      if (autoRollup && content.trim()) {
+        await runRollup(saved);
+      }
     } catch (e) {
       setError("Lưu chương lỗi: " + (e?.message || "lỗi"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const acceptRollupOne = async (key) => {
+    const p = rollupProposal[key];
+    if (!p || p.saved) return;
+    setRollupSaving(true);
+    try {
+      // Snapshot bản cũ trước khi ghi đè — để quay lại nếu AI update sai.
+      if (p.old?.trim()) {
+        await createWriterDocSnapshot(currentStoryId, key, {
+          title: DOC_DEFS_BY_KEY[key]?.title || key,
+          content: p.old,
+          label: "trước rollup",
+        });
+      }
+      await upsertWriterDoc(currentStoryId, key, { title: DOC_DEFS_BY_KEY[key]?.title || key, content: p.new });
+      setRollupProposal((prev) => ({ ...prev, [key]: { ...prev[key], saved: true } }));
+      onDocsUpdated?.();
+    } catch (e) {
+      setError("Lưu tài liệu lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setRollupSaving(false);
+    }
+  };
+
+  const acceptRollupAll = async () => {
+    if (!rollupProposal) return;
+    setRollupSaving(true);
+    try {
+      for (const key of Object.keys(rollupProposal)) {
+        if (rollupProposal[key].saved) continue;
+        if (rollupProposal[key].old?.trim()) {
+          await createWriterDocSnapshot(currentStoryId, key, {
+            title: DOC_DEFS_BY_KEY[key]?.title || key,
+            content: rollupProposal[key].old,
+            label: "trước rollup",
+          });
+        }
+        await upsertWriterDoc(currentStoryId, key, {
+          title: DOC_DEFS_BY_KEY[key]?.title || key,
+          content: rollupProposal[key].new,
+        });
+      }
+      setRollupProposal((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, { ...prev[k], saved: true }])));
+      onDocsUpdated?.();
+    } catch (e) {
+      setError("Lưu tài liệu lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setRollupSaving(false);
     }
   };
 
@@ -163,6 +324,9 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setError("Xoá chương lỗi: " + (e?.message || "lỗi"));
     }
   };
+
+  const rollupKeys = rollupProposal ? Object.keys(rollupProposal) : [];
+  const rollupAllSaved = rollupKeys.length > 0 && rollupKeys.every((k) => rollupProposal[k].saved);
 
   return (
     <div className="grid lg:grid-cols-[1fr_320px] gap-4">
@@ -244,6 +408,58 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           />
         </div>
 
+        {/* Scene Beat Planner */}
+        <div className="px-4 pt-2.5">
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <ListOrdered className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold">Dàn beats (细纲)</span>
+              {beatsApproved && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-500/10 rounded-full px-2 py-0.5">
+                  <Check className="w-3 h-3" /> Đã duyệt — sẽ bám sát khi viết
+                </span>
+              )}
+              <button
+                onClick={handlePlanBeats}
+                disabled={planningBeats}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50"
+              >
+                {planningBeats ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                Lên beats bằng AI
+              </button>
+            </div>
+            {beats.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {beats.map((b, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground w-4 shrink-0">{i + 1}.</span>
+                    <input
+                      value={b}
+                      onChange={(e) => updateBeat(i, e.target.value)}
+                      className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                    />
+                    <button onClick={() => removeBeat(i)} className="p-1 text-muted-foreground hover:text-destructive text-xs">✕</button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 pt-1">
+                  <button onClick={addBeat} className="text-[11px] text-primary hover:underline">+ Thêm beat</button>
+                  <button
+                    onClick={() => setBeatsApproved(true)}
+                    className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline"
+                  >
+                    <Check className="w-3 h-3" /> Duyệt beats này
+                  </button>
+                </div>
+              </div>
+            )}
+            {beats.length === 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Beats = khung xương chương (mở cảnh → xung đột → cao trào → móc treo). Duyệt beats rồi mới viết văn sẽ chặt chẽ hơn.
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 px-4 py-2.5 flex-wrap">
           <button
             onClick={handleWrite}
@@ -261,6 +477,15 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Kiểm tra nhất quán
           </button>
+          <label className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRollup}
+              onChange={(e) => setAutoRollup(e.target.checked)}
+              className="accent-primary"
+            />
+            Tự cập nhật bible sau khi lưu
+          </label>
         </div>
 
         {error && (
@@ -280,13 +505,71 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           </span>
           <button
             onClick={handleSave}
-            disabled={saving || !title.trim()}
+            disabled={saving || rollingUp || !title.trim()}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {activeId ? "Lưu chương" : "Tạo chương"}
           </button>
         </div>
+
+        {/* Auto-rollup đề xuất ngay dưới chương vừa lưu */}
+        {rollingUp && (
+          <div className="mx-4 mb-3 flex items-center gap-2 text-xs text-primary">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> AI đang đọc chương vừa lưu & đề xuất cập nhật bible...
+          </div>
+        )}
+        {rollupProposal && (
+          <div className="mx-4 mb-4 rounded-xl border border-border bg-card overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-primary" />
+                <span className="font-display font-semibold text-sm">
+                  {rollupKeys.length === 0 ? "Bible không cần cập nhật" : `AI đề xuất cập nhật ${rollupKeys.length} tài liệu`}
+                </span>
+              </div>
+              {rollupKeys.length > 0 && (
+                <button
+                  onClick={acceptRollupAll}
+                  disabled={rollupSaving || rollupAllSaved}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                >
+                  {rollupSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Lưu tất cả
+                </button>
+              )}
+            </div>
+            <div className="p-3 space-y-2.5 max-h-[50vh] overflow-y-auto">
+              {rollupKeys.map((key) => {
+                const p = rollupProposal[key];
+                const def = DOC_DEFS_BY_KEY[key];
+                return (
+                  <div key={key} className={`rounded-lg border p-2.5 ${p.saved ? "border-emerald-500/40 bg-emerald-500/5" : "border-border"}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="font-medium text-xs">{def?.title || key}</span>
+                      {p.saved && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600">
+                          <Check className="w-3 h-3" /> Đã lưu
+                        </span>
+                      )}
+                      <button
+                        onClick={() => acceptRollupOne(key)}
+                        disabled={rollupSaving || p.saved}
+                        className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        <Check className="w-3 h-3" /> Lưu
+                      </button>
+                    </div>
+                    <pre className="mt-1.5 text-[10px] whitespace-pre-wrap max-h-32 overflow-y-auto text-foreground/80 bg-muted/30 rounded p-2">
+                      {p.new}
+                    </pre>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cột phải — theo dõi + kết quả nhất quán */}
@@ -311,7 +594,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             ))}
           </ul>
           <p className="text-[10px] text-muted-foreground mt-2">
-            Sau khi lưu, mở tab <b>Cập Nhật Bible</b> để AI ghi nhận tiến độ & phục bút.
+            Lưu chương sẽ tự động đề xuất cập nhật bible (bật/tắt bằng checkbox). Mở tab <b>Cập Nhật Bible</b> nếu muốn rollup chương cũ.
           </p>
         </div>
 
