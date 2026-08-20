@@ -14,6 +14,10 @@ import {
   FileText,
   Edit3,
   MessagesSquare,
+  Gauge,
+  Sparkles,
+  DoorOpen,
+  Flag,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -35,6 +39,12 @@ import {
   BIBLE_CONSISTENCY_SCHEMA,
   buildXungHoConsistencyPrompt,
   XUNG_HO_CONSISTENCY_SCHEMA,
+  buildChapterCritiquePrompt,
+  CHAPTER_CRITIQUE_SCHEMA,
+  buildRewriteFromCritiquePrompt,
+  buildOpeningPrompt,
+  buildHookPrompt,
+  CHAPTER_OPTIONS_SCHEMA,
   buildRollupPrompt,
   ROLLUP_SCHEMA,
   DOC_DEFS_BY_KEY,
@@ -70,6 +80,17 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [xungHoIssues, setXungHoIssues] = useState(null);
   const [error, setError] = useState("");
   const [statusNote, setStatusNote] = useState("");
+
+  // Viết 2 pass (tự đánh giá & viết lại)
+  const [qualityMode, setQualityMode] = useState(false);
+  const [writeStep, setWriteStep] = useState("");
+  const [critique, setCritique] = useState(null);
+
+  // Mở màn / hook đa lựa chọn
+  const [openingOptions, setOpeningOptions] = useState(null);
+  const [hookOptions, setHookOptions] = useState(null);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genHook, setGenHook] = useState(false);
 
   // Beat planner
   const [beats, setBeats] = useState([]);
@@ -175,6 +196,8 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const handleWrite = async () => {
     setError("");
     setIssues(null);
+    setCritique(null);
+    setWriteStep("");
     setWriting(true);
     try {
       const prompt = buildWriteChapterPrompt({
@@ -188,13 +211,100 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         beats: beatsApproved ? beats : undefined,
         targetWords,
       });
-      const res = await aiCall(prompt);
-      setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${String(res)}` : String(res)));
+      if (qualityMode) {
+        // Pass 1 — viết nháp
+        setWriteStep("Pass 1/2 — viết nháp...");
+        const draft = await aiCall(prompt);
+        // Pass 2 — tự đánh giá theo rubric
+        setWriteStep("Pass 2/2 — tổng biên tập đang chấm điểm...");
+        const crit = await aiCall(buildChapterCritiquePrompt({ genre, chapterTitle: title, bibleText, chapterContent: draft, targetWords }), {
+          jsonSchema: CHAPTER_CRITIQUE_SCHEMA,
+        });
+        setCritique(crit);
+        // Pass 3 — viết lại theo đánh giá
+        setWriteStep("Pass 2/2 — viết lại theo đánh giá...");
+        const critiqueText = [
+          ...(crit?.scores || []).map((s) => `- ${s.criterion}: ${s.score}/10 — ${s.note || ""}`),
+          "Điểm mạnh: " + (crit?.strengths || []).join("; "),
+          "Điểm yếu: " + (crit?.weaknesses || []).join("; "),
+          "Lệnh viết lại: " + (crit?.rewrite_instructions || []).map((r) => `[${r}]`).join(", "),
+        ].join("\n");
+        const final = await aiCall(
+          buildRewriteFromCritiquePrompt({
+            genre,
+            chapterTitle: title,
+            bibleText,
+            chapterContent: draft,
+            critiqueText,
+            targetWords,
+          })
+        );
+        setContent(String(final));
+        setStatusNote("Đã viết 2 pass: nháp → chấm điểm → viết lại. Xem lại rồi Lưu chương.");
+      } else {
+        const res = await aiCall(prompt);
+        setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${String(res)}` : String(res)));
+      }
     } catch (e) {
       setError("Không thể viết chương: " + (e?.message || "lỗi"));
     } finally {
+      setWriteStep("");
       setWriting(false);
     }
+  };
+
+  const handleGenOpening = async () => {
+    setError("");
+    setOpeningOptions(null);
+    setGenOpen(true);
+    try {
+      const p = buildOpeningPrompt({
+        genre,
+        chapterTitle: title,
+        chapterNumber: number,
+        chapterGoal: goal,
+        bibleText,
+        prevTail: prevTail || getLastWords(content, 800),
+        orientation,
+      });
+      const res = await aiCall(p, { jsonSchema: CHAPTER_OPTIONS_SCHEMA });
+      setOpeningOptions(res?.options || []);
+    } catch (e) {
+      setError("Sinh mở màn lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setGenOpen(false);
+    }
+  };
+
+  const applyOpening = (opt) => {
+    setContent((prev) => (prev.trim() ? `${opt.trim()}\n\n${prev.trim()}` : opt.trim()));
+    setOpeningOptions(null);
+    setStatusNote("Đã chèn mở màn vào đầu chương.");
+  };
+
+  const handleGenHook = async () => {
+    if (!content.trim()) {
+      setError("Hãy viết chương trước rồi mới sinh hook kết chương.");
+      return;
+    }
+    setError("");
+    setHookOptions(null);
+    setGenHook(true);
+    try {
+      const p = buildHookPrompt({ genre, chapterTitle: title, chapterContent: content, bibleText, beats: beatsApproved ? beats : undefined });
+      const res = await aiCall(p, { jsonSchema: CHAPTER_OPTIONS_SCHEMA });
+      setHookOptions(res?.options || []);
+    } catch (e) {
+      setError("Sinh hook lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setGenHook(false);
+    }
+  };
+
+  const applyHook = (opt) => {
+    setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${opt.trim()}` : opt.trim()));
+    setHookOptions(null);
+    setStatusNote("Đã chèn hook vào cuối chương.");
   };
 
   const handleRevise = async () => {
@@ -587,6 +697,67 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           </div>
         </div>
 
+        {/* Mở màn & Hook đa lựa chọn */}
+        <div className="px-4 pt-2.5">
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Sparkles className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-semibold">Mở màn & Hook kết chương</span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  onClick={handleGenOpening}
+                  disabled={genOpen}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {genOpen ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DoorOpen className="w-3.5 h-3.5" />}
+                  {genOpen ? "Đang sinh..." : "3 cách mở màn"}
+                </button>
+                <button
+                  onClick={handleGenHook}
+                  disabled={genHook}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {genHook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Flag className="w-3.5 h-3.5" />}
+                  {genHook ? "Đang sinh..." : "3 hook kết chương"}
+                </button>
+              </div>
+            </div>
+
+            {openingOptions?.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {openingOptions.map((o, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-background p-2">
+                    <span className="text-[10px] text-muted-foreground mt-0.5 shrink-0">Mở {i + 1}</span>
+                    <p className="flex-1 text-[11px] leading-5 line-clamp-4 whitespace-pre-wrap">{o}</p>
+                    <button
+                      onClick={() => applyOpening(o)}
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10"
+                    >
+                      <Check className="w-3 h-3" /> Dùng
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {hookOptions?.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {hookOptions.map((o, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-background p-2">
+                    <span className="text-[10px] text-muted-foreground mt-0.5 shrink-0">Hook {i + 1}</span>
+                    <p className="flex-1 text-[11px] leading-5 line-clamp-4 whitespace-pre-wrap">{o}</p>
+                    <button
+                      onClick={() => applyHook(o)}
+                      className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10"
+                    >
+                      <Check className="w-3 h-3" /> Dùng
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 px-4 py-2.5 flex-wrap">
           <button
             onClick={handleWrite}
@@ -594,8 +765,17 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {writing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-            {writing ? "Xưởng đang viết..." : "Viết chương bằng AI"}
+            {writing ? writeStep || "Xưởng đang viết..." : "Viết chương bằng AI"}
           </button>
+          <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer" title="Viết nháp → tự chấm điểm rubric → viết lại cho tốt hơn">
+            <input
+              type="checkbox"
+              checked={qualityMode}
+              onChange={(e) => setQualityMode(e.target.checked)}
+              className="accent-primary"
+            />
+            <Gauge className="w-3.5 h-3.5" /> Viết 2 pass (tự đánh giá & viết lại)
+          </label>
           <button
             onClick={handleCheck}
             disabled={checking || !content.trim()}
@@ -629,6 +809,27 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         )}
         {statusNote && (
           <div className="mx-4 mb-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-md px-3 py-2">{statusNote}</div>
+        )}
+        {critique && (
+          <div className="mx-4 mb-2 rounded-xl border border-border bg-card overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
+              <Gauge className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] font-semibold">Điểm tổng biên tập (trước khi viết lại)</span>
+            </div>
+            <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(critique.scores || []).map((s, i) => (
+                <div key={i} className="rounded-md border border-border p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium">{s.criterion}</span>
+                    <span className={`text-[11px] font-bold ${(s.score || 0) >= 7 ? "text-emerald-600" : (s.score || 0) >= 5 ? "text-amber-600" : "text-destructive"}`}>
+                      {s.score}/10
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{s.note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <textarea

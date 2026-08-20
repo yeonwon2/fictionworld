@@ -429,6 +429,212 @@ export const XUNG_HO_CONSISTENCY_SCHEMA = {
   required: ["issues"],
 };
 
+// ---------- Tự đánh giá chương theo rubric (bước 2 của "viết 2 pass") ----------
+export function buildChapterCritiquePrompt({ genre, chapterTitle, bibleText, chapterContent, targetWords }) {
+  return `Bạn là TỔNG BIÊN TẬP khắt khe của một xưởng viết tiểu thuyết mạng. ${genreStyleLine(genre)} Tác giả vừa viết xong bản nháp chương và muốn bạn CHẤM ĐIỂM trung thực để tự nâng chất lượng trước khi xuất bản. Hãy đọc chương và cho điểm theo rubric.
+
+# BỘ TÀI LIỆU XƯỞNG (bible — chuẩn để so sánh)
+${bibleText}
+
+# BẢN NHÁP CHƯƠNG "${chapterTitle || "(chưa có tiêu đề)"}"
+"""${chapterContent}"""
+
+${targetWords && Number(targetWords) > 0 ? `# Yêu cầu độ dài: ~${targetWords} từ.\n` : ""}
+
+# Rubric chấm điểm (mỗi tiêu chí score 1–10, note 1–2 câu cụ thể)
+1. độ_căng_kịch_tính — mức độ xung đột, áp lực, thông tin mới được kéo căng.
+2. cảm_xúc — tác động vào cảm xúc người đọc (đồng cảm, hồi hộp, tức giận...).
+3. hook_kết_chương — móc treo/giây phút cảm xúc ở cuối có khiến muốn đọc chương sau không.
+4. nhịp_độ — phân bổ đoạn, không dài dòng/loãng, cao trào đặt đúng chỗ.
+5. đối_thoại_xưng_hô — lời thoại tự nhiên, đúng giọng từng nhân vật, xưng hô nhất quán (đối chiếu 02_NHAN_VAT, 03_QUAN_HE).
+6. bám_bible — địa danh/luật lệ/trạng thái nhân vật khớp 01_THE_GIOI, 07_TRANG_THAI_NHAN_VAT, 06_TIMELINE.
+
+# Yêu cầu
+- Không nương tay: nếu chương chỉ đạt 6/10 thì cứ nói thẳng — điều này giúp truyện hay hơn.
+- strengths: 2–3 điểm mạnh cụ thể.
+- weaknesses: 2–4 điểm yếu cụ thể (trích đoạn ngắn nếu cần).
+- rewrite_instructions: 3–6 LỆNH viết lại cụ thể, ưu tiên tăng độ căng, hook, cảm xúc.
+Trả JSON đúng schema: { scores: [{criterion, score, note}], strengths: [string], weaknesses: [string], rewrite_instructions: [string] }.`;
+}
+
+export const CHAPTER_CRITIQUE_SCHEMA = {
+  type: "object",
+  properties: {
+    scores: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          criterion: { type: "string" },
+          score: { type: "number" },
+          note: { type: "string" },
+        },
+        required: ["criterion", "score"],
+      },
+    },
+    strengths: { type: "array", items: { type: "string" } },
+    weaknesses: { type: "array", items: { type: "string" } },
+    rewrite_instructions: { type: "array", items: { type: "string" } },
+  },
+  required: ["scores", "strengths", "weaknesses", "rewrite_instructions"],
+};
+
+// ---------- Viết lại theo đánh giá (bước 3 của "viết 2 pass") ----------
+export function buildRewriteFromCritiquePrompt({ genre, chapterTitle, bibleText, chapterContent, critiqueText, targetWords }) {
+  const wordRule =
+    targetWords && Number(targetWords) > 0
+      ? `- Độ dài chương: viết KHOẢNG ${targetWords} từ (đủ dài, không cắt bớt).`
+      : "- Đảm bảo nhịp chương ~800-1200 từ.";
+  return `Bạn là TÁC GIẢ CHÍNH của một xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Tổng biên tập vừa chấm điểm bản nháp chương "${chapterTitle || "(chưa có tiêu đề)"}". Hãy viết lại TOÀN BỘ chương theo đánh giá — GIỮ phần đã hay, khắc phục đúng các điểm yếu, tuân thủ từng lệnh viết lại. TUYỆT ĐỐI không giải thích meta, chỉ trả văn chương hoàn chỉnh.
+
+# BỘ TÀI LIỆU XƯỞNG (bible — bám sát 100%)
+${bibleText}
+
+# BẢN NHÁP HIỆN TẠI
+"""${chapterContent}"""
+
+# ĐÁNH GIÁ CỦA TỔNG BIÊN TẬP (phải khắc phục từng mục)
+${critiqueText}
+
+# Yêu cầu bắt buộc
+- Khắc phục mọi điểm yếu trong weaknesses và làm theo TẤT CẢ rewrite_instructions.
+- Giữ nguyên mạch truyện, beats và các chi tiết tốt đã có — chỉ nâng cấp, không phá cấu trúc.
+- ${wordRule}
+- Kết chương phải có hook mạnh hoặc khoảnh khắc cảm xúc rõ ràng.
+- Không mâu thuẫn 06_TIMELINE, 07_TRANG_THAI_NHAN_VAT, summaries/tom_tat_hien_tai.md.
+Chỉ trả nội dung chương (Markdown), không tiêu đề meta, không lời dẫn.`;
+}
+
+// ---------- Mở màn đa lựa chọn ----------
+export function buildOpeningPrompt({ genre, chapterTitle, chapterNumber, chapterGoal, bibleText, prevTail, orientation }) {
+  return `Bạn là biên kịch của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy sinh 3 PHƯƠNG ÁN MỞ ĐẦU khác nhau cho chương "${chapterTitle || "(chưa có tiêu đề)"}" (chương ${chapterNumber || "?"}).
+
+# BỘ TÀI LIỆU XƯỞNG (bible)
+${bibleText}
+
+# Mục tiêu chương
+${chapterGoal?.trim() || "(chưa có — dựa vào đại cương và tóm tắt hiện tại)"}
+
+# Đoạn cuối chương trước (phải nối mạch)
+${prevTail?.trim() || "(chưa có — viết như mở đầu)"}
+
+${orientation?.trim() ? `# Định hướng tác giả\n${orientation.trim()}` : ""}
+
+# Yêu cầu
+- 3 phương án KHÁC NHAU rõ rệt về cách vào cảnh (in medias res, từ chi tiết gợi mở, từ tâm trạng nhân vật, từ hội thoại...).
+- Mỗi phương án 150–250 từ, đủ sức hút, tự nhiên, đúng tông truyện.
+- Bám sát bible: nhân vật, địa danh, trạng thái nhân vật bắt đầu chương phải khớp 07_TRANG_THAI_NHAN_VAT.
+Trả JSON đúng schema: { options: [string] } — 3 chuỗi văn xuôi hoàn chỉnh.`;
+}
+
+// ---------- Hook / móc treo kết chương đa lựa chọn ----------
+export function buildHookPrompt({ genre, chapterTitle, chapterContent, bibleText, beats }) {
+  return `Bạn là biên kịch của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc chương "${chapterTitle || "(chưa có tiêu đề)"}" và sinh 3 PHƯƠNG ÁN KẾT CHƯƠNG (hook) khác nhau để móc người đọc vào chương sau.
+
+# BỘ TÀI LIỆU XƯỞNG (bible)
+${bibleText}
+
+# NỘI DUNG CHƯƠNG ĐÃ VIẾT
+"""${chapterContent}"""
+
+${beats?.length ? `# DÀN BEATS đã duyệt\n${beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : ""}
+
+# Yêu cầu
+- 3 phương án KHÁC NHAU về loại hook: (a) tiết lộ chấn động, (b) nguy hiểm đang tới, (c) tình cảm/nút thắt mới, (d) hồi đáp phục bút treo, (e) quyết định liều lĩnh...
+- Mỗi phương án 2–5 câu, là PHẦN NỐI TIẾP ngay sau nội dung chương (không lặp lại đoạn cuối chương).
+- Phải nhất quán với bible và hướng câu chuyện; không bịa sự kiện mâu thuẫn.
+Trả JSON đúng schema: { options: [string] } — 3 chuỗi hook hoàn chỉnh.`;
+}
+
+export const CHAPTER_OPTIONS_SCHEMA = {
+  type: "object",
+  properties: {
+    options: { type: "array", items: { type: "string" } },
+  },
+  required: ["options"],
+};
+
+// ---------- Bản đồ Arc: phân tích đại cương thành các arc ----------
+export function buildArcMapPrompt({ genre, daiCuong, chapters }) {
+  const chaptersBlock = chapters
+    .map((c) => `- Chương ${c.chapter_number != null ? c.chapter_number : "?"}: ${c.title}`)
+    .join("\n");
+  return `Bạn là ĐẠI CƯƠNG SƯ của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy phân tích tài liệu ĐẠI CƯƠNG (04_DAI_CUONG) và danh sách chương đã viết để VẼ BẢN ĐỒ ARC của bộ truyện.
+
+# 04_DAI_CUONG (đại cương — nguồn duy nhất để phân tích arc)
+${daiCuong?.trim() || "(trống)"}
+
+# CÁC CHƯƠNG ĐÃ VIẾT
+${chaptersBlock || "(chưa có)"}
+
+# Yêu cầu
+- Xác định TẤT CẢ các arc có trong đại cương (arc chính + arc phụ nếu có): tên, số chương bắt đầu, số chương kết thúc, mục tiêu/bước ngoặt chính.
+- Nếu đại cương không nêu rõ số chương từng arc, hãy ước lượng hợp lý từ mô tả và thứ tự.
+- Ghi chú tiến độ: arc nào đã bắt đầu/đang viết/hoàn tất dựa trên số chương đã viết.
+- Cảnh báo những chương đã viết NẰM NGOÀI mọi arc (lạc đề) — đưa vào warning_chapters.
+Trả JSON đúng schema: { arcs: [{ name, start_chapter, end_chapter, goal, progress_note }], warnings: [string] }.`;
+}
+
+export const ARC_MAP_SCHEMA = {
+  type: "object",
+  properties: {
+    arcs: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          start_chapter: { type: "number" },
+          end_chapter: { type: "number" },
+          goal: { type: "string" },
+          progress_note: { type: "string" },
+        },
+        required: ["name", "start_chapter", "end_chapter", "goal"],
+      },
+    },
+    warnings: { type: "array", items: { type: "string" } },
+  },
+  required: ["arcs"],
+};
+
+// ---------- Sổ phục bút: phân tích + cảnh báo treo lâu ----------
+export function buildForeshadowParsePrompt({ genre, fucBut, chapters }) {
+  const maxChapter = chapters.reduce((m, c) => Math.max(m, Number(c.chapter_number) || 0), 0);
+  return `Bạn là PHỤC BÚT QUẢN LÝ của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc SỔ PHỤC BÚT (05_FUC_BUT) và danh sách chương đã viết, rồi lập danh sách phục bút có trạng thái hiện tại.
+
+# 05_FUC_BUT (sổ phục bút)
+${fucBut?.trim() || "(trống — chưa có phục bút nào)"}
+
+# SỐ CHƯƠNG ĐÃ VIẾT: ${maxChapter || 0}
+
+# Yêu cầu
+- Liệt kê TẤT CẢ phục bút có trong sổ: tên, chương được cài (nếu ghi rõ), chương dự kiến hồi đáp (nếu ghi rõ), trạng thái (chưa cài / đã cài / đang treo / đã hồi đáp), mô tả ngắn.
+- Nếu tài liệu không ghi số chương, để trống hoặc suy luận từ mô tả (planted_chapter / resolve_by_chapter có thể null).
+- status chuẩn hoá về 1 trong: "chưa cài" | "đã cài" | "đang treo" | "đã hồi đáp".
+Trả JSON đúng schema: { items: [{ name, planted_chapter, resolve_by_chapter, status, description }] }.`;
+}
+
+export const FORESHADOW_PARSE_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          planted_chapter: { type: ["number", "null"] },
+          resolve_by_chapter: { type: ["number", "null"] },
+          status: { type: "string" },
+          description: { type: "string" },
+        },
+        required: ["name", "status"],
+      },
+    },
+  },
+  required: ["items"],
+};
+
 // ---------- Voice Consistency: trích giọng văn nhân vật từ chương đã viết ----------
 export function buildVoiceExtractionPrompt({ genre, characterName, chapterContents }) {
   const excerpts = chapterContents

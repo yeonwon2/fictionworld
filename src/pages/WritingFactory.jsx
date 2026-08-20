@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2 } from "lucide-react";
+import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2, Map, Flag } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
@@ -41,10 +41,14 @@ import ChapterWriter from "@/components/writing-factory/ChapterWriter";
 import RollupPanel from "@/components/writing-factory/RollupPanel";
 import TeamChat from "@/components/writing-factory/TeamChat";
 import CharacterStateDashboard from "@/components/writing-factory/CharacterStateDashboard";
+import ArcMapPanel from "@/components/writing-factory/ArcMapPanel";
+import ForeshadowPanel from "@/components/writing-factory/ForeshadowPanel";
 
 const TABS = [
   { key: "docs", label: "Bộ Tài Liệu", icon: Factory },
   { key: "state", label: "Trạng Thái NV", icon: Users },
+  { key: "arc", label: "Bản Đồ Arc", icon: Map },
+  { key: "fucbut", label: "Phục Bút", icon: Flag },
   { key: "write", label: "Viết Chương", icon: PenLine },
   { key: "rollup", label: "Cập Nhật Bible", icon: RefreshCw },
   { key: "team", label: "Team AI", icon: Bot },
@@ -423,6 +427,14 @@ export default function WritingFactory() {
           genre={currentStory?.genre || ""}
           onDocsUpdated={loadDocs}
         />
+      )}
+
+      {!loadingDocs && activeTab === "arc" && (
+        <ArcMapPanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
+      )}
+
+      {!loadingDocs && activeTab === "fucbut" && (
+        <ForeshadowPanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
       )}
 
       {!loadingDocs && activeTab === "write" && (
