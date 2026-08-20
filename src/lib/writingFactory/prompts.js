@@ -233,6 +233,7 @@ export function buildWriteChapterPrompt({
   orientation,
   beats,
   targetWords,
+  overdueForeshadows,
 }) {
   const wordRule =
     targetWords && Number(targetWords) > 0
@@ -252,6 +253,8 @@ ${prevTail?.trim() ? prevTail.trim() : "(chưa có — viết như mở đầu)"
 ${beats?.length ? `# DÀN BEATS ĐÃ DUYỆT (细纲 — bám sát 100% từng beat theo thứ tự)\n${beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : ""}
 
 ${orientation?.trim() ? `# Định hướng thêm của tác giả\n${orientation.trim()}` : ""}
+
+${overdueForeshadows?.length ? `# PHỤC BÚT CẦN HỒI ĐÁP TRONG CHƯƠNG NÀY (nếu hợp lý, hãy hồi đáp ít nhất 1 phục bút sau — nếu có thể nhồi tự nhiên vào tình tiết)\n${overdueForeshadows.map((f) => `- ${f.name}: ${f.description || ""}${f.resolve_by_chapter ? ` (dự kiến ch.${f.resolve_by_chapter})` : ""}`).join("\n")}` : ""}
 
 # Yêu cầu bắt buộc
 - Tuân thủ tuyệt đối 00_QUY_TAC_VIET (tông giọng, POV, từ cấm, xưng hô, giới hạn tiết lộ).
@@ -660,6 +663,145 @@ export const VOICE_EXTRACTION_SCHEMA = {
     voice_notes: { type: "string" },
   },
   required: ["name", "dialogue_samples", "voice_notes"],
+};
+
+// ---------- Kiểm tra đạo nhại / trùng lặp giữa chương mới vs chương cũ ----------
+export function buildRepetitionCheckPrompt({ genre, chapterContent, pastChapters }) {
+  const past = pastChapters
+    .map((c, i) => `### Chương ${i + 1} — ${c.title || "?"}\n"""${(c.content || "").slice(0, 2000)}"""`)
+    .join("\n\n");
+  return `Bạn là BIÊN TẬP CHẤT LƯỢNG của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc chương vừa viết và TOÀN BỘ các chương trước đó, phát hiện các dấu hiệu TRÙNG LẶP / ĐẠO NHẠI NGNÀI, cụ thể:
+
+# CHƯƠNG VỪA VIẾT
+"""${chapterContent}"""
+
+# CÁC CHƯƠNG TRƯỚC ĐÓ
+${past || "(chưa có chương trước)"}
+
+# Yêu cầu kiểm tra
+1. CÂU/CỤM TỪ TRÙNG: tìm câu hoặc cụm từ dài >= 10 từ xuất hiện >= 2 lần trong TOÀN BỘ các chương (gồm cả chương mới). Trích nguyên văn.
+2. TÌNH TIẾT TRÙNG: mô tả cùng 1 sự kiện/hành động/cảm xúc lặp lại y hệt (VD: nữ chính "lòng đau như cắt" 3 lần, hoặc 2 chương mở đầu đều "nắng nhẹ nhàng chiếu qua cửa sổ").
+3. CẤU TRÚC TRÙNG: cách mở đầu/kết thúc chương lặp lại mô-tip giống hệt nhau (VD: mỗi chương đều mở bằng "một buổi sáng đẹp trời").
+4. CẢM XÚC TRÙNG: nhân vật phản ứng cảm xúc giống hệt nhau ở cùng tình huống (VD: lần nào cũng "mắt đỏ hoe" khi buồn).
+
+Trả JSON đúng schema: { issues: [{ type, excerpt, chapters, problem, suggestion }] } — type = "câu_trùng" | "tình_tiết_trùng" | "cấu_trúc_trùng" | "cảm_xúc_trùng". Nếu không có vấn đề, issues rỗng.`;
+}
+
+export const REPETITION_CHECK_SCHEMA = {
+  type: "object",
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          type: { type: "string" },
+          excerpt: { type: "string" },
+          chapters: { type: "string" },
+          problem: { type: "string" },
+          suggestion: { type: "string" },
+        },
+        required: ["type", "problem"],
+      },
+    },
+  },
+  required: ["issues"],
+};
+
+// ---------- Sinh backstory / sách bách khoa nhân vật phụ ----------
+export function buildBackstoryPrompt({ genre, bibleText, characterName, numScenes, focus }) {
+  return `Bạn là THIẾT LẬP SƯ + QUẢN LÝ NHÂN VẬT của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy viết backstory chi tiết cho nhân vật phụ "${characterName}" — biến nhân vật phụ thành nhân vật ĐƯỢC NHỚ, có chiều sâu, có mục tiêu riêng, có bí mật.
+
+# BỘ TÀI LIỆU XƯỞNG (bible)
+${bibleText}
+
+# Yêu cầu
+- Viết backstory đầy đủ: quá khứ, biến cố định hình, mục tiêu, bí mật, mâu thuẫn nội tâm, quan hệ với nhân vật chính.
+- Gợi ý ${numScenes || 3} CẢNH/HỌA ĐỘNG cụ thể mà nhân vật này có thể xuất hiện trong truyện (mỗi cảnh 1-2 câu mô tả, rõ ràng thời điểm/nguyên nhân).
+- Gợi ý ${numScenes || 3} CÂU HỎI / ĐỘNG THÁY MỚI mà nhân vật này có thể tạo ra cho nhân vật chính.
+- Giữ nhất quán với bible: không bịa sự kiện mâu thuẫn.
+Chỉ trả nội dung Markdown về nhân vật "${characterName}", không lời dẫn ngoài.`;
+}
+
+// ---------- Timeline: phân tích 06_TIMELINE thành mốc trực quan ----------
+export function buildTimelineParsePrompt({ genre, timeline }) {
+  return `Bạn là THỜI TUYẾN QUẢN LÝ của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc tài liệu 06_TIMELINE và trích xuất các mốc thời gian theo định dạng có cấu trúc.
+
+# 06_TIMELINE
+${timeline?.trim() || "(trống)"}
+
+# Yêu cầu
+Liệt kê TẤT CẢ các mốc thời gian đã xác lập. Với mỗi mốc:
+- event: tên sự kiện
+- time: thời điểm (nếu ghi rõ) hoặc thứ tự timeline_order
+- location: nơi xảy ra (nếu có)
+- characters: nhân vật liên quan
+- foreshadow: phục bút liên quan (nếu có)
+- note: ghi chú thêm (nếu có)
+Sắp xếp theo thứ tự thời gian tăng dần. Nếu timeline trống, trả items rỗng.
+Trả JSON đúng schema: { events: [{event, time, location, characters, foreshadow, note}] }.`;
+}
+
+export const TIMELINE_PARSE_SCHEMA = {
+  type: "object",
+  properties: {
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          event: { type: "string" },
+          time: { type: "string" },
+          location: { type: "string" },
+          characters: { type: "string" },
+          foreshadow: { type: "string" },
+          note: { type: "string" },
+        },
+        required: ["event"],
+      },
+    },
+  },
+  required: ["events"],
+};
+
+// ---------- Quan hệ nhân vật: trích xuất thành JSON cho graph ----------
+export function buildRelationshipExtractPrompt({ genre, relationText }) {
+  return `Bạn là QUAN HỆ QUẢN LÝ của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy đọc tài liệu 03_QUAN_HE và trích xuất thành mạng lưới quan hệ nhân vật.
+
+# 03_QUAN_HE
+${relationText?.trim() || "(trống)"}
+
+# Yêu cầu
+- Liệt kê TẤT CẢ nhân vật có tên trong tài liệu.
+- Liệt kê TẤT CẢ quan hệ giữa các cặp nhân vật.
+- Mỗi quan hệ: source (nhân vật A), target (nhân vật B), type (quỹ vị/hữu/địch/lãng mạn/gia đình/thầy trò...), label (mô tả ngắn), intensity (mức độ quan trọng 1-5).
+- Nếu quan hệ đa chiều (VD: vừa thù vừa yêu), tạo nhiều bản ghi.
+Trả JSON đúng schema.`;
+}
+
+export const RELATIONSHIP_EXTRACT_SCHEMA = {
+  type: "object",
+  properties: {
+    nodes: {
+      type: "array",
+      items: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id", "name"] },
+    },
+    edges: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          source: { type: "string" },
+          target: { type: "string" },
+          type: { type: "string" },
+          label: { type: "string" },
+          intensity: { type: "number" },
+        },
+        required: ["source", "target"],
+      },
+    },
+  },
+  required: ["nodes", "edges"],
 };
 
 // ---------- Team chat: prompt hệ thống theo vai + context bible ----------

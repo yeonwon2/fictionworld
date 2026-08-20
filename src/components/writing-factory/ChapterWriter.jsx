@@ -18,6 +18,7 @@ import {
   Sparkles,
   DoorOpen,
   Flag,
+  Copy,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -45,6 +46,8 @@ import {
   buildOpeningPrompt,
   buildHookPrompt,
   CHAPTER_OPTIONS_SCHEMA,
+  buildRepetitionCheckPrompt,
+  REPETITION_CHECK_SCHEMA,
   buildRollupPrompt,
   ROLLUP_SCHEMA,
   DOC_DEFS_BY_KEY,
@@ -60,6 +63,7 @@ function getLastWords(text, n) {
 // Viết chương bám Bible — nạp toàn bộ bộ tài liệu xưởng làm ngữ cảnh.
 // Flow: (1) Lên beats (细纲) → tác giả duyệt/sửa → (2) AI viết prose theo beats
 // → (3) Lưu chương → (4) auto-rollup đề xuất cập nhật bible ngay bên dưới.
+// (5) Nếu có phục bút sắp hết hạn → tự nhồi vào prompt để AI hồi đáp.
 export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChapterWritten, onDocsUpdated }) {
   const [chapters, setChapters] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -91,6 +95,10 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [hookOptions, setHookOptions] = useState(null);
   const [genOpen, setGenOpen] = useState(false);
   const [genHook, setGenHook] = useState(false);
+
+  // Check đạo nhại
+  const [checkingRep, setCheckingRep] = useState(false);
+  const [repIssues, setRepIssues] = useState(null);
 
   // Beat planner
   const [beats, setBeats] = useState([]);
@@ -148,6 +156,28 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   }, [activeId]);
 
   const bibleText = useMemo(() => buildBibleBlock(docsByKey), [docsByKey]);
+
+  // Parse 05_FUC_BUT, tìm phục bút "đang treo" / "đã cài" có resolve_by_chapter <= số chương hiện tại.
+  const getOverdueForeshadows = useMemo(() => {
+    const content = docsByKey?.fuc_but?.content || "";
+    const curNum = Number(number) || 1;
+    const items = [];
+    const regex = /###?\s*(.+?)(?:\n|$)/g;
+    let m;
+    while ((m = regex.exec(content))) {
+      const name = m[1].trim();
+      const rest = content.slice(m.index, content.indexOf("\n###", m.index + 1) || content.length);
+      const isPending = /treo|đã cài|chưa cài|pending/i.test(rest) && !/đã hồi đáp|resolved/i.test(rest);
+      if (isPending) {
+        const chapMatch = rest.match(/chương\s*(\d+)/i);
+        const resolveBy = chapMatch ? Number(chapMatch[1]) : null;
+        if (!resolveBy || resolveBy <= curNum) {
+          items.push({ name, description: rest.replace(/^#+\s*.+\n/, "").trim().slice(0, 200) });
+        }
+      }
+    }
+    return items.slice(0, 3); // tối đa 3 phục bút
+  }, [docsByKey, number]);
 
   const handleNew = () => {
     setActiveId(null);
@@ -210,6 +240,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         orientation,
         beats: beatsApproved ? beats : undefined,
         targetWords,
+        overdueForeshadows: getOverdueForeshadows(),
       });
       if (qualityMode) {
         // Pass 1 — viết nháp
@@ -305,6 +336,39 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${opt.trim()}` : opt.trim()));
     setHookOptions(null);
     setStatusNote("Đã chèn hook vào cuối chương.");
+  };
+
+  const handleCheckRep = async () => {
+    if (!content.trim()) {
+      setError("Chưa có nội dung để kiểm tra.");
+      return;
+    }
+    // Lấy tối đa 5 chương gần nhất có nội dung làm đối chiếu.
+    const past = [];
+    for (const c of chapters) {
+      if (c.id === activeId) continue;
+      if (past.length >= 5) break;
+      try {
+        const row = await getChapter(c.id);
+        if (row?.content?.trim()) past.push(row);
+      } catch { /* skip */ }
+    }
+    if (!past.length) {
+      setError("Chưa có chương nào khác để so sánh — viết thêm chương rồi kiểm tra lại.");
+      return;
+    }
+    setError("");
+    setRepIssues(null);
+    setCheckingRep(true);
+    try {
+      const prompt = buildRepetitionCheckPrompt({ genre, chapterContent: content, pastChapters: past });
+      const res = await aiCall(prompt, { jsonSchema: REPETITION_CHECK_SCHEMA });
+      setRepIssues(res?.issues || []);
+    } catch (e) {
+      setError("Kiểm tra đạo nhại lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setCheckingRep(false);
+    }
   };
 
   const handleRevise = async () => {
@@ -793,6 +857,15 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             {checkingXungHo ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessagesSquare className="w-4 h-4" />}
             Kiểm tra xưng hô
           </button>
+          <button
+            onClick={handleCheckRep}
+            disabled={checkingRep || !content.trim()}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md border border-primary/40 text-primary text-sm hover:bg-primary/10 disabled:opacity-50"
+            title="Phát hiện câu lặp, tình tiết trùng, cấu trúc mở đầu/kết thúc giống hệt"
+          >
+            {checkingRep ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+            Kiểm tra đạo nhại
+          </button>
           <label className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
@@ -1013,6 +1086,39 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             <p className="text-[10px] text-muted-foreground mt-2">
               So sánh xưng hô giữa các chương với nhau và với 03_QUAN_HE. Sửa chương theo góp ý nếu cần rồi lưu lại.
             </p>
+          </div>
+        )}
+
+        {repIssues !== null && (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <Copy className="w-4 h-4 text-primary" />
+              <h3 className="font-display font-semibold text-sm">Kiểm tra đạo nhại / trùng lặp</h3>
+            </div>
+            <div className="mt-2 space-y-2">
+              {repIssues.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-500/10 rounded-md px-3 py-2.5">
+                  <CheckCircle2 className="w-4 h-4" /> Không phát hiện đạo nhại / trùng lặp giữa các chương.
+                </div>
+              ) : (
+                repIssues.map((iss, i) => (
+                  <div key={i} className="rounded-md px-3 py-2 text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-semibold">{iss.type || "Trùng lặp"}</span>
+                        {iss.chapters ? <span className="opacity-70"> · {iss.chapters}</span> : null}
+                        <div className="opacity-80 mt-0.5">{iss.problem}</div>
+                        {iss.excerpt ? (
+                          <div className="opacity-70 mt-0.5 text-[10px] italic border-l-2 border-amber-400 pl-2">"{iss.excerpt}"</div>
+                        ) : null}
+                        {iss.suggestion ? <div className="opacity-80 mt-0.5">→ {iss.suggestion}</div> : null}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>

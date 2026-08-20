@@ -328,3 +328,64 @@ export function downloadJson(filename, obj) {
     new Blob([typeof obj === "string" ? obj : JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" })
   );
 }
+
+// ---------- Bundle download (zip) — backup toàn diện 1 lần ----------
+export async function buildBundleZip({ storyName, docsByKey, chapters, relationships, characters, locations, events, glossary }) {
+  const zip = new JSZip();
+  const safe = (storyName || "truyen").replace(/[\\/:*?"<>|]/g, "_");
+  const root = zip.folder(safe);
+
+  // Bible
+  const bibleFolder = root.folder("bible");
+  for (const d of DOC_DEFS) {
+    const doc = docsByKey?.[d.key];
+    if (doc?.content?.trim()) {
+      bibleFolder.file(`${d.file}`, doc.content);
+    }
+  }
+  bibleFolder.file("_all.json", JSON.stringify(
+    Object.fromEntries(DOC_DEFS.map((d) => [d.key, docsByKey?.[d.key]?.content || ""])),
+    null, 2
+  ));
+
+  // Chapters
+  const chaptersFolder = root.folder("chapters");
+  for (const c of chapters) {
+    const num = c.chapter_number != null ? String(c.chapter_number).padStart(3, "0") : "xxx";
+    const fname = `ch${num}_${(c.title || "untitled").replace(/[\\/:*?"<>|]/g, "_")}.md`;
+    const header = `# Chương ${c.chapter_number != null ? c.chapter_number : "?"}: ${c.title}\n\n`;
+    chaptersFolder.file(fname, header + (c.content || ""));
+  }
+  // beats JSON
+  chaptersFolder.file("_beats.json", JSON.stringify(
+    chapters.map((c) => ({ chapter_number: c.chapter_number, title: c.title, beats: (() => { try { return c.outline_beats ? JSON.parse(c.outline_beats) : null; } catch { return null; } })() })),
+    null, 2
+  ));
+
+  // World data
+  const worldFolder = root.folder("world");
+  if (characters?.length) worldFolder.file("characters.json", JSON.stringify(characters, null, 2));
+  if (relationships?.length) worldFolder.file("relationships.json", JSON.stringify(relationships, null, 2));
+  if (locations?.length) worldFolder.file("locations.json", JSON.stringify(locations, null, 2));
+  if (events?.length) worldFolder.file("events.json", JSON.stringify(events, null, 2));
+  if (glossary?.length) worldFolder.file("glossary.json", JSON.stringify(glossary, null, 2));
+
+  // Metadata
+  root.file("manifest.json", JSON.stringify({
+    type: "fictionworld_bundle",
+    version: 1,
+    story_name: storyName,
+    exported_at: new Date().toISOString(),
+    chapter_count: chapters.length,
+    bible_doc_count: DOC_DEFS.filter((d) => docsByKey?.[d.key]?.content?.trim()).length,
+    world_data: {
+      characters: characters?.length || 0,
+      relationships: relationships?.length || 0,
+      locations: locations?.length || 0,
+      events: events?.length || 0,
+      glossary: glossary?.length || 0,
+    },
+  }, null, 2));
+
+  return zip.generateAsync({ type: "blob", mimeType: "application/zip" });
+}

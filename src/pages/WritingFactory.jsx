@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2, Map, Flag } from "lucide-react";
+import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2, Map, Flag, BarChart3, Network, Clock, BookOpen } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
@@ -43,13 +43,21 @@ import TeamChat from "@/components/writing-factory/TeamChat";
 import CharacterStateDashboard from "@/components/writing-factory/CharacterStateDashboard";
 import ArcMapPanel from "@/components/writing-factory/ArcMapPanel";
 import ForeshadowPanel from "@/components/writing-factory/ForeshadowPanel";
+import ReadingMode from "@/components/writing-factory/ReadingMode";
+import WritingStats from "@/components/writing-factory/WritingStats";
+import RelationshipGraph from "@/components/writing-factory/RelationshipGraph";
+import TimelinePanel from "@/components/writing-factory/TimelinePanel";
+import { buildBundleZip } from "@/lib/writingFactory/exporters";
 
 const TABS = [
   { key: "docs", label: "Bộ Tài Liệu", icon: Factory },
   { key: "state", label: "Trạng Thái NV", icon: Users },
   { key: "arc", label: "Bản Đồ Arc", icon: Map },
+  { key: "timeline", label: "Timeline", icon: Clock },
+  { key: "relationships", label: "Quan Hệ", icon: Network },
   { key: "fucbut", label: "Phục Bút", icon: Flag },
   { key: "write", label: "Viết Chương", icon: PenLine },
+  { key: "stats", label: "Thống Kê", icon: BarChart3 },
   { key: "rollup", label: "Cập Nhật Bible", icon: RefreshCw },
   { key: "team", label: "Team AI", icon: Bot },
 ];
@@ -72,6 +80,8 @@ export default function WritingFactory() {
   const [error, setError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [readingOpen, setReadingOpen] = useState(false);
+  const [readingChapters, setReadingChapters] = useState([]);
 
   const loadDocs = async () => {
     if (!currentStoryId) return;
@@ -249,6 +259,26 @@ export default function WritingFactory() {
           chapters,
         });
         downloadJson(`${base}_TOAN_BO.json`, json);
+      } else if (mode === "bundle") {
+        if (!chapters.length) throw new Error("Chưa có chương nào.");
+        const [characters, relationships, locations, events, glossary] = await Promise.all([
+          listCharacters(currentStoryId),
+          listRelationships(currentStoryId),
+          listLocations(currentStoryId),
+          listEvents(currentStoryId),
+          listGlossary(currentStoryId),
+        ]);
+        const blob = await buildBundleZip({ storyName: currentStory?.name, docsByKey, chapters, characters, relationships, locations, events, glossary });
+        downloadEpub(`${base}_FULL_BUNDLE.zip`, blob);
+      } else if (mode === "reading") {
+        const fullChapters = [];
+        for (const c of chapters) {
+          try { fullChapters.push(await getChapter(c.id)); } catch { fullChapters.push(c); }
+        }
+        setReadingChapters(fullChapters);
+        setReadingOpen(true);
+        setExportOpen(false);
+        return; // không setStatus
       }
       setExportOpen(false);
       setStatus("Đã tải file về máy.");
@@ -343,7 +373,7 @@ export default function WritingFactory() {
                 </div>
 
                 <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Toàn bộ (bible + truyện)</div>
-                <div className="flex gap-1.5 px-2 pb-1">
+                <div className="flex gap-1.5 px-2 pb-1 flex-wrap">
                   <button
                     onClick={() => handleExport("all")}
                     disabled={exporting}
@@ -357,6 +387,25 @@ export default function WritingFactory() {
                     className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
                   >
                     <FileCode2 className="w-3.5 h-3.5 text-primary" /> .json
+                  </button>
+                  <button
+                    onClick={() => handleExport("bundle")}
+                    disabled={exporting}
+                    className="flex-1 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                    title="Tải zip đầy đủ: bible + chapters + beats + world data"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-primary" /> .zip
+                  </button>
+                </div>
+
+                <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Đọc & Review</div>
+                <div className="px-2 pb-1">
+                  <button
+                    onClick={() => handleExport("reading")}
+                    disabled={exporting}
+                    className="w-full inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-border hover:bg-muted disabled:opacity-50"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-primary" /> Đọc toàn bộ truyện (full-screen)
                   </button>
                 </div>
               </div>
@@ -433,6 +482,14 @@ export default function WritingFactory() {
         <ArcMapPanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
       )}
 
+      {!loadingDocs && activeTab === "timeline" && (
+        <TimelinePanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
+      )}
+
+      {!loadingDocs && activeTab === "relationships" && (
+        <RelationshipGraph currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
+      )}
+
       {!loadingDocs && activeTab === "fucbut" && (
         <ForeshadowPanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
       )}
@@ -458,6 +515,19 @@ export default function WritingFactory() {
 
       {!loadingDocs && activeTab === "team" && (
         <TeamChat currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
+      )}
+
+      {!loadingDocs && activeTab === "stats" && (
+        <WritingStats currentStoryId={currentStoryId} storyName={currentStory?.name} />
+      )}
+
+      {/* Chế độ đọc full-screen */}
+      {readingOpen && (
+        <ReadingMode
+          chapters={readingChapters}
+          storyName={currentStory?.name}
+          onClose={() => setReadingOpen(false)}
+        />
       )}
 
       {/* Modal khởi tạo xưởng */}
