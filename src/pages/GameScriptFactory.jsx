@@ -192,9 +192,11 @@ export default function GameScriptFactory() {
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           Mô hình xưởng như Xưởng Viết Truyện: bộ tài liệu kịch bản sống là "trí nhớ dài hạn" của AI —
-          nhưng mỗi <b>loại game</b> có nguyên tắc kịch bản riêng (Visual Novel, RPG, Action-Adventure,
-          Point & Click, Horror, Interactive Fiction, Romance/Otome, Interactive Film) mà AI bắt buộc tuân thủ.
-          Lên tuyến kịch bản → viết phân cảnh theo từng tuyến → theo dõi timeline từng tuyến và sửa trực tiếp.
+          nhưng sản phẩm ở đây là <b>KỊCH BẢN GAME</b> (slugline SCENE, thoại theo nhân vật, mô tả hành động,
+          khối lựa chọn kèm cờ/chỉ số + đích nhánh, chỉ dẫn kỹ thuật SFX/MUSIC/TRANSITION) — không phải văn xuôi
+          truyện. Các loại game lấy <b>đúng từ Xưởng Game</b> ({GAME_TYPE_DEFS.map((t) => t.label).join(", ")}),
+          mỗi loại có nguyên tắc kịch bản riêng mà AI bắt buộc tuân thủ.
+          Lên tuyến kịch bản → dàn beats → viết phân cảnh theo từng tuyến → theo dõi timeline từng tuyến và sửa trực tiếp.
         </p>
         <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">

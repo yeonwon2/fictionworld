@@ -197,6 +197,45 @@ function gameTypePrinciplesBlock(gameType) {
   return `# LOẠI GAME: ${t.label} (${t.emoji})\n${t.desc}\n\n## NGUYÊN TẮC KỊCH BẢN BẮT BUỘC TUÂN THỦ\n${t.principles.map((p) => `- ${p}`).join("\n")}`;
 }
 
+// Bộ quy chuẩn ĐỊNH DẠNG KỊCH BẢN GAME — kịch bản game KHÔNG phải văn xuôi truyện.
+// Nhồi vào mọi prompt lên dàn / viết / sửa / kiểm tra để AI luôn xuất đúng định dạng.
+export const GAME_SCRIPT_FORMAT_GUIDE = `# ĐỊNH DẠNG KỊCH BẢN GAME (bắt buộc)
+Kịch bản game KHÔNG phải văn xuôi tiểu thuyết. Mỗi phân cảnh phải viết theo cấu trúc chuẩn dưới đây:
+
+1) TIÊU ĐỀ CẢNH (slugline) — dòng đầu tiên, đúng mẫu:
+   SCENE <số> — <NỘI/NGOẠI> | <ĐỊA ĐIỂM> — <THỜI GIAN>
+   (VD: SCENE 3 — NGOẠI | Cổng thành phương Bắc — ĐÊM)
+
+2) MÔ TẢ HÀNH ĐỘNG (stage direction) — câu ngắn, hiện thực, thì hiện tại, mô tả điều NHÌN THẤY:
+   (VD: Linh kéo Tố vào bóng tối. Mưa bắt đầu rơi lộp độp trên nóc nhà.)
+
+3) CHỈ DẪN KỸ THUẬT — đặt trong ngoặc vuông, viết hoa:
+   [SFX: sấm] [MUSIC: trống căng] [CAMERA: cận cảnh tay Linh] [TRANSITION: fade to black]
+
+4) THOẠI — tên nhân vật VIẾT HOA trên dòng riêng; hành động/cảm xúc trong ngoặc đơn:
+   LINH: (siết tay thành nắm) Trời sắp đổ mưa.
+   TỐ: (lo lắng nhìn ra cổng) Nghe nói quân địch đã cắt đường tiếp tế.
+
+5) THẺ CỜ / CHỈ SỐ / VẬT PHẨM — gắn ngay chỗ xảy ra để hệ thống áp dụng:
+   Cờ:      {#nghi_ngo=true}   /  {#nghi_ngo=false}
+   Chỉ số:  [+hảo cảm Tố +5]   /  [-san 10]  /  [+vàng 200]
+   Vật phẩm: [+nhẫn_mẹ_linh]
+
+6) LỰA CHỌN (choice block) — cuối cảnh nếu có rẽ nhánh; mỗi lựa chọn ghi rõ HIỆU ỨNG + ĐÍCH:
+   ► CHOICE:
+     1) Tin lời phản diện.  {#nghi_ngo=true}  → SCENE 5 (tuyến: tuyen_phan_dien)
+     2) Chống lại.          [-hảo cảm Trưởng lão -5]  → SCENE 6 (tuyến hiện tại)
+
+7) KẾT CẢNH — luôn kết bằng: LỰA CHỌN (nếu rẽ nhánh) HOẶC chỉ dẫn chuyển cảnh:
+   [CUT TO: SCENE ...] / [TRANSITION: cut]
+
+CẤM: kể chuyện kiểu văn xuôi/truyện (tâm trạng mô tả dài dòng, hồi tưởng đứng im, độc thoại nội tâm dài);
+mọi cảm xúc/ý nghĩ nhân vật phải lộ ra qua HÀNH ĐỘNG + THOẠI, không qua người kể chuyện.`;
+
+function scriptFormatBlock() {
+  return GAME_SCRIPT_FORMAT_GUIDE;
+}
+
 // ---------- Khởi tạo xưởng: sinh toàn bộ tài liệu từ loại game + ý tưởng ----------
 export function buildGameBootstrapPrompt({ gameType, idea, notes, directionBlock }) {
   const t = GAME_TYPE_BY_KEY[gameType] || GAME_TYPE_DEFS[0];
@@ -213,7 +252,7 @@ ${directionBlock || "(chưa có)"}
 ${notes?.trim() ? `# Ghi chú thêm\n${notes.trim()}` : ""}
 
 Hãy trả về TOÀN BỘ ${GAME_SCRIPT_DOC_DEFS.length} tài liệu, MỖI tài liệu là một chuỗi Markdown hoàn chỉnh (đầy đủ tiêu đề #, gạch đầu dòng, bảng khi cần). Yêu cầu:
-- 00_QUY_TAC_KICH_BAN: quy tắc viết kịch bản — TÓM TẮT các nguyên tắc kịch bản của loại game ${t.label} nêu trên (viết thành quy tắc hành văn: tông giọng, POV, độ dài phân cảnh, cách viết thoại, chỉ dẫn kỹ thuật cần có như scene/transition/audio), cộng thêm quy tắc riêng của game này.
+- 00_QUY_TAC_KICH_BAN: quy tắc viết kịch bản game — TÓM TẮT các nguyên tắc kịch bản của loại game ${t.label} nêu trên, cộng với QUY CHUẨN ĐỊNH DẠNG KỊCH BẢN GAME: tông giọng, cách viết thoại (tên nhân vật hoa + ngoặc đơn chỉ dẫn), slugline SCENE, mô tả hành động, chỉ dẫn kỹ thuật (SFX/MUSIC/CAMERA/TRANSITION), quy tắc gắn cờ/chỉ số ({#flag=...}, [+stat ±n]) và viết khối LỰA CHỌN kèm hiệu ứng + đích nhánh; cộng quy tắc riêng của game này.
 - 01_THE_GIOI_GAME: thế giới game — bối cảnh, địa lý, bản đồ vùng, phe phái/lực lượng, luật lệ, công nghệ/phép thuật, kinh tế, thuật ngữ riêng, địa điểm quan trọng (mỗi địa điểm 1 mục với công dụng kể chuyện).
 - 02_NHAN_VAT_NPC: nhân vật — nhân vật chính (điều khiển được), party/đồng hành, NPC quan trọng, phản diện (mỗi người: thân phận, tính cách, động cơ, bí mật, giọng thoại, vai trò kể chuyện).
 - 03_TUYEN_KICH_BAN: các tuyến kịch bản (route/branch) đề xuất — mỗi tuyến: tên, mô tả ngắn, điều kiện mở khoá, nhân vật trọng tâm, loại kết thúc dự kiến.
@@ -240,7 +279,7 @@ export const GAME_BOOTSTRAP_SCHEMA = {
 export function buildGameDocGenPrompt({ key, gameType, idea, currentDoc, note }) {
   const def = GAME_SCRIPT_DOC_BY_KEY[key];
   const specifics = {
-    quy_tac: "Soạn quy tắc kịch bản: tóm tắt nguyên tắc loại game + tông giọng, POV, độ dài phân cảnh, cách viết thoại, chỉ dẫn kỹ thuật (scene/transition/audio), quy tắc riêng của game này.",
+    quy_tac: "Soạn quy tắc kịch bản: tóm tắt nguyên tắc loại game + QUY CHUẨN ĐỊNH DẠNG KỊCH BẢN GAME (slugline SCENE, thoại tên hoa + ngoặc đơn, mô tả hành động, chỉ dẫn SFX/MUSIC/CAMERA/TRANSITION, thẻ cờ {#flag}, [+stat ±n], khối LỰA CHỌN kèm hiệu ứng + đích nhánh), độ dài phân cảnh hợp loại, cách dùng cờ/chỉ số trong kịch bản, quy tắc riêng của game này.",
     the_gioi: "Soạn thế giới game: bối cảnh, địa lý, bản đồ vùng, phe phái, luật lệ, công nghệ/phép thuật, kinh tế, thuật ngữ, địa điểm quan trọng kèm công dụng kể chuyện.",
     nhan_vat: "Soạn nhân vật: chính/party/NPC/phản diện — thân phận, tính cách, động cơ, bí mật, giọng thoại, vai trò kể chuyện.",
     tuyen: "Soạn tuyến kịch bản: mỗi tuyến tên + mô tả + điều kiện mở khoá + nhân vật trọng tâm + loại kết thúc.",
@@ -311,14 +350,16 @@ export const GAME_ROUTE_PLAN_SCHEMA = {
   required: ["routes"],
 };
 
-// ---------- Lên dàn phân cảnh (scene beats) cho một tuyến ----------
+// ---------- Lên dàn phân cảnh (screenplay beats) cho một tuyến ----------
 export function buildSceneOutlinePrompt({ gameType, docsText, route, sceneGoal, prevScene, count }) {
   const prevBlock = prevScene
     ? `# Phân cảnh trước đó (nối mạch)\n- Tiêu đề: ${prevScene.title}\n- Loại: ${prevScene.scene_type || "?"}\n- Tóm tắt: ${(prevScene.content || "").slice(0, 600)}`
     : "(đây là phân cảnh ĐẦU TIÊN của tuyến)";
-  return `Bạn là ĐẠO DIỄN KỊCH BẢN của một xưởng viết kịch bản game.
+  return `Bạn là ĐẠO DIỄN KỊCH BẢN của một xưởng viết kịch bản game. Bạn lên DÀN THEO BEAT (screenplay beats) — KHÔNG viết văn xuôi, chỉ phác khung từng phân cảnh để biên kịch viết sau.
 
 ${gameTypePrinciplesBlock(gameType)}
+
+${scriptFormatBlock()}
 
 # BỘ TÀI LIỆU KỊCH BẢN HIỆN TẠI
 ${docsText}
@@ -328,19 +369,19 @@ ${route?.description ? `- Mô tả: ${route.description}` : ""}
 
 ${prevBlock}
 
-# Mục tiêu của đoạn phân cảnh tiếp theo
+# Mục tiêu của đoạn kịch bản tiếp theo
 ${sceneGoal?.trim() || "(chưa có — tiếp tục tự nhiên theo tuyến + tóm tắt hiện tại)"}
 
 # Yêu cầu
-Lên dàn ${count || 5} PHÂN CẢNH (scene outline) cho đoạn này, mỗi phân cảnh:
+Lên dàn ${count || 5} PHÂN CẢNH (scene outline / beat) cho đoạn này, mỗi phân cảnh:
 - title: tiêu đề ngắn
-- scene_type: loại phân cảnh phù hợp với loại game (adventure: "hành động" / "khám phá" / "đối thoại" / "set piece"; dialogue: "đối thoại" / "chọn lựa" / "CG"; transmigration: "chệch bản gốc" / "mưu kế" / "cảnh báo"; system: "nhiệm vụ" / "thăng cấp" / "cạnh tranh"; detective: "hiện trường" / "phỏng vấn" / "suy luận" / "đối chất"; palace: "hậu cung" / "mưu kế" / "đấu khẩu" / "sự kiện"; rebirth: "đầu tư" / "thương chiến" / "khủng hoảng" / "đối tác"; ...)
-- goal: mục tiêu kể chuyện của phân cảnh (1 câu)
+- scene_type: loại phân cảnh theo loại game (adventure: "hành động" / "khám phá" / "đối thoại" / "set piece"; dialogue: "đối thoại" / "chọn lựa" / "CG"; transmigration: "chệch bản gốc" / "mưu kế" / "cảnh báo"; system: "nhiệm vụ" / "thăng cấp" / "cạnh tranh"; detective: "hiện trường" / "phỏng vấn" / "suy luận" / "đối chất"; palace: "hậu cung" / "mưu kế" / "đấu khẩu" / "sự kiện"; rebirth: "đầu tư" / "thương chiến" / "khủng hoảng" / "đối tác"; ...)
+- goal: MỤC ĐÍCH KỊCH BẢN của cảnh — beat đẩy chuyện gì (thông tin mới / đe dọa / quyết định / tiết lộ / thay đổi mối quan hệ / chốt hạ đau) — 1 câu
 - location: địa điểm (nếu có)
 - characters: nhân vật tham gia
 - foreshadow: phục bút / chi tiết cần cài hoặc hồi đáp (nếu có)
-- choice_hint: nếu phân cảnh có điểm rẽ lựa chọn, mô tả các lựa chọn + hệ quả
-Phân cảnh đầu phải nối mạch với phân cảnh trước; phân cảnh cuối để lại móc câu (hook). Bám sát 00_QUY_TAC_KICH_BAN và nguyên tắc loại game.
+- choice_hint: nếu cảnh có LỰA CHỌN rẽ nhánh — liệt kê từng lựa chọn kèm HIỆU ỨNG cờ/chỉ số ({#flag}, [+stat ±n]) và ĐÍCH (SCENE/tuyến tiếp theo)
+Phân cảnh đầu phải nối mạch với phân cảnh trước; phân cảnh cuối để lại móc câu (hook). Bám sát 00_QUY_TAC_KICH_BAN, 05_FLAGS_CHI_SO và nguyên tắc loại game — mọi cờ/chỉ số trong choice_hint phải nằm trong tài liệu 05_FLAGS_CHI_SO.
 Trả JSON đúng schema.`;
 }
 
@@ -367,39 +408,42 @@ export const GAME_SCENE_OUTLINE_SCHEMA = {
   required: ["scenes"],
 };
 
-// ---------- Viết phân cảnh kịch bản hoàn chỉnh ----------
+// ---------- Viết phân cảnh kịch bản hoàn chỉnh (đúng định dạng kịch bản game) ----------
 export function buildSceneWritePrompt({ gameType, docsText, route, outline, prevScene, targetWords = 0 }) {
   const lengthRule =
     targetWords && Number(targetWords) > 0
       ? `- Độ dài: khoảng ${targetWords} từ kịch bản hoàn chỉnh.`
-      : "- Độ dài: phù hợp loại phân cảnh (thoại vừa đủ, không dài dòng).";
-  return `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Hãy viết PHÂN CẢNH kịch bản hoàn chỉnh, TUYỆT ĐỐI không giải thích meta — chỉ trả nội dung kịch bản.
+      : "- Độ dài: phù hợp loại phân cảnh (thoại vừa đủ, mô tả hành động ngắn, không dài dòng).";
+  return `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Hãy viết PHÂN CẢNH kịch bản game hoàn chỉnh — đúng định dạng kịch bản, TUYỆT ĐỐI không giải thích meta, không kể văn xuôi truyện. Chỉ trả nội dung kịch bản.
 
 ${gameTypePrinciplesBlock(gameType)}
+
+${scriptFormatBlock()}
 
 # BỘ TÀI LIỆU KỊCH BẢN HIỆN TẠI
 ${docsText}
 
 # TUYẾN KỊCH BẢN: ${route?.name || route?.route_key || "?"}
 
-# DÀN PHÂN CẢNH (outline — bám sát 100%)
+# DÀN PHÂN CẢNH (beat — bám sát 100%)
 - Tiêu đề: ${outline?.title || "(chưa có)"}
 - Loại: ${outline?.scene_type || "đối thoại"}
-- Mục tiêu: ${outline?.goal || "(chưa có)"}
+- Mục đích kịch bản: ${outline?.goal || "(chưa có)"}
 - Địa điểm: ${outline?.location || "(chưa có)"}
 - Nhân vật: ${outline?.characters || "(chưa có)"}
 ${outline?.foreshadow ? `- Phục bút: ${outline.foreshadow}` : ""}
-${outline?.choice_hint ? `- Điểm rẽ lựa chọn: ${outline.choice_hint}` : ""}
+${outline?.choice_hint ? `- Lựa chọn (choice block): ${outline.choice_hint}` : ""}
 
 ${prevScene ? `# Phân cảnh trước đó (nối mạch)\n- Tiêu đề: ${prevScene.title}\n- Tóm tắt: ${(prevScene.content || "").slice(0, 800)}` : "(đây là phân cảnh đầu tiên của tuyến)"}
 
 # Yêu cầu kịch bản
-- Đúng định dạng kịch bản game: ghi rõ bối cảnh (SCENE/location), nhân vật hiện diện, thoại theo mẫu "Tên: lời thoại", mô tả hành động/cảm xúc trong ngoặc, chỉ dẫn âm thanh/transition khi cần.
+- ĐÚNG ĐỊNH DẠNG KỊCH BẢN GAME theo quy chuẩn trên: slugline "SCENE n — NỘI/NGOẠI | Địa điểm — Thời gian", mô tả hành động ngắn thì hiện tại, thoại "TÊN: (chỉ dẫn) lời thoại", chỉ dẫn kỹ thuật [SFX]/[MUSIC]/[CAMERA]/[TRANSITION] khi cần.
+- Nếu dàn có lựa chọn: kết cảnh bằng khối "► CHOICE:" — mỗi lựa chọn ghi HIỆU ỨNG cờ/chỉ số ({#flag=...}, [+stat ±n]) và ĐÍCH (SCENE/tuyến tiếp theo). Chỉ dùng cờ/chỉ số có trong 05_FLAGS_CHI_SO.
+- Gắn thẻ cờ/chỉ số {#...}, [+...] NGAY tại dòng xảy ra tác động trong cảnh.
 - Tuân thủ 00_QUY_TAC_KICH_BAN + NGUYÊN TẮC LOẠI GAME (nhịp pha đo, hệ quả lựa chọn, căng-xả...).
 - Nhân vật hành động/đối thoại ĐÚNG hồ sơ trong 02_NHAN_VAT_NPC; địa danh/luật lệ ĐÚNG 01_THE_GIOI_GAME.
 - ${lengthRule}
-- Nếu outline có điểm rẽ lựa chọn, ghi rõ các lựa chọn và hệ quả (cờ/chỉ số thay đổi).
-- Cài phục bút / hồi đáp theo outline; không mâu thuẫn 04_PHA_DO_BEATS và summaries/tom_tat_tuyen.md.
+- Cài phục bút / hồi đáp theo dàn; không mâu thuẫn 04_PHA_DO_BEATS và summaries/tom_tat_tuyen.md.
 Chỉ trả nội dung kịch bản phân cảnh, không lời dẫn ngoài.`;
 }
 
@@ -408,6 +452,8 @@ export function buildSceneRevisionPrompt({ gameType, docsText, route, outline, c
   return `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Game master vừa xem phân cảnh và muốn SỬA theo góp ý. Nhiệm vụ: viết lại TOÀN BỘ phân cảnh, GIỮ phần hay, sửa đúng các điểm được góp ý. TUYỆT ĐỐI không giải thích meta — chỉ trả kịch bản hoàn chỉnh.
 
 ${gameTypePrinciplesBlock(gameType)}
+
+${scriptFormatBlock()}
 
 # BỘ TÀI LIỆU KỊCH BẢN HIỆN TẠI
 ${docsText}
@@ -422,16 +468,18 @@ ${feedback}
 
 # Yêu cầu
 - Sửa đúng từng điểm góp ý, phần khác giữ nguyên chất lượng.
-- Giữ định dạng kịch bản game (SCENE/thoại/mô tả hành động/audio), tuân thủ nguyên tắc loại game.
+- Giữ TUYỆT ĐỐI định dạng kịch bản game (slugline SCENE / thoại "TÊN: (chỉ dẫn)" / mô tả hành động / [SFX]/[MUSIC]/[TRANSITION] / thẻ {#flag}/[+stat] / khối ► CHOICE kèm hiệu ứng + đích), tuân thủ nguyên tắc loại game.
 - Không làm mâu thuẫn với bộ tài liệu (nhân vật, thế giới, cờ/chỉ số, pha đo).
 Chỉ trả nội dung kịch bản phân cảnh, không lời dẫn ngoài.`;
 }
 
 // ---------- Kiểm tra nhất quán phân cảnh với bộ tài liệu ----------
 export function buildGameConsistencyPrompt({ gameType, docsText, sceneContent }) {
-  return `Bạn là BIÊN TẬP NHẤT QUÁN của xưởng viết kịch bản game. So sánh phân cảnh vừa viết với BỘ TÀI LIỆU KỊCH BẢN, phát hiện mâu thuẫn và vi phạm THẬT SỰ.
+  return `Bạn là BIÊN TẬP NHẤT QUÁN của xưởng viết kịch bản game. So sánh phân cảnh vừa viết với BỘ TÀI LIỆU KỊCH BẢN + QUY CHUẨN ĐỊNH DẠNG KỊCH BẢN, phát hiện mâu thuẫn và vi phạm THẬT SỰ.
 
 ${gameTypePrinciplesBlock(gameType)}
+
+${scriptFormatBlock()}
 
 # BỘ TÀI LIỆU KỊCH BẢN
 ${docsText}
@@ -440,7 +488,11 @@ ${docsText}
 """${sceneContent}"""
 
 # Yêu cầu
-Chỉ báo lỗi thật sự: nhân vật lạc tính cách/giọng thoại, xưng hô sai, địa danh/luật lệ sai, timeline tuyến lệch, cờ/chỉ số cài mà không dùng, vật phẩm bịa không có, kết thúc không đạt được do thiếu điều kiện, vi phạm nguyên tắc loại game. Mỗi lỗi: severity ("nghiêm trọng"/"cảnh báo"), where, problem, suggestion. Nếu không có lỗi, trả issues rỗng. Trả JSON đúng schema.`;
+Chỉ báo lỗi thật sự:
+- SAI ĐỊNH DẠNG: không có slugline SCENE, thoại thiếu tên nhân vật hoa, viết theo văn xuôi truyện (kể tâm trạng dài, người kể chuyện xen vào), không có chỉ dẫn kỹ thuật khi cần, lựa chọn thiếu hiệu ứng/đích.
+- SAI LOGIC CỜ/CHỈ SỐ: thẻ {#flag}/[+stat] dùng tên KHÔNG CÓ trong 05_FLAGS_CHI_SO, hiệu ứng mâu thuẫn (vd cài flag rồi phủ nhận trong cùng cảnh), đích nhánh trỏ tới SCENE/tuyến không tồn tại.
+- SAI NỘI DUNG: nhân vật lạc tính cách/giọng thoại, xưng hô sai, địa danh/luật lệ sai, timeline tuyến lệch, phục bút cài mà không hồi đáp, kết thúc không đạt được do thiếu điều kiện, vi phạm nguyên tắc loại game.
+Mỗi lỗi: severity ("nghiêm trọng"/"cảnh báo"), where, problem, suggestion. Nếu không có lỗi, trả issues rỗng. Trả JSON đúng schema.`;
 }
 
 export const GAME_CONSISTENCY_SCHEMA = {

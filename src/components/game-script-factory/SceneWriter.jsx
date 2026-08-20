@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   ListChecks,
+  Info,
+  FilePlus2,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -23,6 +25,7 @@ import {
   buildSceneRevisionPrompt,
   buildGameConsistencyPrompt,
   GAME_CONSISTENCY_SCHEMA,
+  GAME_SCRIPT_FORMAT_GUIDE,
 } from "@/lib/gameScriptFactory/prompts";
 import {
   listGameRoutes,
@@ -79,6 +82,17 @@ export default function SceneWriter({ currentStoryId, gameType, docsByKey, idea,
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [adding, setAdding] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
+
+  const SCENE_TEMPLATE = `SCENE 1 — NGOẠI | <Địa điểm> — <THỜI GIAN>
+(<Mô tả hành động ngắn, thì hiện tại.>)
+[SFX: ...]
+<NHÂN VẬT>: (chỉ dẫn hành động/cảm xúc) Lời thoại
+<NHÂN VẬT 2>: Lời thoại
+
+► CHOICE:
+  1) <Lựa chọn 1>  {#cờ=true}  → SCENE 2
+  2) <Lựa chọn 2>  [+hảo cảm <NV> +5]  → SCENE 3`;
 
   useEffect(() => {
     if (!currentStoryId) return;
@@ -439,6 +453,9 @@ export default function SceneWriter({ currentStoryId, gameType, docsByKey, idea,
                     {o.title}
                   </div>
                   <div className="text-muted-foreground mt-0.5">{o.goal}</div>
+                  {o.choice_hint && (
+                    <div className="text-[10px] text-cyan-600 dark:text-cyan-400 mt-1 line-clamp-2">► {o.choice_hint}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -513,21 +530,49 @@ export default function SceneWriter({ currentStoryId, gameType, docsByKey, idea,
               </div>
 
               <label className="text-[11px] text-muted-foreground block">
-                Điểm rẽ lựa chọn (nếu có — AI sẽ viết các chọn lựa + hệ quả)
+                Điểm rẽ lựa chọn (nếu có — AI sẽ viết các chọn lựa + hiệu ứng + đích nhánh)
                 <textarea
                   value={scene.choices || ""}
                   onChange={(e) => setScene({ ...scene, choices: e.target.value })}
                   rows={2}
-                  placeholder="VD: A) Tin lời phản diện (+cờ 'nghi ngờ') B) Chống lại (−affection Trưởng lão)..."
+                  placeholder="VD: 1) Tin lời phản diện {#nghi_ngo=true} → SCENE 5 · 2) Chống lại [−hảo cảm Trưởng lão −5] → SCENE 6..."
                   className="w-full rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs mt-1 resize-none"
                 />
               </label>
+
+              {/* Khung định dạng kịch bản game */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setFormatOpen((o) => !o)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-[11px] text-muted-foreground hover:bg-muted"
+                >
+                  <Info className="w-3.5 h-3.5" /> Định dạng kịch bản game
+                </button>
+                <button
+                  onClick={() => {
+                    if (!scene.content?.trim()) {
+                      setScene({ ...scene, content: SCENE_TEMPLATE });
+                    } else if (window.confirm("Ghi đè nội dung hiện tại bằng khung mẫu?")) {
+                      setScene({ ...scene, content: SCENE_TEMPLATE });
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-[11px] text-muted-foreground hover:bg-muted"
+                  title="Chèn khung kịch bản mẫu vào ô soạn"
+                >
+                  <FilePlus2 className="w-3.5 h-3.5" /> Chèn khung mẫu
+                </button>
+              </div>
+              {formatOpen && (
+                <pre className="rounded-lg border border-border bg-muted/20 p-3 text-[11px] leading-5 text-muted-foreground overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto font-sans">
+                  {GAME_SCRIPT_FORMAT_GUIDE}
+                </pre>
+              )}
 
               <textarea
                 value={scene.content}
                 onChange={(e) => setScene({ ...scene, content: e.target.value })}
                 rows={16}
-                placeholder={`Kịch bản phân cảnh (đúng định dạng kịch bản game):\n\n[SCENE: Cổng thành - đêm]\nLinh: (nhìn lên tường thành) Trời sắp đổ mưa...\nTố: (lo lắng) Nghe nói quân địch đã cắt đường tiếp tế.\n\nChỉ dẫn audio/transition khi cần.`}
+                placeholder={`Kịch bản phân cảnh — ĐÚNG ĐỊNH DẠNG KỊCH BẢN GAME (không phải văn xuôi truyện):\n\nSCENE 1 — NGOẠI | Cổng thành — ĐÊM\n(Linh kéo Tố vào bóng tối. Mưa bắt đầu rơi.)\n[SFX: sấm]\nLINH: (siết tay) Trời sắp đổ mưa.\nTỐ: (lo lắng) Nghe nói quân địch đã cắt đường tiếp tế.\n\n► CHOICE:\n  1) Tin lời phản diện.  {#nghi_ngo=true}  → SCENE 5\n  2) Chống lại.  [−hảo cảm Trưởng lão −5]  → SCENE 6`}
                 className="w-full rounded-md border border-input bg-transparent px-3 py-2.5 text-sm leading-6 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
               />
 
