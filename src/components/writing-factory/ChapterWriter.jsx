@@ -13,6 +13,7 @@ import {
   Check,
   FileText,
   Edit3,
+  MessagesSquare,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -32,6 +33,8 @@ import {
   buildChapterRevisionPrompt,
   buildBibleConsistencyPrompt,
   BIBLE_CONSISTENCY_SCHEMA,
+  buildXungHoConsistencyPrompt,
+  XUNG_HO_CONSISTENCY_SCHEMA,
   buildRollupPrompt,
   ROLLUP_SCHEMA,
   DOC_DEFS_BY_KEY,
@@ -63,6 +66,8 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
   const [issues, setIssues] = useState(null);
+  const [checkingXungHo, setCheckingXungHo] = useState(false);
+  const [xungHoIssues, setXungHoIssues] = useState(null);
   const [error, setError] = useState("");
   const [statusNote, setStatusNote] = useState("");
 
@@ -240,6 +245,40 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setError("Kiểm tra nhất quán lỗi: " + (e?.message || "lỗi"));
     } finally {
       setChecking(false);
+    }
+  };
+
+  const handleCheckXungHo = async () => {
+    if (!chapters.length) {
+      setError("Chưa có chương nào để kiểm tra xưng hô.");
+      return;
+    }
+    setError("");
+    setXungHoIssues(null);
+    setCheckingXungHo(true);
+    try {
+      // listChapters chỉ trả cột nhẹ — cần lấy content từng chương.
+      const full = [];
+      for (const c of chapters) {
+        try {
+          const row = await getChapter(c.id);
+          if (row?.content?.trim()) full.push(row);
+        } catch {
+          // bỏ qua chương đọc lỗi
+        }
+      }
+      if (!full.length) {
+        setError("Không tìm thấy nội dung chương nào — hãy lưu chương trước.");
+        return;
+      }
+      const relationText = docsByKey?.quan_he?.content || "";
+      const prompt = buildXungHoConsistencyPrompt({ genre, relationText, chapters: full });
+      const res = await aiCall(prompt, { jsonSchema: XUNG_HO_CONSISTENCY_SCHEMA });
+      setXungHoIssues(res?.issues || []);
+    } catch (e) {
+      setError("Kiểm tra xưng hô lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setCheckingXungHo(false);
     }
   };
 
@@ -565,6 +604,15 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Kiểm tra nhất quán
           </button>
+          <button
+            onClick={handleCheckXungHo}
+            disabled={checkingXungHo || !chapters.length}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md border border-primary/40 text-primary text-sm hover:bg-primary/10 disabled:opacity-50"
+            title="Đọc toàn bộ chương, rà xem lúc 'em' lúc 'ngươi', lúc 'tôi' lúc 'ta'..."
+          >
+            {checkingXungHo ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessagesSquare className="w-4 h-4" />}
+            Kiểm tra xưng hô
+          </button>
           <label className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
@@ -723,6 +771,47 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
                 })
               )}
             </div>
+          </div>
+        )}
+        {xungHoIssues !== null && (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <MessagesSquare className="w-4 h-4 text-primary" />
+              <h3 className="font-display font-semibold text-sm">Kiểm tra xưng hô (mọi chương)</h3>
+            </div>
+            <div className="mt-2 space-y-2">
+              {xungHoIssues.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-500/10 rounded-md px-3 py-2.5">
+                  <CheckCircle2 className="w-4 h-4" /> Xưng hô nhất quán giữa các chương.
+                </div>
+              ) : (
+                xungHoIssues.map((iss, i) => (
+                  <div key={i} className="rounded-md px-3 py-2 text-xs bg-destructive/10 text-destructive">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-semibold">
+                          {iss.character_a || "?"}
+                          {iss.character_b ? ` ↔ ${iss.character_b}` : ""}
+                        </span>
+                        {iss.chapters ? <span className="opacity-70"> · Chương {iss.chapters}</span> : null}
+                        <div className="opacity-80 mt-0.5">{iss.problem}</div>
+                        {iss.found ? (
+                          <div className="opacity-80 mt-0.5 text-[10px]">Thấy: {iss.found}</div>
+                        ) : null}
+                        {iss.expected ? (
+                          <div className="opacity-80 mt-0.5 text-[10px]">Chuẩn: {iss.expected}</div>
+                        ) : null}
+                        {iss.suggestion ? <div className="opacity-80 mt-0.5">→ {iss.suggestion}</div> : null}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">
+              So sánh xưng hô giữa các chương với nhau và với 03_QUAN_HE. Sửa chương theo góp ý nếu cần rồi lưu lại.
+            </p>
           </div>
         )}
       </div>

@@ -379,6 +379,56 @@ export const BIBLE_CONSISTENCY_SCHEMA = {
   required: ["issues"],
 };
 
+// ---------- Kiểm tra xưng hô nhất quán GIỮA CÁC CHƯƠNG ----------
+// Rà từng cặp nhân vật: nhân vật A xưng/gọi B bằng gì qua các chương, đối chiếu
+// với 03_QUAN_HE. Phát hiện chỗ lúc "em" lúc "ngươi", lúc "ta" lúc "tôi"...
+export function buildXungHoConsistencyPrompt({ genre, relationText, chapters }) {
+  const chaptersBlock = chapters
+    .map((c, i) => `### Chương ${i + 1} — ${c.title || "(chưa có tiêu đề)"}\n"""${(c.content || "").trim()}"""`)
+    .join("\n\n");
+  return `Bạn là BIÊN TẬP NHẤT QUÁN của xưởng viết tiểu thuyết, chuyên rà XƯNG HÔ. ${genreStyleLine(genre)}
+Nhiệm vụ: đọc TOÀN BỘ các chương đã viết và kiểm tra xem cách các nhân vật XƯNG (gọi bản thân) và GỌI nhau (ngươi/em/anh/chị/chú/bác...) có nhất quán GIỮA CÁC CHƯƠNG không, và có khớp với tài liệu QUAN HỆ & XƯNG HÔ không.
+
+# QUAN HỆ & XƯNG HÔ (03_QUAN_HE — chuẩn cần tuân thủ)
+${relationText || "(chưa có tài liệu — chỉ so nhất quán giữa các chương)"}
+
+# TOÀN BỘ CHƯƠNG ĐÃ VIẾT
+${chaptersBlock || "(chưa có chương nào)"}
+
+# Yêu cầu
+- Với mỗi CẶP nhân vật có tương tác, xác định cách A xưng bản thân (tôi/ta/mình/em/thiếp...) và cách A gọi B (em/anh/ngươi/cô/tiểu thư...) qua từng chương.
+- Báo lỗi khi:
+  1. Cùng một cặp, xưng hô ĐỔI KHÁC NHAU giữa các chương mà không có lý do cốt truyện rõ ràng (VD: lúc gọi "em", lúc gọi "ngươi"; lúc xưng "tôi", lúc xưng "ta").
+  2. Xưng hô lệch với 03_QUAN_HE (VD: tài liệu ghi "nam chính gọi nữ chính là 'em'" nhưng chương viết "ngươi").
+  3. Hai nhân vật xưng hô không đối xứng (VD: A gọi B "em" nhưng B gọi A "em" khi quan hệ không phải vậy).
+- KHÔNG báo lỗi nếu sự thay đổi có chủ đích rõ ràng (bí mật thân phận vỡ lở, quan hệ đổi chỗ, giai đoạn mới...) — nhưng phải ghi rõ lý do đó là gì.
+- Mỗi lỗi: character_a, character_b (tên nhân vật), expected (xưng hô chuẩn theo tài liệu, hoặc rỗng nếu không có), found (các biến thể tìm thấy, VD "chương 1: em — chương 3: ngươi"), chapters (số chương liên quan), problem (mô tả cụ thể), suggestion (cách sửa). Nếu không có lỗi, trả issues rỗng.
+Trả JSON đúng schema.`;
+}
+
+export const XUNG_HO_CONSISTENCY_SCHEMA = {
+  type: "object",
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          character_a: { type: "string" },
+          character_b: { type: "string" },
+          expected: { type: "string" },
+          found: { type: "string" },
+          chapters: { type: "string" },
+          problem: { type: "string" },
+          suggestion: { type: "string" },
+        },
+        required: ["problem"],
+      },
+    },
+  },
+  required: ["issues"],
+};
+
 // ---------- Voice Consistency: trích giọng văn nhân vật từ chương đã viết ----------
 export function buildVoiceExtractionPrompt({ genre, characterName, chapterContents }) {
   const excerpts = chapterContents
