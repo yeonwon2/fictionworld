@@ -221,11 +221,80 @@ create table if not exists public.writer_doc_snapshots (
 );
 create index if not exists writer_doc_snapshots_story_key_idx on public.writer_doc_snapshots (story_id, doc_key);
 
+-- =========================================================================
+-- Xưởng Kịch Bản Game (game_script_*) — viết kịch bản game theo từng loại game
+-- Hoạt động theo đúng mô hình xưởng của WritingFactory: mỗi bộ truyện (story)
+-- có 1 cấu hình loại game + bộ tài liệu kịch bản sống (bible) + các tuyến kịch
+-- bản (branch/route) + phân cảnh theo từng tuyến (scene).
+-- =========================================================================
+
+-- Cấu hình xưởng kịch bản: 1 dòng / bộ truyện — loại game + tên + bối cảnh.
+create table if not exists public.game_script_config (
+  story_id uuid primary key references public.stories (id) on delete cascade,
+  game_type text not null default 'visual-novel',
+  game_name text,
+  setting text,
+  notes text,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- Bộ tài liệu kịch bản game (bible) — doc_key cố định theo loại game;
+-- (story_id, doc_key) unique để mỗi bộ truyện chỉ có 1 bản mỗi tài liệu.
+create table if not exists public.game_script_docs (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  doc_key text not null,
+  title text not null default 'Tài liệu',
+  content text not null default '',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (story_id, doc_key)
+);
+create index if not exists game_script_docs_story_id_idx on public.game_script_docs (story_id);
+
+-- Tuyến kịch bản (branch/route): mỗi tuyến là 1 storyline — có tên, màu, mô tả,
+-- điều kiện mở khoá, kết thúc riêng. (story_id, route_key) unique.
+create table if not exists public.game_routes (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  route_key text not null,
+  name text not null,
+  color text,
+  description text,
+  sort_order numeric not null default 0,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (story_id, route_key)
+);
+create index if not exists game_routes_story_id_idx on public.game_routes (story_id);
+
+-- Phân cảnh kịch bản theo tuyến: mỗi scene thuộc 1 route_key, có thứ tự, loại
+-- phân cảnh (dialog/hành động/khám phá/trận đấu/cutscene/chọn lựa...), địa điểm,
+-- nhân vật, phục bút, lựa chọn (choices cho node rẽ nhánh) và nội dung kịch bản.
+create table if not exists public.game_scenes (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  route_key text not null,
+  scene_order numeric not null default 0,
+  title text not null default 'Phân cảnh',
+  scene_type text,
+  location text,
+  characters text,
+  foreshadow text,
+  choices text,
+  content text not null default '',
+  status text not null default 'nháp',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists game_scenes_story_route_idx on public.game_scenes (story_id, route_key, scene_order);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -239,7 +308,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

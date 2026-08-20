@@ -299,6 +299,117 @@ export async function deleteTheme(id) {
   return deleteRow("custom_themes", id);
 }
 
+// ---------- Xưởng Kịch Bản Game (game_script_*) ----------
+// Mô hình xưởng viết kịch bản game: 1 config (loại game) + bộ tài liệu bible
+// (game_script_docs) + tuyến kịch bản (game_routes) + phân cảnh theo tuyến
+// (game_scenes). Cùng nguyên tắc "trí nhớ dài hạn" của WritingFactory.
+const GAME_SCRIPT_DOC_COLUMNS = "id, story_id, doc_key, title, content, updated_at, created_at";
+const GAME_ROUTE_COLUMNS = "id, story_id, route_key, name, color, description, sort_order, updated_at, created_at";
+// listGameScenes() chỉ trả cột nhẹ (KHÔNG có content) — gọi getGameScene(id) khi cần đọc/sửa.
+const GAME_SCENE_LITE_COLUMNS = "id, story_id, route_key, scene_order, title, scene_type, status, updated_at, created_at";
+
+export async function getGameScriptConfig(storyId) {
+  const { data, error } = await supabase
+    .from("game_script_config")
+    .select("*")
+    .eq("story_id", storyId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function upsertGameScriptConfig(storyId, data) {
+  const payload = { story_id: storyId, ...data };
+  const { data: row, error } = await supabase
+    .from("game_script_config")
+    .upsert(payload, { onConflict: "story_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return row;
+}
+
+export async function listGameScriptDocs(storyId) {
+  let q = supabase.from("game_script_docs").select(GAME_SCRIPT_DOC_COLUMNS).order("doc_key", { ascending: true });
+  if (storyId) q = q.eq("story_id", storyId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getGameScriptDoc(storyId, docKey) {
+  const { data, error } = await supabase
+    .from("game_script_docs")
+    .select(GAME_SCRIPT_DOC_COLUMNS)
+    .eq("story_id", storyId)
+    .eq("doc_key", docKey)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function upsertGameScriptDoc(storyId, docKey, data) {
+  const payload = { story_id: storyId, doc_key: docKey, ...data };
+  const { data: row, error } = await supabase
+    .from("game_script_docs")
+    .upsert(payload, { onConflict: "story_id,doc_key" })
+    .select()
+    .single();
+  if (error) throw error;
+  return row;
+}
+
+export async function deleteGameScriptDoc(storyId, docKey) {
+  const { error } = await supabase
+    .from("game_script_docs")
+    .delete()
+    .eq("story_id", storyId)
+    .eq("doc_key", docKey);
+  if (error) throw error;
+}
+
+export async function listGameRoutes(storyId) {
+  let q = supabase.from("game_routes").select(GAME_ROUTE_COLUMNS).order("sort_order", { ascending: true }).order("created_at", { ascending: true });
+  if (storyId) q = q.eq("story_id", storyId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createGameRoute(data) {
+  return createRow("game_routes", data);
+}
+export async function updateGameRoute(id, data) {
+  return updateRow("game_routes", id, data);
+}
+export async function deleteGameRoute(id) {
+  return deleteRow("game_routes", id);
+}
+
+export async function listGameScenes(storyId, routeKey) {
+  let q = supabase.from("game_scenes").select(GAME_SCENE_LITE_COLUMNS).order("scene_order", { ascending: true });
+  if (storyId) q = q.eq("story_id", storyId);
+  if (routeKey) q = q.eq("route_key", routeKey);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getGameScene(id) {
+  const { data, error } = await supabase.from("game_scenes").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+export async function createGameScene(data) {
+  return createRow("game_scenes", data);
+}
+export async function updateGameScene(id, data) {
+  return updateRow("game_scenes", id, data);
+}
+export async function deleteGameScene(id) {
+  return deleteRow("game_scenes", id);
+}
+
 // ---------- Tiện ích: tải tệp lên Storage (tự nén ảnh trước khi lưu) ----------
 export async function uploadFile(file) {
   const compressed = await compressImage(file);
