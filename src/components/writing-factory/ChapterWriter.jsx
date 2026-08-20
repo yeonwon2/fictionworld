@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Check,
   FileText,
+  Edit3,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -28,6 +29,7 @@ import {
   buildWriteChapterPrompt,
   buildBeatPlannerPrompt,
   BEAT_PLANNER_SCHEMA,
+  buildChapterRevisionPrompt,
   buildBibleConsistencyPrompt,
   BIBLE_CONSISTENCY_SCHEMA,
   buildRollupPrompt,
@@ -53,12 +55,16 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [content, setContent] = useState("");
   const [goal, setGoal] = useState("");
   const [orientation, setOrientation] = useState("");
+  const [targetWords, setTargetWords] = useState("2000");
   const [prevTail, setPrevTail] = useState("");
   const [writing, setWriting] = useState(false);
+  const [revising, setRevising] = useState(false);
+  const [revisionNote, setRevisionNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
   const [issues, setIssues] = useState(null);
   const [error, setError] = useState("");
+  const [statusNote, setStatusNote] = useState("");
 
   // Beat planner
   const [beats, setBeats] = useState([]);
@@ -175,6 +181,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         prevTail: prevTail || getLastWords(content, 800),
         orientation,
         beats: beatsApproved ? beats : undefined,
+        targetWords,
       });
       const res = await aiCall(prompt);
       setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n---\n\n${String(res)}` : String(res)));
@@ -182,6 +189,41 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setError("Không thể viết chương: " + (e?.message || "lỗi"));
     } finally {
       setWriting(false);
+    }
+  };
+
+  const handleRevise = async () => {
+    if (!content.trim()) {
+      setError("Chưa có bản thảo để sửa — hãy viết chương trước.");
+      return;
+    }
+    if (!revisionNote.trim()) {
+      setError("Hãy ghi rõ góp ý (VD: 'kéo dài đoạn đối chất, thêm cảm xúc, bỏ đoạn miêu tả...').");
+      return;
+    }
+    setError("");
+    setRevising(true);
+    try {
+      const prompt = buildChapterRevisionPrompt({
+        genre,
+        chapterTitle: title,
+        chapterNumber: number,
+        chapterGoal: goal,
+        bibleText,
+        currentContent: content,
+        feedback: revisionNote,
+        orientation,
+        beats: beatsApproved ? beats : undefined,
+        targetWords,
+      });
+      const res = await aiCall(prompt);
+      setContent(String(res));
+      setRevisionNote("");
+      setStatusNote("Đã sửa chương theo góp ý. Xem lại rồi Lưu chương để cập nhật.");
+    } catch (e) {
+      setError("Sửa chương lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setRevising(false);
     }
   };
 
@@ -385,7 +427,22 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         </div>
 
         <div className="px-4 pt-2.5">
-          <label className="text-[11px] font-medium text-muted-foreground">Mục tiêu chương (biến cố/xung đột cần xảy ra)</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[11px] font-medium text-muted-foreground">Mục tiêu chương (biến cố/xung đột cần xảy ra)</label>
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground shrink-0">
+              Độ dài mục tiêu
+              <input
+                type="number"
+                min={300}
+                max={10000}
+                step={100}
+                value={targetWords}
+                onChange={(e) => setTargetWords(e.target.value)}
+                className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-xs text-foreground"
+              />
+              từ
+            </label>
+          </div>
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
@@ -460,6 +517,37 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           </div>
         </div>
 
+        {/* Sửa chương theo góp ý */}
+        <div className="px-4 pt-2.5">
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center gap-2">
+              <Edit3 className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-semibold">Sửa chương theo góp ý</span>
+              <span className="text-[10px] text-muted-foreground">(viết xong chương rồi muốn AI chỉnh lại chỗ nào)</span>
+            </div>
+            <textarea
+              value={revisionNote}
+              onChange={(e) => setRevisionNote(e.target.value)}
+              rows={2}
+              placeholder="VD: 'Kéo dài đoạn đối chất giữa nữ chính và nam chính, thêm cảm xúc; bỏ đoạn miêu tả phố xá; nhân vật A phải nghi ngờ hơn'..."
+              className="mt-2 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs resize-y"
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={handleRevise}
+                disabled={revising || !content.trim()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50"
+              >
+                {revising ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                {revising ? "Đang sửa..." : "Sửa theo góp ý này"}
+              </button>
+              <span className="text-[10px] text-muted-foreground">
+                AI viết lại toàn bộ chương theo góp ý — giữ đoạn đã hay. Sau đó bấm Lưu chương.
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 px-4 py-2.5 flex-wrap">
           <button
             onClick={handleWrite}
@@ -490,6 +578,9 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
 
         {error && (
           <div className="mx-4 mb-2 text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>
+        )}
+        {statusNote && (
+          <div className="mx-4 mb-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-md px-3 py-2">{statusNote}</div>
         )}
 
         <textarea

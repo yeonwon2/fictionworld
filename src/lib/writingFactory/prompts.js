@@ -232,7 +232,12 @@ export function buildWriteChapterPrompt({
   prevTail,
   orientation,
   beats,
+  targetWords,
 }) {
+  const wordRule =
+    targetWords && Number(targetWords) > 0
+      ? `- Độ dài chương: viết KHOẢNG ${targetWords} từ (đủ dài theo yêu cầu — đừng cắt bớt, cũng đừng lặp ý để kéo dài).`
+      : "- Đảm bảo nhịp chương ~800-1200 từ.";
   return `Bạn là tác giả chính của một xưởng viết tiểu thuyết. ${genreStyleLine(genre)} TUYỆT ĐỐI không giải thích meta — chỉ viết văn chương hoàn chỉnh.
 
 # BỘ TÀI LIỆU XƯỞNG (bible) — phải bám sát 100%
@@ -253,8 +258,55 @@ ${orientation?.trim() ? `# Định hướng thêm của tác giả\n${orientatio
 - Nhân vật hành động/đối thoại ĐÚNG hồ sơ trong 02_NHAN_VAT & 03_QUAN_HE (giọng văn, xưng hô đúng từng người).
 - Địa danh, luật lệ, thuật ngữ ĐÚNG 01_THE_GIOI.
 - Trạng thái nhân vật bắt đầu chương phải KHỚP với 07_TRANG_THAI_NHAN_VAT (vị trí, hành động, tâm lý, vật phẩm).
-- Đảm bảo nhịp chương ~800-1200 từ, chia đoạn rõ ràng, kết chương có móc treo (hook) tự nhiên hoặc khoảnh khắc cảm xúc.
+- ${wordRule}
+- Chia đoạn rõ ràng, kết chương có móc treo (hook) tự nhiên hoặc khoảnh khắc cảm xúc.
 - Nếu hợp lý, cài 1 phục bút mới theo 05_FUC_BUT hoặc hồi đáp một phục bút đang treo.
+- Không mâu thuẫn 06_TIMELINE và summaries/tom_tat_hien_tai.md.
+Chỉ trả nội dung chương (Markdown), không tiêu đề meta, không lời dẫn.`;
+}
+
+// ---------- Sửa chương theo góp ý: AI đọc lại + viết lại chương theo feedback ----------
+export function buildChapterRevisionPrompt({
+  genre,
+  chapterTitle,
+  chapterNumber,
+  chapterGoal,
+  bibleText,
+  currentContent,
+  feedback,
+  orientation,
+  beats,
+  targetWords,
+}) {
+  const wordRule =
+    targetWords && Number(targetWords) > 0
+      ? `- Độ dài chương: viết KHOẢNG ${targetWords} từ (đủ dài theo yêu cầu — đừng cắt bớt, cũng đừng lặp ý để kéo dài).`
+      : "- Đảm bảo nhịp chương ~800-1200 từ.";
+  return `Bạn là tác giả chính của một xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Tác giả vừa xem chương và muốn SỬA CHỮA theo góp ý. Nhiệm vụ: viết lại TOÀN BỘ chương, GIỮ nguyên phần đã hay, sửa đúng các điểm được góp ý. TUYỆT ĐỐI không giải thích meta — chỉ trả nội dung chương hoàn chỉnh (viết lại toàn bộ, không phải chỉ phần thay đổi).
+
+# BỘ TÀI LIỆU XƯỞNG (bible) — phải bám sát 100%
+${bibleText}
+
+# Mục tiêu của chương này
+${chapterGoal?.trim() || "(không thay đổi so với lần viết trước)"}
+
+${beats?.length ? `# DÀN BEATS ĐÃ DUYỆT (细纲 — bám sát 100% từng beat theo thứ tự)\n${beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : ""}
+
+${orientation?.trim() ? `# Định hướng thêm của tác giả\n${orientation.trim()}` : ""}
+
+# BẢN THẢO CHƯƠNG HIỆN TẠI (cần sửa)
+"""${currentContent}"""
+
+# GÓP Ý CỦA TÁC GIẢ (phải bám sát từng ý)
+${feedback}
+
+# Yêu cầu bắt buộc
+- Đọc kỹ GÓP Ý rồi sửa đúng từng điểm, phần khác giữ nguyên chất lượng (không làm hỏng đoạn đã hay).
+- Tuân thủ tuyệt đối 00_QUY_TAC_VIET (tông giọng, POV, từ cấm, xưng hô, giới hạn tiết lộ).
+- Nhân vật hành động/đối thoại ĐÚNG hồ sơ trong 02_NHAN_VAT & 03_QUAN_HE (giọng văn, xưng hô đúng từng người).
+- Trạng thái nhân vật bắt đầu chương phải KHỚP với 07_TRANG_THAI_NHAN_VAT.
+- ${wordRule}
+- Chia đoạn rõ ràng, kết chương có móc treo (hook) tự nhiên hoặc khoảnh khắc cảm xúc.
 - Không mâu thuẫn 06_TIMELINE và summaries/tom_tat_hien_tai.md.
 Chỉ trả nội dung chương (Markdown), không tiêu đề meta, không lời dẫn.`;
 }
@@ -269,11 +321,11 @@ ${bibleText}
 # NỘI DUNG CHƯƠNG VỪA VIẾT
 """${chapterContent}"""
 
-# Yêu cầu cập nhật — chỉ trả những tài liệu CẦN THAY ĐỔI, tài liệu không đổi thì KHÔNG đưa vào kết quả:
+# Yêu cầu cập nhật — LUÔN LUÔN trả về 2 tài liệu sau (bất kể chương như thế nào), các tài liệu khác CHỈ trả khi thực sự có thay đổi:
+- 07_TRANG_THAI_NHAN_VAT (LUÔN): viết MỚI toàn bộ trạng thái sống của từng nhân vật ngay SAU chương này — địa điểm mới, hành động đang làm, tâm lý, vật phẩm mới, bí mật đã biết, thương tích/địa vị mới nhất (mỗi nhân vật 1 mục '### Tên').
+- summaries/tom_tat_hien_tai.md (LUÔN): viết MỚI toàn bộ tóm tắt hiện tại (thay hoàn toàn bản cũ) — nhân vật đang ở đâu, đang làm gì, xung đột leo thang thế nào, móc treo đang treo là gì.
 - 06_TIMELINE: thêm các sự kiện mới của chương vào cuối timeline (đúng thứ tự), cập nhật trạng thái nếu có thay đổi.
-- summaries/tom_tat_hien_tai.md: VIẾT MỚI tóm tắt hiện tại (thay hoàn toàn bản cũ) — nhân vật đang ở đâu, đang làm gì, xung đột leo thang thế nào, móc treo đang treo là gì.
 - 05_FUC_BUT: thêm phục bút MỚI được cài trong chương (đánh dấu "đang treo"), và đánh dấu "đã hồi đáp" cho phục bút nào được hồi đáp trong chương này.
-- 07_TRANG_THAI_NHAN_VAT: CẬP NHẬT trạng thái sống của nhân vật sau chương — địa điểm mới, hành động đang làm, tâm lý, vật phẩm mới, bí mật đã biết, thương tích/địa vị mới nhất.
 - 02_NHAN_VAT: cập nhật nếu chương thay đổi đáng kể hồ sơ nhân vật (mục tiêu đổi, bí mật tiết lộ, mối quan hệ quan trọng thay đổi...). TRÊN 03_QUAN_HE nếu chỉ thay đổi thái độ thì không cần.
 - 03_QUAN_HE: cập nhật thái độ/quan hệ nếu chương có thay đổi.
 - 04_DAI_CUONG: đánh dấu tiến độ chương đã viết (ghi chú nhỏ) nếu cần.

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Factory, Loader2, PenLine, RefreshCw, Bot, Users } from "lucide-react";
+import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookOpen, BookMarked, Archive } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
@@ -36,6 +36,18 @@ const TABS = [
   { key: "team", label: "Team AI", icon: Bot },
 ];
 
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
 // Xưởng Viết Truyện — workspace mô hình "xưởng" kiểu tác giả web-novel Trung Quốc:
 // 1 bộ tài liệu bible sống + viết chương bám bible + rollup tự cập nhật + team AI theo vai.
 export default function WritingFactory() {
@@ -52,6 +64,8 @@ export default function WritingFactory() {
   const [savingKey, setSavingKey] = useState(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadDocs = async () => {
     if (!currentStoryId) return;
@@ -169,6 +183,48 @@ export default function WritingFactory() {
     }
   };
 
+  const handleExport = async (mode) => {
+    if (!currentStoryId) return;
+    setExporting(true);
+    setError("");
+    try {
+      const storyName = (currentStory?.name || "truyen").replace(/[\\/:*?"<>|]/g, "_");
+      const blocks = [];
+      if (mode === "bible" || mode === "all") {
+        const docBlocks = DOC_DEFS.map((d) => {
+          const doc = docsByKey[d.key];
+          if (!doc?.content?.trim()) return null;
+          return `# ${d.title} (${d.file})\n\n${doc.content.trim()}`;
+        }).filter(Boolean);
+        if (docBlocks.length) blocks.push(`# BỘ TÀI LIỆU XƯỞNG (bible)\n\n` + docBlocks.join("\n\n---\n\n"));
+      }
+      if (mode === "chapters" || mode === "all") {
+        const list = (await listChapters(currentStoryId)) || [];
+        list.sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0));
+        const chBlocks = list.map(
+          (c) => `# ${c.chapter_number != null ? `Chương ${c.chapter_number}: ` : ""}${c.title}\n\n${(c.content || "").trim()}`
+        );
+        if (chBlocks.length) {
+          if (blocks.length) blocks.push(`# TRUYỆN (các chương — dùng để đăng)\n\n`);
+          blocks.push(chBlocks.join("\n\n---\n\n"));
+        }
+      }
+      const text = blocks.join("\n");
+      if (!text.trim()) {
+        setError("Không có nội dung để tải.");
+        return;
+      }
+      const suffix = mode === "bible" ? "_BO_TAI_LIEU" : mode === "chapters" ? "_TRUYEN" : "_TOAN_BO";
+      downloadTextFile(`${storyName}${suffix}.md`, text);
+      setExportOpen(false);
+      setStatus("Đã tải file về máy.");
+    } catch (e) {
+      setError("Xuất file lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (!ready) {
     return (
       <div className="p-10 max-w-[1400px] mx-auto">
@@ -189,6 +245,41 @@ export default function WritingFactory() {
           Mô hình xưởng kiểu tác giả web-novel: bộ tài liệu bible sống là "trí nhớ dài hạn" của AI —
           viết chương bám bible, rồi tự cập nhật bible sau mỗi chương để không bao giờ lệch.
         </p>
+        <div className="relative mt-3 inline-block">
+          <button
+            onClick={() => setExportOpen((o) => !o)}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Xuất file
+          </button>
+          {exportOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+              <div className="absolute left-0 top-full mt-1 z-40 w-72 rounded-xl border border-border bg-card shadow-xl p-1.5">
+                <button
+                  onClick={() => handleExport("bible")}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
+                >
+                  <BookOpen className="w-4 h-4 text-primary shrink-0" /> Tải bộ tài liệu (bible)
+                </button>
+                <button
+                  onClick={() => handleExport("chapters")}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
+                >
+                  <BookMarked className="w-4 h-4 text-primary shrink-0" /> Tải truyện (các chương — để đăng)
+                </button>
+                <button
+                  onClick={() => handleExport("all")}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left hover:bg-muted"
+                >
+                  <Archive className="w-4 h-4 text-primary shrink-0" /> Tải toàn bộ (bible + truyện)
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
       {status && (
@@ -285,9 +376,9 @@ export default function WritingFactory() {
           <div className="relative w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl p-5">
             <h3 className="font-display font-semibold text-lg">Khởi tạo Xưởng Viết Truyện</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              AI sẽ dựng đủ 8 tài liệu (quy tắc viết, thế giới, nhân vật, quan hệ, đại cương, phục bút,
-              timeline, tóm tắt hiện tại) từ ý tưởng + dữ liệu sổ tay thế giới hiện có của bộ truyện{" "}
-              <b>{currentStory?.name}</b>. Nếu bỏ trống ý tưởng, Xưởng vẫn khởi tạo từ dữ liệu hiện có.
+              AI sẽ dựng đủ 9 tài liệu (quy tắc viết, thế giới, nhân vật, quan hệ, đại cương, phục bút,
+              timeline, trạng thái nhân vật, tóm tắt hiện tại) từ ý tưởng + dữ liệu sổ tay thế giới hiện có
+              của bộ truyện <b>{currentStory?.name}</b>. Nếu bỏ trống ý tưởng, Xưởng vẫn khởi tạo từ dữ liệu hiện có.
             </p>
             <textarea
               value={idea}

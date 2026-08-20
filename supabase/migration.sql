@@ -82,6 +82,8 @@ create table if not exists public.chapters (
   updated_at timestamptz not null default now()
 );
 create index if not exists chapters_story_id_idx on public.chapters (story_id);
+-- Nâng cấp: thêm cột outline_beats cho bảng chapters đã tồn tại từ trước
+alter table public.chapters add column if not exists outline_beats text;
 
 create table if not exists public.characters (
   id uuid primary key default gen_random_uuid(),
