@@ -1,6 +1,6 @@
 import React from "react";
 import { Folder, FileText, Sparkles, Loader2, BookText, FolderOpen, Check, Gamepad2 } from "lucide-react";
-import { GAME_SCRIPT_DOC_DEFS, GAME_TYPE_BY_KEY } from "@/lib/gameScriptFactory/prompts";
+import { GAME_SCRIPT_DOC_DEFS, GAME_TYPE_BY_KEY, GAME_TYPE_DEFS } from "@/lib/gameScriptFactory/prompts";
 
 const ICONS = {
   quy_tac: BookText,
@@ -15,7 +15,7 @@ const ICONS = {
 // Cây tài liệu của Xưởng Kịch Bản Game — mô phỏng thư mục game: quy tắc, thế
 // giới, nhân vật, tuyến, pha đo, flags, tóm tắt.
 export default function GameDocTree({ gameType, docsByKey, activeKey, onSelect, onBootstrap, bootstrapping, hasContent }) {
-  const type = GAME_TYPE_BY_KEY[gameType] || GAME_TYPE_BY_KEY["visual-novel"];
+  const type = GAME_TYPE_BY_KEY[gameType] || GAME_TYPE_BY_KEY[GAME_TYPE_DEFS[0]?.key] || GAME_TYPE_BY_KEY.adventure;
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col">
       <div className="px-4 py-3 border-b border-border bg-muted/30">

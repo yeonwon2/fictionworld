@@ -231,7 +231,7 @@ create index if not exists writer_doc_snapshots_story_key_idx on public.writer_d
 -- Cấu hình xưởng kịch bản: 1 dòng / bộ truyện — loại game + tên + bối cảnh.
 create table if not exists public.game_script_config (
   story_id uuid primary key references public.stories (id) on delete cascade,
-  game_type text not null default 'visual-novel',
+  game_type text not null default 'adventure',
   game_name text,
   setting text,
   notes text,

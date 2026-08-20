@@ -54,7 +54,7 @@ export default function GameScriptFactory() {
   const [docsByKey, setDocsByKey] = useState({});
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [bootstrapOpen, setBootstrapOpen] = useState(false);
-  const [gameType, setGameType] = useState("visual-novel");
+  const [gameType, setGameType] = useState(GAME_TYPE_DEFS[0]?.key || "adventure");
   const [idea, setIdea] = useState("");
   const [notes, setNotes] = useState("");
   const [bootstrapping, setBootstrapping] = useState(false);
@@ -64,7 +64,7 @@ export default function GameScriptFactory() {
   const [error, setError] = useState("");
   const [focusSceneId, setFocusSceneId] = useState(null);
 
-  const currentType = config?.game_type || "visual-novel";
+  const currentType = config?.game_type || GAME_TYPE_DEFS[0]?.key || "adventure";
 
   const loadDocs = async () => {
     if (!currentStoryId) return;

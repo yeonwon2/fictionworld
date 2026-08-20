@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Wand2, Loader2, Save, CheckCircle2, Eye, Pencil, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { GAME_SCRIPT_DOC_BY_KEY } from "@/lib/gameScriptFactory/prompts";
+import { GAME_SCRIPT_DOC_BY_KEY, GAME_TYPE_BY_KEY } from "@/lib/gameScriptFactory/prompts";
 
 // Trình soạn thảo một tài liệu kịch bản game: xem / soạn Markdown + AI soạn lại
 // theo vai chuyên môn của tài liệu (bám nguyên tắc loại game đang chọn).
@@ -131,7 +131,7 @@ export default function GameDocEditor({ doc, onSave, saving, onAIGenerate, busy,
         ) : (
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <p className="text-[11px] text-muted-foreground">
-              Để {def.role} làm việc với tài liệu này (bám nguyên tắc {gameType}):
+              Để {def.role} làm việc với tài liệu này (bám nguyên tắc {GAME_TYPE_BY_KEY[gameType]?.label || gameType}):
             </p>
             <div className="flex items-center gap-1.5">
               <button

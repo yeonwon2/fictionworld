@@ -2,150 +2,124 @@
 // Xưởng Kịch Bản Game — Prompt builders
 // Cùng nguyên tắc mô hình "xưởng" của WritingFactory: một đội AI đóng vai chuyên
 // môn cùng quản lý một bộ tài liệu sống (bible) cho mỗi bộ truyện — nhưng chuyên
-// viết KỊCH BẢN GAME. Mỗi LOẠI GAME có bộ NGUYÊN TẮC KỊCH BẢN RIÊNG (GAME_TYPE_DEFS)
-// mà AI bắt buộc tuân thủ, khác hẳn nhau:
-//   - Visual Novel  : tuyến theo chỉ số tình cảm + cờ (flag) + CG + đa kết thúc
-//   - RPG / JRPG    : cấu trúc nhiệm vụ (main/side quest), party, trận đấu, khám phá
-//   - Action-Adventure: pha đo gắn gameplay — set piece, nhịp đấu xen nghỉ
-//   - Point & Click : câu đố, túi đồ (inventory), hotspot, hội thoại rẽ nhánh
-//   - Horror        : nhịp căng thẳng, jump scare, tài nguyên khan hiếm, sinh tồn
-//   - Text Adventure: parser, phòng (rooms), động từ (verbs), vật thể (objects)
-//   - Romance/Otome : tuyến tình cảm, ngưỡng affection, cảnh thân mật, nhiều kết
-//   - Interactive Film: rẽ nhánh điện ảnh, quyết định nhanh, cây kết thúc
+// viết KỊCH BẢN GAME. Danh sách LOẠI GAME được lấy ĐÚNG từ Xưởng Game
+// (GAME_PRESENTATIONS trong src/lib/gameStudio/rpgThemes.js) — cùng một nguồn,
+// không tự sinh danh sách riêng. Mỗi loại có bộ NGUYÊN TẮC KỊCH BẢN RIÊNG
+// (GAME_SCRIPT_PRINCIPLES) mà AI bắt buộc tuân thủ; khi thêm xưởng/layout mới vào
+// Xưởng Game thì loại mới tự xuất hiện và dùng nguyên tắc chung
+// (GENERIC_SCRIPT_PRINCIPLES) cho tới khi được bổ sung nguyên tắc riêng.
 // Các tài liệu được lưu ở bảng game_script_docs (doc_key) và luôn được nạp làm
 // "trí nhớ dài hạn" khi lên tuyến / viết phân cảnh / kiểm tra nhất quán.
 // =============================================================================
+import { GAME_PRESENTATIONS } from "../gameStudio/rpgThemes";
 
-// ---------- Định nghĩa loại game + nguyên tắc kịch bản riêng từng loại ----------
-export const GAME_TYPE_DEFS = [
-  {
-    key: "visual-novel",
-    label: "Visual Novel",
-    short: "VN",
-    emoji: "🎭",
-    desc: "Tiểu thuyết hình ảnh: đọc thoại, chọn lựa, theo đuổi tuyến tình cảm / tuyến nhân vật, đa kết thúc.",
-    principles: [
-      "Kịch bản là chuỗi CẢNH đọc/hiển thị: thoại (dialogue) + bối cảnh (narration) + chọn lựa (choices).",
-      "Mỗi nhân vật có giọng thoại riêng, tuyệt đối nhất quán xưng hô (đối chiếu tài liệu quan hệ).",
-      "Chọn lựa tại các node rẽ nhánh phải CÓ HỆ QUẢ thực tế (tăng/giảm affection, mở/khoá cờ), không phải chọn cho có.",
-      "Chỉ số tình cảm / cờ (flags) tích luỹ theo từng chương và quyết định tuyến mở khoá + kết thúc nhận được.",
-      "Cảnh CG / cảnh đặc biệt chỉ diễn ra ở các nhịp cao trào, mỗi tuyến 2–4 điểm CG.",
-      "Cây kết thúc rõ ràng: mỗi tuyến ≥2 kết (tốt/xấu hoặc tốt/bình thường/xấu) do ngưỡng chỉ số quyết định.",
-    ],
-    docs: "Quy tắc: viết theo nhịp Visual Novel — thoại ngắn gọn, cảm xúc qua lời thoại + mô tả ngắn; mỗi màn nên có điểm rẽ hoặc thông tin mới.",
-  },
-  {
-    key: "rpg",
-    label: "RPG / JRPG",
-    short: "RPG",
-    emoji: "⚔️",
-    desc: "Nhập vai: party, nhiệm vụ chính/phụ, trận đấu, khám phá bản đồ, phát triển nhân vật.",
-    principles: [
-      "Cấu trúc 3 hồi rõ ràng: giới thiệu thế giới → xây dựng party → đại chiến/kết cục.",
-      "Nhiệm vụ chia main quest (bắt buộc) và side quest (tuỳ chọn); mỗi nhiệm vụ có mục tiêu rõ ràng + phần thưởng + hệ quả lên thế giới.",
-      "Phân cảnh phải đan xen gameplay: khám phá → trận đấu → cutscene → nghỉ ngơi → nhiệm vụ mới (nhịp 'leo thang – xả hơi').",
-      "Mỗi thành viên party có động cơ riêng + khoảnh khắc 'phát triển nhân vật' (character arc) ở ít nhất 1 mốc lớn.",
-      "Boss/trùm là đỉnh nhịp của mỗi hồi — kịch bản phải xây dựng mâu thuẫn dồn về đó trước trận.",
-      "Thế giới sống: NPC có lời thoại thay đổi theo tiến trình nhiệm vụ, không đứng im bất biến.",
-    ],
-    docs: "Quy tắc: viết theo cấu trúc RPG — mô tả bối cảnh + thoại NPC gọn, nhấn vào hành động nhiệm vụ; ghi rõ mục tiêu từng quest.",
-  },
-  {
-    key: "action-adventure",
-    label: "Action-Adventure",
-    short: "Action",
-    emoji: "🗡️",
-    desc: "Hành động - phiêu lưu: pha đo gắn chặt gameplay, set piece, cắt cảnh (cutscene).",
+// ---------- Nguyên tắc kịch bản riêng của từng loại game (khớp GAME_PRESENTATIONS) ----------
+const GAME_SCRIPT_PRINCIPLES = {
+  adventure: {
     principles: [
       "Kịch bản tính theo PHA ĐO (level/chương): mỗi pha đo = 1 mục tiêu gameplay + 1 bước tiến câu chuyện.",
-      "Cân bằng nghịch pha: hành động (đấu/rượt đuổi/giải đố) xen kẽ tĩnh lặng (khám phá, hội thoại, tiết lộ) — không quá 3 pha động liên tiếp.",
-      "Set piece (cảnh bom tấn) đặt ở mở đầu, giữa và cuối — mỗi set piece phải đổi cách chơi hoặc leo thang nguy hiểm.",
+      "Lựa chọn HÀNH ĐỘNG là trục chính: mỗi quyết định lớn phải đổi hướng diễn biến hoặc đổi tài nguyên/trạng thái nhân vật.",
+      "Nhịp động-tĩnh xen kẽ: hành động (đấu/rượt đuổi/leo trèo) đan với tĩnh (khám phá, hội thoại, tiết lộ) — không quá 3 pha động liên tiếp.",
+      "Set piece (cảnh bom tấn) đặt ở mở đầu, giữa và cuối; mỗi set piece phải đổi cách chơi hoặc leo thang nguy hiểm.",
       "Cutscene chỉ kể điều gameplay không kể được; mỗi cutscene ≤ 60 giây đọc và luôn chuyển sang gameplay.",
-      "Nhân vật chính có động cơ rõ ràng đẩy suốt câu chuyện; thế giới trả lời 'tại sao tôi phải qua pha đo này'.",
+      "Nhân vật chính có động cơ rõ ràng; thế giới phải trả lời 'tại sao tôi phải qua pha đo này'.",
     ],
-    docs: "Quy tắc: viết kịch bản theo pha đo — mỗi phân cảnh ghi rõ mục tiêu gameplay đi kèm, giữ nhịp động-tĩnh xen kẽ.",
+    docs: "Quy tắc: viết kịch bản theo pha đo — mỗi phân cảnh ghi rõ mục tiêu gameplay đi kèm, giữ nhịp động-tĩnh xen kẽ, set piece và cutscene ngắn.",
   },
-  {
-    key: "point-click",
-    label: "Point & Click Adventure",
-    short: "P&C",
-    emoji: "🖱️",
-    desc: "Phiêu lưu trỏ-chạm: câu đố, túi đồ (inventory), hotspot, hội thoại cây rẽ nhánh.",
+  dialogue: {
     principles: [
-      "Câu chuyện tiến triển qua VIỆC GIẢI CÂU ĐỐ: mỗi câu đố phải có logic nội tại + nhiều cách gợi ý, không mò mẫm vô nghĩa.",
-      "Hotspot (vật thể tương tác) phải có ý nghĩa kể chuyện — mỗi vật khám phá bổ sung 1 mảnh thông tin hoặc mở 1 con đường.",
-      "Túi đồ (inventory) là công cụ kể chuyện: vật phẩm kết hợp được với nhau theo logic, không bịa ghép vô lý.",
-      "Hội thoại là cây nhiều lựa chọn: lựa chọn thay đổi thái độ NPC và có thể mở/khoá hội thoại sau.",
-      "Mỗi màn (chapter) có một 'câu đố trung tâm' buộc mọi tuyến nhỏ hội tụ về để giải.",
-      "Hài hước / kỳ quái là phong cách đặc trưng — giữ tông nhất quán theo tài liệu quy tắc.",
+      "Kịch bản là chuỗi CẢNH đọc/hiển thị: thoại (dialogue) + bối cảnh (narration) + chọn lựa (choices).",
+      "Hội thoại là trục chính: mỗi lựa chọn thoại đổi thái độ NPC và có thể mở/khoá hội thoại hoặc cảnh sau.",
+      "Chỉ số hảo cảm / cờ (flags) tích luỹ theo từng chương và quyết định tuyến mở khoá + kết thúc nhận được.",
+      "Mỗi NPC có giọng thoại riêng, tuyệt đối nhất quán xưng hô (đối chiếu tài liệu nhân vật).",
+      "Chọn lựa phải CÓ HỆ QUẢ thực tế (tăng/giảm hảo cảm, mở/khoá cờ), không phải chọn cho có.",
+      "Cây kết thúc rõ ràng: mỗi tuyến ≥2 kết (tốt/xấu hoặc tốt/bình thường/xấu) do ngưỡng chỉ số quyết định.",
     ],
-    docs: "Quy tắc: viết kịch bản theo màn-câu-đố — mô tả hotspot, vật phẩm, câu đố trung tâm mỗi màn, hội thoại rẽ nhánh.",
+    docs: "Quy tắc: viết theo nhịp visual novel / trò chuyện NPC — thoại ngắn gọn, cảm xúc qua lời thoại + mô tả ngắn; mỗi màn nên có điểm rẽ hoặc thông tin mới.",
   },
-  {
-    key: "horror",
-    label: "Horror / Survival",
-    short: "Horror",
-    emoji: "🕯️",
-    desc: "Kinh dị - sinh tồn: nhịp căng thẳng, jump scare, tài nguyên khan hiếm, giữ 'khoảng an toàn' cho người chơi.",
+  transmigration: {
     principles: [
-      "Nhịp căng thẳng hình SIN (leo thang – xả): căng → đỉnh → xả nhẹ; không giữ căng liên tục (mất tác dụng).",
-      "Jump scare phải là PHẦN THƯỞNG của sự hồi hộp đã xây, không phải công cụ rẻ tiền — tối đa 1-2 lần/pha đo.",
-      "Thông tin rò rỉ dần dần (breadcrumb): người chơi hiểu thấu đáo mối nguy CHẬM hơn nhân vật, tạo lo sợ.",
-      "Tài nguyên khan hiếm gắn với kể chuyện: đạn/đèn pin/máu ít → lựa chọn sinh tồn đau đớn được kịch bản hoá.",
-      "Kết thúc tuỳ trạng thái sinh tồn: ít nhất 2 hướng (sống sót / hy sinh / trốn thoát) dựa trên quyết định người chơi.",
-      "Bối cảnh 'an toàn' ban đầu phải thật sự an toàn để cú lật sau đáng sợ.",
+      "Nhân vật chính BIẾT TRƯỚC kịch bản gốc (xuyên vào sách/phim/game) — kịch bản xoay quanh chênh lệch 'bản gốc vs hiện tại'.",
+      "Phân loại rõ 'điểm bất biến' (không thể hoặc chống đổi) và 'điểm có thể sửa' — mỗi màn nêu rõ đang phá/thay đổi điều gì.",
+      "Cờ cốt truyện: mỗi hành động chống lại bản gốc đặt cờ và làm cốt truyện lệch dần, tạo phản ứng dây chuyền.",
+      "Quan hệ với nhân vật 'phản diện bản gốc' phải có tiến trình thuyết phục, không đổi thái độ tức thì.",
+      "Hệ thống/cốt truyện phản ứng với sự thay đổi (cảnh báo, nhiệm vụ mới, ám chỉ nguy hiểm) — tạo áp lực sửa kịch bản.",
+      "Kết thúc tuỳ mức 'lệch bản gốc': tránh kết cục gốc, tạo kết mới hoặc đổi kết gốc — không có kết 'miễn nhiễm' với hệ quả.",
     ],
-    docs: "Quy tắc: viết theo nhịp kinh dị — xây căng rồi xả, ghi rõ mỗi jump scare ở đâu, khan hiếm tài nguyên ra sao.",
+    docs: "Quy tắc: viết theo xuyên sách/sửa kịch bản — ghi rõ điểm bất biến vs điểm sửa được, cờ thay đổi cốt truyện, hảo cảm nhân vật gốc.",
   },
-  {
-    key: "text-adventure",
-    label: "Interactive Fiction",
-    short: "IF",
-    emoji: "⌨️",
-    desc: "Tiểu thuyết tương tác / trò chơi văn bản: phòng (rooms), động từ (verbs), vật thể (objects), câu lệnh.",
+  system: {
     principles: [
-      "Kịch bản là chuỗi MÔ TẢ PHÒNG + VẬT THỂ + CÂU LỆNH: mỗi phòng mô tả ngắn gọn, gợi mở hành động khả dĩ.",
-      "Động từ chuẩn hoá: đi/nhìn/lấy/dùng/nói/cho — mỗi vật thể có phản hồi với các động từ hợp lý.",
-      "Mô tả phòng cần 'gợi ý mềm' (đồ vật nổi bật, hướng đi) — người chơi không được phép bế tắc vô lý.",
-      "Câu đố dựa trên logic ngôn ngữ: kết hợp động từ + vật thể theo lẽ thường, có phản hồi hài hước/hợp lý khi sai.",
-      "Có nhiều con đường đến cùng đích (nhiều cách giải 1 câu đố) — tôn trọng tự do người chơi.",
-      "Giọng văn kể chuyện thứ hai ('Bạn đang ở...') nhất quán toàn game.",
+      "Cấu trúc theo NHIỆM VỤ (quest) + cấp bậc: mỗi pha đo có mục tiêu hệ thống giao, phần thưởng và hệ quả rõ ràng.",
+      "Trọng sinh biết trước tương lai → kịch bản xoay quanh lợi thế 'biết trước' và hệ quả khi thay đổi tương lai.",
+      "Thông báo hệ thống là công cụ kể chuyện: nhiệm vụ, cảnh báo, tiến độ — dùng có ý nghĩa, không lạm dụng.",
+      "Phát triển cấp bậc/kỹ năng gắn với arc nhân vật, không tự dưng mạnh; mỗi bước mạnh lên phải có cái giá.",
+      "Mỗi lựa chọn đầu tư (thời gian/tài nguyên) có lời-lỗ rõ ràng ở pha đo sau — người chơi cảm được quyết định của mình.",
+      "Có đối thủ cũng biết trước hoặc học theo — tạo màn rượt đuổi tiến độ, không để người chơi thắng quá dễ.",
     ],
-    docs: "Quy tắc: viết interactive fiction — mô tả phòng + vật thể + động từ khả dĩ; mỗi phân cảnh ghi rõ các hành động người chơi được làm.",
+    docs: "Quy tắc: viết theo hệ thống/trọng sinh — mỗi pha đo ghi nhiệm vụ + phần thưởng, thông báo hệ thống có ý nghĩa, cạnh tranh tiến độ với đối thủ.",
   },
-  {
-    key: "romance",
-    label: "Romance / Otome",
-    short: "Romance",
-    emoji: "💞",
-    desc: "Tình cảm / Otome: tuyến theo nhân vật, ngưỡng affection, cảnh thân mật, nhiều kết thúc theo chỉ số.",
+  detective: {
     principles: [
-      "Mỗi tuyến là 1 nhân vật tình cảm riêng với arc: gặp gỡ → thân thiết → thử thách → bộc lộ → cam kết.",
-      "Cảm xúc tiến triển THEO NGƯỠNG: mỗi cột mốc affection mở 1 cảnh (event) + 1 lựa chọn quan trọng.",
-      "Xung đột trong tuyến phải từ TÍNH CÁCH hai người, không từ hiểu lầm nông cạn — người chơi muốn họ xứng đáng với nhau.",
-      "Lựa chọn lãng mạn không phải lúc nào cũng 'đúng nhất' — đôi khi lựa chọn khó khăn mới tạo chiều sâu.",
-      "Mỗi tuyến có kết thúc tốt/xấu/trung lập; kết thúc tốt phải CÓ ĐƯỢC nhờ tích luỹ chỉ số + quyết định đúng chỗ.",
-      "Nhân vật chính có tính cách riêng (không phải 'máy để yêu'), có mục tiêu ngoài tình cảm.",
+      "Kịch bản theo QUÁ TRÌNH ĐIỀU TRA: hiện trường → chứng cứ → phỏng vấn nghi phạm → suy luận → đối chất.",
+      "Chứng cứ phải CÔNG BẰNG: người chơi có thể thu thập đủ trước khi kết luận; không giấu manh mối quyết định sau một nhánh ngẫu nhiên.",
+      "Mỗi nghi phạm có động cơ + cơ hội + hành tung riêng; lời khai mâu thuẫn chính là manh mối.",
+      "Kết luận sai phải có hậu quả (bắt nhầm, bỏ lọt thủ phạm) nhưng vẫn cho sửa sai bằng chứng mới.",
+      "Hồi tưởng/flashback dùng để lấp lỗ hổng logic, không dùng để trình bày sẵn đáp án.",
+      "Hồ sơ vụ án tích luỹ: bảng chứng cứ cập nhật theo tiến trình; kết luận và kết thúc phụ thuộc chứng cứ đã thu thập.",
     ],
-    docs: "Quy tắc: viết theo tuyến tình cảm — đánh dấu cột mốc affection mở cảnh nào, xung đột từ tính cách, nhiều kết.",
+    docs: "Quy tắc: viết theo hồ sơ/phá án — mỗi phân cảnh ghi chứng cứ + manh mối thu được, nghi phạm và lời khai mâu thuẫn, bước suy luận.",
   },
-  {
-    key: "interactive-film",
-    label: "Interactive Film",
-    short: "Film",
-    emoji: "🎬",
-    desc: "Phim tương tác / lựa chọn phân nhánh: quyết định nhanh theo dòng chảy điện ảnh, cây kết thúc phức tạp.",
+  palace: {
     principles: [
-      "Kịch bản viết theo CẢNH ĐIỆN ẢNH: mô tả hình ảnh + âm thanh + thoại + chỉ dẫn quay (camera/diễn xuất).",
-      "Quyết định người chơi thường có GIỚI HẠN THỜI GIAN ngắn — tạo cảm giác căng như phim, kịch bản phải ghi rõ.",
-      "Rẽ nhánh phải 'hội tụ thông minh': sau một đoạn phân kỳ, các nhánh gặp lại ở trục chính mà vẫn nhớ hệ quả (biến cờ).",
-      "Mỗi quyết định lớn có hậu quả DÀI HẠN rõ ràng ở ít nhất 1 cảnh sau — không bỏ quên.",
-      "Cây kết thúc có phân cấp: kết thúc chính + kết phụ (thất bại giữa chừng) — mỗi kết phụ phải có ý nghĩa kể chuyện.",
-      "Toàn bộ mạch phim hướng về 'khoảnh khắc quyết định' cuối cùng — các lựa chọn trước tạo dựng cho nó.",
+      "Kịch bản theo THỨ BẬC + PHE PHÁI: địa vị (sủng ái/cấp bậc) thay đổi theo quyết định và mưu kế.",
+      "Mưu kế DÀI HƠI: mỗi âm mưu có chuẩn bị, nghi phạm và hậu quả ở các màn sau — không giải quyết tức thì.",
+      "Quyết định phe phái: chọn phe / giữ trung lập đổi bộ mặt kịch bản và mở/khoá sự kiện.",
+      "Lời ăn tiếng nói, cử chỉ, lễ nghi là vũ khí — thoại phải thể hiện địa vị và dụng ý, không lộng ngôn.",
+      "Đối thủ thông minh: họ nhớ lỗi sai của người chơi và trả đũa, cạm bẫy đặt theo điểm yếu đã lộ.",
+      "Kết thúc theo địa vị cuối: sống sót / được sủng / đăng cơ / bị diệt — do chuỗi quyết định và mưu kế quyết định.",
     ],
-    docs: "Quy tắc: viết kịch bản phim tương tác — ghi chỉ dẫn quay/âm thanh, thời gian giới hạn quyết định, hệ quả dài hạn của mỗi rẽ.",
+    docs: "Quy tắc: viết theo cung đấu/hậu cung — ghi địa vị sủng ái, phe phái, mưu kế dài hơi, lời thoại thể hiện địa vị, kết theo địa vị cuối.",
   },
-];
+  rebirth: {
+    principles: [
+      "Kịch bản theo NIÊN ĐẠI LÀM GIÀU: giai đoạn tích vốn → đầu tư → cạnh tranh → xây đế chế.",
+      "Trọng sinh biết trước cơ hội giá rẻ / khủng hoảng → xoay quanh 'quyết định khi biết trước' và hệ quả thay đổi dòng thời gian.",
+      "Vốn (tài chính) là chỉ số kể chuyện: mỗi quyết định đầu tư có lời-lỗ, có cú sốc thị trường bất ngờ làm đảo lộn kế hoạch.",
+      "Cạnh tranh trên THƯƠNG TRƯỜNG: thâu tóm, chiêu nhân tài, phá giá, chính sách — không dùng bạo lực tầm thường.",
+      "Quan hệ (đối tác, gia đình, nhân tài) đổi theo cách làm ăn: quá máu lạnh thì cô đơn, quá nương tay thì thua cuộc.",
+      "Kết thúc theo quy mô đế chế + uy tín: bá chủ / truyền nhân / phá sản nhưng giữ được người thân — phụ thuộc chuỗi quyết định.",
+    ],
+    docs: "Quy tắc: viết theo trọng sinh/làm giàu — ghi niên đại tích vốn, cơ hội biết trước, thương chiến với đối thủ, lời-lỗ từng quyết định.",
+  },
+};
+
+// Nguyên tắc chung cho loại game MỚI thêm vào Xưởng Game sau này (chưa có nguyên tắc riêng)
+const GENERIC_SCRIPT_PRINCIPLES = {
+  principles: [
+    "Mỗi phân cảnh phải đẩy câu chuyện lên và có mục tiêu gameplay/cảm xúc rõ ràng.",
+    "Rẽ nhánh phải có hệ quả thực tế (cờ/chỉ số/trạng thái), không có nhánh chết vô nghĩa.",
+    "Nhịp pha đo xen kẽ động-tĩnh; cao trào đặt đúng chỗ, không dồn dập hay kéo dài vô lối.",
+    "Nhân vật nhất quán với bộ tài liệu, xưng hô chuẩn, không lạc tính cách.",
+    "Mỗi tuyến có ≥2 kết thúc phụ thuộc quyết định người chơi, không có kết 'mặc định'.",
+    "Cập nhật bộ tài liệu (đặc biệt Tóm Tắt Hiện Tại) sau mỗi màn để mạch kịch bản không lệch.",
+  ],
+  docs: "Quy tắc: viết theo nguyên tắc chung của xưởng — đẩy câu chuyện, rẽ nhánh có hệ quả, nhịp xen kẽ, nhân vật nhất quán, đa kết thúc.",
+};
+
+// ---------- Định nghĩa loại game — tự đồng bộ với Xưởng Game (GAME_PRESENTATIONS) ----------
+export const GAME_TYPE_DEFS = Object.entries(GAME_PRESENTATIONS).map(([key, p]) => {
+  const spec = GAME_SCRIPT_PRINCIPLES[key] || GENERIC_SCRIPT_PRINCIPLES;
+  return {
+    key,
+    label: p.name,
+    short: p.name.split(" · ")[0],
+    emoji: p.icon,
+    desc: p.description,
+    principles: spec.principles,
+    docs: spec.docs,
+  };
+});
 
 export const GAME_TYPE_BY_KEY = Object.fromEntries(GAME_TYPE_DEFS.map((t) => [t.key, t]));
 
@@ -170,7 +144,7 @@ export const GAME_TEAM_ROLES = [
     name: "Biên kịch chính",
     emoji: "✒️",
     desc: "Giữ tông kịch bản, nhịp pha đo, đảm bảo AI bám nguyên tắc loại game đang chọn.",
-    system: `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Bạn nắm chắc nguyên tắc kịch bản của LOẠI GAME đang chọn (visual novel / RPG / action-adventure / point & click / horror / interactive fiction / romance / interactive film) và đảm bảo mọi phân cảnh tuân thủ đúng. Bạn đánh giá thẳng thắn chất lượng kịch bản, đề xuất cải thiện nhịp, thoại, rẽ nhánh và hệ quả lựa chọn. Luôn trả lời bằng tiếng Việt, cụ thể, bám tài liệu.`,
+    system: `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Bạn nắm chắc nguyên tắc kịch bản của LOẠI GAME đang chọn (theo bộ NGUYÊN TẮC KỊCH BẢN RIÊNG của từng loại trong xưởng — cùng danh sách loại game của Xưởng Game) và đảm bảo mọi phân cảnh tuân thủ đúng. Bạn đánh giá thẳng thắn chất lượng kịch bản, đề xuất cải thiện nhịp, thoại, rẽ nhánh và hệ quả lựa chọn. Luôn trả lời bằng tiếng Việt, cụ thể, bám tài liệu.`,
   },
   {
     key: "thiet_ke_tuyen",
@@ -360,7 +334,7 @@ ${sceneGoal?.trim() || "(chưa có — tiếp tục tự nhiên theo tuyến + t
 # Yêu cầu
 Lên dàn ${count || 5} PHÂN CẢNH (scene outline) cho đoạn này, mỗi phân cảnh:
 - title: tiêu đề ngắn
-- scene_type: loại phân cảnh phù hợp với loại game (visual-novel: "đối thoại" / "chọn lựa" / "CG"; rpg: "khám phá" / "trận đấu" / "cutscene" / "nhiệm vụ"; horror: "thăm dò" / "chạy trốn" / "hội thoại" / "jump-scare"; ...)
+- scene_type: loại phân cảnh phù hợp với loại game (adventure: "hành động" / "khám phá" / "đối thoại" / "set piece"; dialogue: "đối thoại" / "chọn lựa" / "CG"; transmigration: "chệch bản gốc" / "mưu kế" / "cảnh báo"; system: "nhiệm vụ" / "thăng cấp" / "cạnh tranh"; detective: "hiện trường" / "phỏng vấn" / "suy luận" / "đối chất"; palace: "hậu cung" / "mưu kế" / "đấu khẩu" / "sự kiện"; rebirth: "đầu tư" / "thương chiến" / "khủng hoảng" / "đối tác"; ...)
 - goal: mục tiêu kể chuyện của phân cảnh (1 câu)
 - location: địa điểm (nếu có)
 - characters: nhân vật tham gia
