@@ -53,13 +53,15 @@ export default function FinalStep({ project, patchProject, onBack }) {
   }, [project.id]);
 
   function scenesForBranch(branchIndex) {
-    const bp = scenes.find((s) => s.is_branch_point && s.branch_index === branchIndex);
-    if (!bp) return scenes;
-    return scenes.filter((s) => s.scene_order >= bp.scene_order);
+    return scenes.filter((s) => {
+      if (!s.is_branch_point) return true;
+      return Number(s.branch_index) === Number(branchIndex);
+    });
   }
 
   function buildPlanBlockText() {
     const lines = [];
+    if (project.idea?.trim()) lines.push("## Ý tưởng nguồn\n" + project.idea.trim().slice(0, 6000));
     if (meta?.characters?.length) lines.push("## Nhân vật\n" + meta.characters.map((c) => `- ${c.name}${c.role ? ` (${c.role})` : ""}: ${c.personality || ""} ${c.motive ? `· ${c.motive}` : ""}`).join("\n"));
     if (meta?.settings?.length) lines.push("## Bối cảnh\n" + meta.settings.map((s) => `- ${s.name}: ${s.description || ""}`).join("\n"));
     if (meta?.endings?.length) lines.push("## Kết thúc\n" + meta.endings.map((e) => `- ${e.name} [${e.type || "NORMAL_END"}]: ${e.description || ""}`).join("\n"));
@@ -70,6 +72,10 @@ export default function FinalStep({ project, patchProject, onBack }) {
   const handleWriteBranchScript = async (branch) => {
     const branchScenes = scenesForBranch(branch.branch_index);
     if (!branchScenes.length) return;
+    if (!String(project.idea || "").trim()) {
+      setError("Ý tưởng trống — quay lại bước Ý Tưởng và lưu trước khi viết kịch bản.");
+      return;
+    }
     setError("");
     setWritingBranch(branch.id);
     try {
@@ -168,6 +174,7 @@ export default function FinalStep({ project, patchProject, onBack }) {
         scene: sc,
         currentContent: cur?.script || "",
         feedback,
+        idea: project.idea,
       });
       const res = await aiCall(prompt);
       await upsertGamePlanSceneContent(project.id, branchId, sceneId, { script: String(res || "").trim(), status: "đã sửa" });

@@ -1,8 +1,7 @@
 // =============================================================================
-// Xưởng Kịch Bản Game (luồng mới) — Prompt builders
-// Wizard: Ý tưởng → AI gợi ý bộ khung (nhân vật/bối cảnh/dàn cảnh/lựa chọn/
-// kết thúc) → tác giả duyệt/chỉnh → AI viết 4 nhánh truyện (bản thảo văn xuôi)
-// → chốt → AI viết kịch bản chuẩn form theo đúng cú pháp xưởng game → xuất.
+// Xưởng Kịch Bản Game — Prompt builders
+// Luồng: Ý tưởng (nguồn duy nhất) → AI phát triển bộ khung (theo lô) → duyệt
+// → bản thảo 4 nhánh → kịch bản chuẩn form theo cú pháp xưởng game.
 // =============================================================================
 import { buildSyntaxBlock, WORKSHOPS, WORKSHOP_LIST } from "./syntaxGuide";
 
@@ -10,58 +9,135 @@ const WORKSHOP_DEFS_BLOCK = WORKSHOP_LIST
   .map((w) => `- ${w.label}: ${w.desc}`)
   .join("\n");
 
-// ---------- Bước 1: Gợi ý bộ khung (dàn tổng) từ ý tưởng ----------
-export function buildPlanPrompt({ workshop, title, idea, genre, sceneCount, choicesPerScene, branchCount, notes, directionBlock, playerName, playerDesc, mainQuest }) {
+function stickToIdeaRules(idea) {
+  return `# ⚠️ QUY TẮC BẮT BUỘC — BÁM SÁT Ý TƯỞNG (KHÔNG ĐƯỢC THAY THẾ)
+- Ý tưởng dưới đây là NGUỒN DUY NHẤT. Bạn chỉ PHÁT TRIỂN THÊM chi tiết, KHÔNG được bịa thế giới / nhân vật / tên / cốt truyện khác.
+- Mọi tên nhân vật, hệ thống, chỉ số, tuyến, twist, địa danh đã nêu trong ý tưởng PHẢI giữ nguyên chữ (VD: "Hệ Thống 404", "Lâm Tịch", "Tạ Vãn Ninh"...).
+- CẤM viết sang thể loại/bối cảnh khác (cung đình, vương phi, v.v.) nếu ý tưởng không có.
+- Nếu ý tưởng đã liệt kê nhân vật/tuyến/kết thúc/chỉ số/gameplay — dùng ĐÚNG chúng, chỉ bổ sung cho đủ số lượng yêu cầu.
+
+# Ý TƯỞNG CỦA TÁC GIẢ (NGUỒN)
+"""${idea?.trim() || "(TRỐNG — dừng lại, không được bịa)"}"""`;
+}
+
+// ---------- Pass 1: nhân vật + bối cảnh + nhánh + kết thúc (KHÔNG dàn cảnh) ----------
+export function buildPlanCorePrompt({ workshop, title, idea, genre, branchCount, notes, directionBlock, playerName, playerDesc, mainQuest }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
-  return `Bạn là BIÊN KỊCH CHÍNH của một xưởng viết kịch bản game. Game master giao một ý tưởng và cần bạn dựng TOÀN BỘ BỘ KHUNG (dàn tổng) cho game ${w.label} — trước khi viết kịch bản thật.
+  return `Bạn là BIÊN KỊCH CHÍNH xưởng kịch bản game (${w.label}). Tác giả đã giao Ý TƯỞNG đầy đủ. Nhiệm vụ: trích xuất và phát triển BỘ CỐT LÕI (nhân vật, bối cảnh, nhánh, kết thúc) — CHƯA viết dàn cảnh.
 
-# XƯỞNG GAME ĐANG CHỌN
-${WORKSHOP_DEFS_BLOCK}
+${stickToIdeaRules(idea)}
 
-# XƯỞNG ĐANG DÙNG CHO DỰ ÁN NÀY: ${w.label}
-${w.desc}
+# XƯỞNG: ${w.label} — ${w.desc}
+# Tên game: ${title || "(theo ý tưởng)"}
+# Thể loại: ${genre || "(theo ý tưởng)"}
+# Số nhánh truyện: ${branchCount}
 
-# THÔNG SỐ
-- Số cảnh (dàn tổng): ${sceneCount}
-- Số lựa chọn mỗi cảnh: ${choicesPerScene}
-- Số nhánh truyện (đáp án chính): ${branchCount}
+${directionBlock ? `# Định hướng thêm\n${directionBlock}` : ""}
+${notes?.trim() ? `# Ghi chú thêm\n${notes.trim()}` : ""}
 
-${directionBlock ? `# ĐỊNH HƯỚNG CỦA TÁC GIẢ\n${directionBlock}` : ""}
+# NHÂN VẬT NHẬP VAI (nếu ý tưởng đã có tên thì dùng đúng tên đó)
+- Tên gợi ý từ form: ${playerName?.trim() || "(đọc trong ý tưởng — VD Lâm Tịch)"}
+- Lai lịch form: ${playerDesc?.trim() || "(đọc trong ý tưởng)"}
+- Nhiệm vụ chính form: ${mainQuest?.trim() || "(đọc trong ý tưởng — nhiệm vụ hệ thống / mục tiêu chính)"}
 
-# Ý TƯỞNG CỦA TÁC GIẢ
-"""${idea || "(trống — hãy dựng khung chuẩn cho xưởng này, có thể chỉnh sau)"}"""
-
-${notes?.trim() ? `# GHI CHÚ THÊM\n${notes.trim()}` : ""}
-
-# NHÂN VẬT NGƯỜI CHƠI NHẬP VAI (PLAYER — bắt buộc phải có, là vai người chơi điều khiển)
-- Tên / danh xưng: ${playerName?.trim() || "(chưa có — hãy đặt tên và xác định danh xưng)"}
-- Lai lịch / xuất thân: ${playerDesc?.trim() || "(chưa có — hãy tự dựng lai lịch hợp lý cho nhân vật này)"}
-
-# NHIỆM VỤ CHÍNH / MỤC TIÊU (MAIN QUEST — cốt lõi, mọi cảnh phải đẩy mạch về đây)
-${mainQuest?.trim() || "(chưa có — hãy tự đề xuất nhiệm vụ chính rõ ràng, có bước ngoặt và cái giá/điều phải hy sinh)"}
-
-# YÊU CẦU — trả về bộ khung đầy đủ để tác giả duyệt, gồm:
-- characters: danh sách nhân vật (tên, vai trò, tính cách, động cơ). NHÂN VẬT ĐẦU TIÊN PHẢI LÀ nhân vật người chơi nhập vai (role ghi rõ "Nhân vật nhập vai / Player"). Gồm đủ: nhân vật nhập vai, party/đồng hành, NPC quan trọng, phản diện.
-- settings: bối cảnh / địa điểm quan trọng (tên, mô tả, công dụng kể chuyện).
-- scenes: DÀN ${sceneCount} CẢNH theo đúng thứ tự — mỗi cảnh gồm title, description (sự kiện diễn ra, LUÔN nêu rõ nhân vật nhập vai làm gì trong cảnh), location, characters (nhân vật tham gia), foreshadow (phục bút cài/hồi đáp nếu có), choices (mảng ${choicesPerScene} lựa chọn — mỗi lựa chọn: text, effect (mô tả hiệu ứng cờ/chỉ số/vật phẩm), target (đến cảnh số mấy, hoặc kết thúc)). MỌI CẢNH PHẢI ĐẨY MẠCH về nhiệm vụ chính. Đánh dấu is_branch_point=true và branch_index (0..${branchCount - 1}) cho ${branchCount} cảnh quan trọng nhất — mỗi cảnh là điểm rẽ tương ứng 1 nhánh truyện, tại đó lựa chọn dẫn vào nhánh đó.
-- endings: danh sách kết thúc dự kiến (tên, loại TRUE_END/GOOD_END/NORMAL_END/BAD_END, mô tả) — ít nhất ${branchCount} kết thúc.
-- branches: danh sách ${branchCount} nhánh truyện (tên, mô tả ngắn) — mỗi nhánh tương ứng 1 đáp án/lựa chọn chính.
-- notes: ghi chú tổng thể cho biên kịch (nếu cần).
+# YÊU CẦU JSON
+- characters: danh sách đầy đủ. Phần tử ĐẦU TIÊN = nhân vật người chơi nhập vai (role: "Nhân vật nhập vai / Player"), dùng đúng tên trong ý tưởng. Tiếp theo: từng tuyến nữ chính/NPC/phản diện/hệ thống (nếu có) — đúng tên + tính cách + động cơ + mối quan hệ với player.
+- settings: địa điểm / không gian quan trọng trong ý tưởng (có thể suy ra thêm nếu ý tưởng không liệt kê, nhưng phải khớp bối cảnh).
+- branches: đúng ${branchCount} nhánh — nếu ý tưởng có 4 tuyến nhân vật thì mỗi nhánh = 1 tuyến đó; mô tả ngắn storyline của nhánh.
+- endings: ≥${branchCount} kết thúc (TRUE_END/GOOD_END/NORMAL_END/BAD_END) khớp ý tưởng (VD ending từng tuyến + True Ending).
+- player_name, player_desc, main_quest: trích từ ý tưởng (bắt buộc điền, không để trống).
+- notes: tóm tắt cơ chế gameplay (chỉ số, nhiệm vụ hệ thống, twist...) đã có trong ý tưởng.
 
 Trả JSON đúng schema.`;
 }
 
-export const PLAN_SCHEMA = {
+export const PLAN_CORE_SCHEMA = {
   type: "object",
   properties: {
     characters: {
       type: "array",
-      items: { type: "object", properties: { name: { type: "string" }, role: { type: "string" }, personality: { type: "string" }, motive: { type: "string" } }, required: ["name"] },
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          role: { type: "string" },
+          personality: { type: "string" },
+          motive: { type: "string" },
+        },
+        required: ["name", "role"],
+      },
     },
     settings: {
       type: "array",
-      items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } }, required: ["name"] },
+      items: {
+        type: "object",
+        properties: { name: { type: "string" }, description: { type: "string" } },
+        required: ["name"],
+      },
     },
+    endings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { name: { type: "string" }, type: { type: "string" }, description: { type: "string" } },
+        required: ["name"],
+      },
+    },
+    branches: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { name: { type: "string" }, description: { type: "string" } },
+        required: ["name"],
+      },
+    },
+    player_name: { type: "string" },
+    player_desc: { type: "string" },
+    main_quest: { type: "string" },
+    notes: { type: "string" },
+  },
+  required: ["characters", "settings", "endings", "branches", "player_name", "main_quest"],
+};
+
+// ---------- Pass 2+: dàn cảnh theo lô (mỗi lô ~8–10 cảnh) ----------
+export function buildPlanScenesChunkPrompt({
+  workshop,
+  idea,
+  coreBlock,
+  branchCount,
+  choicesPerScene,
+  startOrder,
+  count,
+  totalScenes,
+  prevScenesSummary,
+}) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  const endOrder = Math.min(startOrder + count - 1, totalScenes);
+  return `Bạn là BIÊN KỊCH CHÍNH xưởng kịch bản game (${w.label}). Đang dựng DÀN CẢNH theo lô — chỉ viết các cảnh từ số ${startOrder} đến ${endOrder} (tổng game ${totalScenes} cảnh).
+
+${stickToIdeaRules(idea)}
+
+# BỘ CỐT LÕI ĐÃ CHỐT (bám sát 100%)
+${coreBlock}
+
+# TIẾN ĐỘ DÀN CẢNH
+- Viết đúng các cảnh số: ${startOrder} … ${endOrder} (đủ ${endOrder - startOrder + 1} cảnh, không thiếu không thừa).
+- Mỗi cảnh ${choicesPerScene} lựa chọn (text + effect + target).
+- ${branchCount} nhánh truyện: đánh dấu is_branch_point=true + branch_index (0..${branchCount - 1}) tại các điểm rẽ quan trọng (ưu tiên rải đều theo tiến độ game, khớp từng tuyến nhân vật trong bộ cốt lõi).
+
+${prevScenesSummary?.trim() ? `# CÁC CẢNH TRƯỚC ĐÃ CÓ (nối mạch, không lặp)\n${prevScenesSummary.trim()}` : "(đây là lô cảnh đầu)"}
+
+# YÊU CẦU MỖI CẢNH
+- title, description (nêu rõ player làm gì + đẩy mạch nhiệm vụ chính / hệ thống nếu có), location, characters (tên đúng), foreshadow, choices[].
+- description 1–3 câu súc tích, bám ý tưởng (nhiệm vụ hệ thống, chỉ số Tình cảm/Tin tưởng/Nghi ngờ, twist vòng lặp... nếu ý tưởng có).
+- choices.target: "cảnh N" hoặc "kết thúc <tên>" hợp lý.
+
+Trả JSON: { scenes: [ ... ] } đúng số lượng.`;
+}
+
+export const PLAN_SCENES_CHUNK_SCHEMA = {
+  type: "object",
+  properties: {
     scenes: {
       type: "array",
       items: {
@@ -74,7 +150,15 @@ export const PLAN_SCHEMA = {
           foreshadow: { type: "string" },
           choices: {
             type: "array",
-            items: { type: "object", properties: { text: { type: "string" }, effect: { type: "string" }, target: { type: "string" } }, required: ["text"] },
+            items: {
+              type: "object",
+              properties: {
+                text: { type: "string" },
+                effect: { type: "string" },
+                target: { type: "string" },
+              },
+              required: ["text"],
+            },
           },
           is_branch_point: { type: "boolean" },
           branch_index: { type: "number" },
@@ -82,57 +166,73 @@ export const PLAN_SCHEMA = {
         required: ["title", "description"],
       },
     },
-    endings: {
-      type: "array",
-      items: { type: "object", properties: { name: { type: "string" }, type: { type: "string" }, description: { type: "string" } }, required: ["name"] },
-    },
-    branches: {
-      type: "array",
-      items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } }, required: ["name"] },
-    },
-    notes: { type: "string" },
   },
-  required: ["characters", "settings", "scenes", "endings", "branches"],
+  required: ["scenes"],
 };
 
-// ---------- Bước 2: Viết BẢN THẢO VĂN XUÔI cho toàn bộ cảnh của 1 nhánh ----------
-// Dùng JSON schema để lấy nhiều cảnh cùng lúc. Trả mảng theo thứ tự scene_order.
-export function buildBranchDraftPrompt({ workshop, title, idea, genre, planBlock, branch, scenes, playerName, playerDesc, mainQuest }) {
+/** @deprecated dùng buildPlanCorePrompt + buildPlanScenesChunkPrompt */
+export function buildPlanPrompt(args) {
+  return buildPlanCorePrompt(args);
+}
+
+export const PLAN_SCHEMA = PLAN_CORE_SCHEMA;
+
+export function formatCoreBlock(core) {
+  if (!core) return "(trống)";
+  const lines = [];
+  lines.push(`Player: ${core.player_name || "?"} — ${core.player_desc || ""}`);
+  lines.push(`Main quest: ${core.main_quest || "?"}`);
+  if (core.characters?.length) {
+    lines.push("## Nhân vật");
+    for (const c of core.characters) {
+      lines.push(`- ${c.name} (${c.role || "?"}): ${c.personality || ""} · ${c.motive || ""}`);
+    }
+  }
+  if (core.settings?.length) {
+    lines.push("## Bối cảnh");
+    for (const s of core.settings) lines.push(`- ${s.name}: ${s.description || ""}`);
+  }
+  if (core.branches?.length) {
+    lines.push("## Nhánh");
+    core.branches.forEach((b, i) => lines.push(`- [${i}] ${b.name}: ${b.description || ""}`));
+  }
+  if (core.endings?.length) {
+    lines.push("## Kết thúc");
+    for (const e of core.endings) lines.push(`- ${e.name} [${e.type || "NORMAL_END"}]: ${e.description || ""}`);
+  }
+  if (core.notes) lines.push(`## Ghi chú gameplay\n${core.notes}`);
+  return lines.join("\n");
+}
+
+// ---------- Bản thảo 1 nhánh (chia lô nếu nhiều cảnh) ----------
+export function buildBranchDraftPrompt({ workshop, title, idea, planBlock, branch, scenes, playerName, playerDesc, mainQuest }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
   const sceneBlock = scenes
-    .map((s) => `- [cảnh ${s.scene_order}] ${s.title}\n  Mô tả: ${s.description}\n  Địa điểm: ${s.location || "-"}\n  NV: ${s.characters || "-"}\n  Phục bút: ${s.foreshadow || "-"}\n  Lựa chọn: ${(s.choices || []).map((c) => `"${c.text}"${c.effect ? ` (${c.effect})` : ""}`).join(" | ") || "-"}`)
+    .map(
+      (s) =>
+        `- [cảnh ${s.scene_order}] ${s.title}\n  Mô tả: ${s.description}\n  Địa điểm: ${s.location || "-"}\n  NV: ${s.characters || "-"}\n  Lựa chọn: ${(s.choices || []).map((c) => `"${c.text}"`).join(" | ") || "-"}`
+    )
     .join("\n");
-  return `Bạn là BIÊN KỊCH của xưởng kịch bản game (${w.label}). Nhiệm vụ: viết BẢN THẢO VĂN XUÔI (bản thảo truyện để tác giả đọc thử) cho NHÁNH "${branch.name}" của game "${title}". Đây là bản thảo kể chuyện mạch lạc, KHÔNG phải kịch bản game có cú pháp — chỉ để tác giả duyệt nội dung.
+  return `Bạn là BIÊN KỊCH xưởng (${w.label}). Viết BẢN THẢO VĂN XUÔI cho NHÁNH "${branch.name}" của "${title}" — để tác giả đọc thử, KHÔNG phải cú pháp kịch bản game.
 
-# XƯỞNG: ${w.label} — ${w.desc}
+${stickToIdeaRules(idea)}
 
-# NHÂN VẬT NGƯỜI CHƠI NHẬP VAI (PLAYER — là vai người chơi điều khiển)
-- Tên: ${playerName?.trim() || "(theo bộ khung)"}
-- Lai lịch: ${playerDesc?.trim() || "(theo bộ khung)"}
+# Player: ${playerName || "?"} — ${playerDesc || ""}
+# Main quest: ${mainQuest || "?"}
 
-# NHIỆM VỤ CHÍNH / MỤC TIÊU (MAIN QUEST)
-${mainQuest?.trim() || "(theo bộ khung)"}
-
-# Ý TƯỞNG GỐC
-"""${idea || "(trống)"}"""
-
-# BỘ KHUNG ĐÃ DUYỆT
+# BỘ KHUNG
 ${planBlock}
 
 # NHÁNH: ${branch.name} — ${branch.description || ""}
 
-# CÁC CẢNH CỦA NHÁNH NÀY (theo thứ tự)
+# CÁC CẢNH CỦA NHÁNH
 ${sceneBlock}
 
 # YÊU CẦU
-- Viết bản thảo văn xuôi cho ĐÚNG từng cảnh theo đúng thứ tự đã cho, bám sát mô tả, nhân vật, phục bút và các lựa chọn.
-- Mạch chuyện LIỀN MẠCH: mỗi cảnh nối tiếp cảnh trước một cách tự nhiên.
-- NHÂN VẬT NHẬP VAI LÀ TRUNG TÂM: mọi cảnh xoay quanh hành động/quyết định của người chơi, và phải đẩy mạch về nhiệm vụ chính "${mainQuest?.trim() || ""}".
-- Nhân vật hành động/đối thoại ĐÚNG tính cách và động cơ; thể hiện phục bút khi cần.
-- Mỗi cảnh trả về 1 object: scene_order (số nguyên đúng thứ tự), title, draft (văn xuôi hoàn chỉnh của cảnh — khoảng 200-350 từ, kể rõ diễn biến, lời thoại trong ngoặc kép).
-- Trả về ĐỦ TẤT CẢ các cảnh của nhánh, không thiếu, theo đúng thứ tự.
+- Đủ từng cảnh theo scene_order; mỗi draft 150–280 từ; player là trung tâm; bám tên/tuyến/hệ thống trong ý tưởng.
+- Mạch liền mạch giữa các cảnh.
 
-Trả JSON đúng schema.`;
+Trả JSON: { scenes: [{ scene_order, title, draft }] }.`;
 }
 
 export const BRANCH_DRAFT_SCHEMA = {
@@ -154,74 +254,72 @@ export const BRANCH_DRAFT_SCHEMA = {
   required: ["scenes"],
 };
 
-// ---------- Bước 3: Viết KỊCH BẢN CHUẨN FORM cho 1 cảnh (theo cú pháp xưởng) ----------
-// Mỗi cảnh viết riêng để kiểm soát chất lượng; trả văn bản thuần đúng cú pháp.
-export function buildSceneScriptPrompt({ workshop, title, idea, planBlock, branch, scene, prevScript, nextScene, isFirst, isLast, totalScenes, playerName, playerDesc, mainQuest }) {
+// ---------- Kịch bản chuẩn form 1 cảnh ----------
+export function buildSceneScriptPrompt({
+  workshop,
+  title,
+  idea,
+  planBlock,
+  branch,
+  scene,
+  prevScript,
+  nextScene,
+  isFirst,
+  isLast,
+  totalScenes,
+  playerName,
+  playerDesc,
+  mainQuest,
+}) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
   const sceneNumber = scene.scene_order;
   const choicesBlock = (scene.choices || [])
     .map((c) => `- "${c.text}"${c.effect ? ` → ${c.effect}` : ""}${c.target ? ` → ${c.target}` : ""}`)
     .join("\n");
-  const playerBlock = `- Nhân vật nhập vai (Player): ${playerName?.trim() || "(theo bộ khung)"}${playerDesc?.trim() ? ` — ${playerDesc.trim()}` : ""}\n- Nhiệm vụ chính (Main Quest): ${mainQuest?.trim() || "(theo bộ khung)"}`;
-  return `Bạn là BIÊN KỊCH CHÍNH của xưởng kịch bản game (${w.label}). Hãy viết PHÂN CẢNH KỊCH BẢN GAME HOÀN CHỈNH cho cảnh số ${sceneNumber} "${scene.title}" — đúng cú pháp kịch bản của XƯỞNG ${w.label}. TUYỆT ĐỐI không giải thích meta, không viết văn xuôi truyện dài dòng.
+  return `Bạn là BIÊN KỊCH CHÍNH (${w.label}). Viết PHÂN CẢNH KỊCH BẢN GAME hoàn chỉnh — đúng cú pháp xưởng. Không meta.
 
 ${buildSyntaxBlock(workshop)}
 
-# GAME: ${title} — ${w.label}
-# NHÂN VẬT NHẬP VAI & NHIỆM VỤ CHÍNH
-${playerBlock}
+${stickToIdeaRules(idea)}
 
-# Ý TƯỞNG GỐC
-"""${idea || "(trống)"}"""
+# GAME: ${title}
+# Player: ${playerName || "?"} — ${playerDesc || ""}
+# Main quest: ${mainQuest || "?"}
+# NHÁNH: ${branch.name}
 
-# BỘ KHUNG ĐÃ DUYỆT
+# BỘ KHUNG
 ${planBlock}
 
-# NHÁNH: ${branch.name} — ${branch.description || ""}
+# CẢNH ${sceneNumber}/${totalScenes}: ${scene.title}
+- Sự kiện: ${scene.description}
+- Địa điểm: ${scene.location || "?"}
+- NV: ${scene.characters || "?"}
+- Phục bút: ${scene.foreshadow || "-"}
+- Lựa chọn:
+${choicesBlock || "- (tiếp tục)"}
 
-# PHÂN CẢNH NÀY (cảnh ${sceneNumber}/${totalScenes})
-- Tiêu đề: ${scene.title}
-- Mô tả sự kiện: ${scene.description}
-- Địa điểm: ${scene.location || "(tự chọn hợp lý)"}
-- Nhân vật: ${scene.characters || "(tự chọn hợp lý)"}
-- Phục bút: ${scene.foreshadow || "(không có)"}
-- Lựa chọn cần đưa vào cuối cảnh:
-${choicesBlock || "- (cảnh này không bắt buộc rẽ nhánh, có thể kết bằng chỉ dẫn chuyển cảnh)"}
+${isFirst ? `BẮT BUỘC mở bằng ## GIỚI THIỆU (player ${playerName || ""} + nhiệm vụ ${mainQuest || ""}) rồi ## CẢNH ${sceneNumber} — ${scene.title}.` : ""}
+${!isFirst && prevScript ? `# Cảnh trước (nối mạch)\n"""${prevScript.slice(-1200)}"""` : ""}
+${isLast ? "CẢNH CUỐI: lựa chọn dẫn ## KẾT THÚC <nhãn> — <Tên> [LOẠI] viết kèm trong bài trả lời." : `Cảnh kế: ## CẢNH ${nextScene?.scene_order} — ${nextScene?.title || ""}. Dùng → Đến cảnh ${nextScene?.scene_order} khi cần.`}
 
-${isFirst ? `(ĐÂY LÀ CẢNH ĐẦU TIÊN của kịch bản nhánh. BẮT BUỘC viết khối '## GIỚI THIỆU' mở đầu game: giới thiệu nhân vật nhập vai (${playerName?.trim() || "tên nhân vật"}), lai lịch ngắn và nhiệm vụ chính (${mainQuest?.trim() || "nhiệm vụ"}), rồi mới viết '## CẢNH ${sceneNumber} — ${scene.title}'.)` : ""}
-${!isFirst && prevScript ? `# CẢNH TRƯỚC (phải NỐI MẠCH — cảnh này mở đầu phải nhắc lại tình huống vừa xảy ra ở cuối cảnh trước)\n"""${prevScript.slice(-1500)}"""` : ""}
-
-${isLast ? "(ĐÂY LÀ CẢNH CUỐI của nhánh: các lựa chọn PHẢI dẫn tới khối '## KẾT THÚC <nhãn> — <Tên> [LOẠI]' mà bạn tạo ngay trong bài trả lời này, viết kèm văn bản kết thúc.)" : `(Cảnh kế tiếp trong nhánh này là '## CẢNH ${nextScene?.scene_order} — ${nextScene?.title || ""}'. Nếu cảnh có lựa chọn rẽ tiếp theo, dùng '→ Đến cảnh ${nextScene?.scene_order}' trỏ tới cảnh đó.)`}
-
-# YÊU CẦU
-- Viết ĐÚNG định dạng: "## CẢNH ${sceneNumber} — <Tên cảnh>" (hoặc nhãn khác phù hợp), văn bản diễn biến, rồi khối lựa chọn "**A —**", "**B —"..., mỗi lựa chọn kèm hiệu ứng "→ ..." và "→ Đến cảnh ..." / "→ Kết thúc ...".
-- TUYỆT ĐỐI chỉ trỏ "→ Đến cảnh N" tới các cảnh THẬT SỰ tồn tại trong kịch bản nhánh này. Cảnh kế hợp lệ là ${nextScene ? `"## CẢNH ${nextScene.scene_order}"` : "(không có — đây là cảnh cuối)"}.
-- NHÂN VẬT NHẬP VAI LÀ TRUNG TÂM của mọi cảnh; mọi diễn biến phải đẩy mạch về nhiệm vụ chính "${mainQuest?.trim() || ""}".
-- Chỉ dùng cờ/chỉ số/vật phẩm hợp lý, đảm bảo logic (vật phẩm/cờ dùng phải được tạo ở phía trước trong nhánh).
-- Nhân vật, địa điểm, phục bút bám sát bộ khung đã duyệt.
-Chỉ trả nội dung kịch bản phân cảnh (có thể kèm khối KẾT THÚC nếu là cảnh cuối), không lời dẫn ngoài.`;
+Chỉ trả nội dung kịch bản phân cảnh.`;
 }
 
-// ---------- Bước 3b: Sửa kịch bản 1 cảnh theo góp ý ----------
-export function buildSceneScriptRevisionPrompt({ workshop, title, planBlock, branch, scene, currentContent, feedback }) {
+export function buildSceneScriptRevisionPrompt({ workshop, title, planBlock, branch, scene, currentContent, feedback, idea }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
-  return `Bạn là BIÊN KỊCH CHÍNH của xưởng kịch bản game (${w.label}). Game master vừa xem kịch bản cảnh "${scene.title}" và muốn SỬA theo góp ý. Nhiệm vụ: viết lại TOÀN BỘ phân cảnh, GIỮ phần hay, sửa đúng các điểm được góp ý. TUYỆT ĐỐI không giải thích meta — chỉ trả kịch bản hoàn chỉnh.
+  return `Bạn là BIÊN KỊCH CHÍNH (${w.label}). Sửa TOÀN BỘ phân cảnh theo góp ý. Không meta.
 
 ${buildSyntaxBlock(workshop)}
+${idea?.trim() ? stickToIdeaRules(idea) : ""}
 
-# GAME: ${title} — ${w.label}
-# NHÁNH: ${branch.name} — ${branch.description || ""}
-# PHÂN CẢNH: ${scene.title} — ${scene.description}
+# GAME: ${title} — NHÁNH ${branch?.name || "?"}
+# CẢNH: ${scene?.title || "?"} — ${scene?.description || ""}
 
 # KỊCH BẢN HIỆN TẠI
 """${currentContent}"""
 
-# GÓP Ý CỦA TÁC GIẢ (bám sát từng ý)
+# GÓP Ý
 ${feedback}
 
-# YÊU CẦU
-- Sửa đúng từng điểm góp ý, phần khác giữ nguyên chất lượng.
-- Giữ TUYỆT ĐỐI cú pháp kịch bản của XƯỞNG ${w.label} (khối CẢNH, lựa chọn "**A —**", hiệu ứng "→ ...", "→ Đến cảnh"/"→ Kết thúc", khối "## KẾT THÚC").
-- Không làm mâu thuẫn với bộ khung đã duyệt.
-Chỉ trả nội dung kịch bản phân cảnh, không lời dẫn ngoài.`;
+Giữ cú pháp xưởng ${w.label}. Chỉ trả kịch bản.`;
 }

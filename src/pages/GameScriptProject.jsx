@@ -101,9 +101,8 @@ export default function GameScriptProject() {
           <Clapperboard className="w-6 h-6 text-primary" /> Xưởng Kịch Bản Game
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Nhập ý tưởng (loại game, thể loại, số cảnh, số lựa chọn) → AI gợi ý bộ khung (nhân vật, bối cảnh, dàn cảnh, lựa chọn, kết thúc)
-          → bạn duyệt/chỉnh → AI viết <b>4 nhánh truyện</b> → bạn đọc, chốt → AI viết <b>kịch bản chuẩn form</b> đúng cú pháp của từng xưởng game
-          (Thiết Kế / Hệ Thống / NPC / Cung Đấu / Trọng Sinh Làm Giàu) → <b>copy</b> dán vào Xưởng Game là sản xuất được.
+          Dán <b>ý tưởng đầy đủ</b> (nguồn duy nhất) → AI phát triển bộ khung (đúng tên nhân vật/tuyến/hệ thống trong ý tưởng)
+          → duyệt → viết nhánh → xuất <b>kịch bản chuẩn form</b> đúng cú pháp 5 xưởng game → copy dán vào Xưởng Game.
         </p>
       </header>
 

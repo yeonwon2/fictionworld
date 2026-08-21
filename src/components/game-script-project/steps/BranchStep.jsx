@@ -10,7 +10,7 @@ import {
 
 // Bước 3 — viết BẢN THẢO VĂN XUÔI cho từng nhánh truyện (theo số nhánh đã chọn),
 // dựa trên bộ khung đã duyệt. Tác giả đọc bản thảo, chỉnh sửa rồi chốt.
-export default function BranchStep({ project, patchProject, directionBlock, onBack, onNext }) {
+export default function BranchStep({ project, patchProject, onBack, onNext }) {
   const [meta, setMeta] = useState(null);
   const [scenes, setScenes] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -63,54 +63,61 @@ export default function BranchStep({ project, patchProject, directionBlock, onBa
      
   }, [project.id]);
 
-  // Xác định các cảnh thuộc 1 nhánh: từ điểm rẽ của nhánh đó trở đi.
-  // Điểm rẽ của nhánh i là cảnh có is_branch_point && branch_index === i.
+  // Cảnh chung (không gắn nhánh khác) + điểm rẽ của nhánh này — đủ 1 kịch bản tuyến.
   function scenesForBranch(branchIndex) {
-    const branchPoint = scenes.find((s) => s.is_branch_point && s.branch_index === branchIndex);
-    if (!branchPoint) return scenes;
-    const startOrder = branchPoint.scene_order;
-    return scenes.filter((s) => s.scene_order >= startOrder);
+    return scenes.filter((s) => {
+      if (!s.is_branch_point) return true;
+      return Number(s.branch_index) === Number(branchIndex);
+    });
   }
 
-  // Gộp bộ khung thành block văn bản đưa vào prompt
   function buildPlanBlockText() {
     const lines = [];
+    if (project.idea?.trim()) lines.push("## Ý tưởng nguồn\n" + project.idea.trim().slice(0, 6000));
     if (meta?.characters?.length) lines.push("## Nhân vật\n" + meta.characters.map((c) => `- ${c.name}${c.role ? ` (${c.role})` : ""}: ${c.personality || ""} ${c.motive ? `· ${c.motive}` : ""}`).join("\n"));
     if (meta?.settings?.length) lines.push("## Bối cảnh\n" + meta.settings.map((s) => `- ${s.name}: ${s.description || ""}`).join("\n"));
     if (meta?.endings?.length) lines.push("## Kết thúc\n" + meta.endings.map((e) => `- ${e.name} [${e.type || "NORMAL_END"}]: ${e.description || ""}`).join("\n"));
     return lines.join("\n\n");
   }
 
+  const DRAFT_CHUNK = 6;
+
   const handleWriteBranch = async (branch) => {
     const branchScenes = scenesForBranch(branch.branch_index);
     if (!branchScenes.length) return;
+    if (!String(project.idea || "").trim()) {
+      setError("Ý tưởng trống — quay lại bước Ý Tưởng và lưu lại trước khi viết nhánh.");
+      return;
+    }
     setError("");
     setWritingBranch(branch.id);
     try {
       const planBlock = buildPlanBlockText();
-      const prompt = buildBranchDraftPrompt({
-        workshop: project.workshop,
-        title: project.title,
-        idea: project.idea,
-        genre: project.genre,
-        planBlock,
-        branch,
-        scenes: branchScenes,
-        playerName: project.player_name,
-        playerDesc: project.player_desc,
-        mainQuest: project.main_quest,
-      });
-      const res = await aiCall(prompt, { jsonSchema: BRANCH_DRAFT_SCHEMA });
-      const drafts = res?.scenes || [];
-      for (const d of drafts) {
-        const sc = branchScenes.find((s) => s.scene_order === d.scene_order);
-        if (!sc) continue;
-        await upsertGamePlanSceneContent(project.id, branch.id, sc.id, {
-          scene_order: sc.scene_order,
-          title: d.title || sc.title,
-          draft: d.draft || "",
-          status: "đã viết",
+      for (let i = 0; i < branchScenes.length; i += DRAFT_CHUNK) {
+        const chunk = branchScenes.slice(i, i + DRAFT_CHUNK);
+        setStatus(`Nhánh "${branch.name}": bản thảo cảnh ${chunk[0].scene_order}–${chunk[chunk.length - 1].scene_order}...`);
+        const prompt = buildBranchDraftPrompt({
+          workshop: project.workshop,
+          title: project.title,
+          idea: project.idea,
+          planBlock,
+          branch,
+          scenes: chunk,
+          playerName: project.player_name,
+          playerDesc: project.player_desc,
+          mainQuest: project.main_quest,
         });
+        const res = await aiCall(prompt, { jsonSchema: BRANCH_DRAFT_SCHEMA });
+        for (const d of res?.scenes || []) {
+          const sc = chunk.find((s) => s.scene_order === d.scene_order) || chunk.find((s) => s.title === d.title);
+          if (!sc) continue;
+          await upsertGamePlanSceneContent(project.id, branch.id, sc.id, {
+            scene_order: sc.scene_order,
+            title: d.title || sc.title,
+            draft: d.draft || "",
+            status: "đã viết",
+          });
+        }
       }
       await updateGamePlanBranch(branch.id, { status: "đã viết" });
       await load();

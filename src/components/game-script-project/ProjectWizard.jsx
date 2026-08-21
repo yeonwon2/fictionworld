@@ -62,7 +62,35 @@ export default function ProjectWizard({ projectId, storyName, directionBlock, on
 
   const updateField = (key, value) => setProject((p) => ({ ...p, [key]: value }));
 
-  const goto = (id) => setStep(id);
+  const projectFields = (p) => ({
+    workshop: p.workshop,
+    title: p.title,
+    idea: p.idea,
+    genre: p.genre,
+    scene_count: p.scene_count,
+    choices_per_scene: p.choices_per_scene,
+    branch_count: p.branch_count,
+    notes: p.notes,
+    player_name: p.player_name,
+    player_desc: p.player_desc,
+    main_quest: p.main_quest,
+  });
+
+  // Chuyển bước: luôn await lưu ý tưởng/thông số trước để AI không nhận idea rỗng.
+  const goto = async (id) => {
+    if (id === step || !project) return;
+    setSaving(true);
+    try {
+      const row = await updateGameScriptProject(projectId, projectFields(project));
+      setProject((p) => ({ ...p, ...row }));
+      onChanged?.();
+      setStep(id);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading || !project) {
     return (
@@ -119,42 +147,18 @@ export default function ProjectWizard({ projectId, storyName, directionBlock, on
       </div>
 
       {step === "idea" && (
-        <IdeaStep
-          project={project}
-          updateField={updateField}
-          patchProject={patchProject}
-          onNext={() => goto("plan")}
-          storyName={storyName}
-        />
+        <IdeaStep project={project} updateField={updateField} patchProject={patchProject} onNext={() => goto("plan")} />
       )}
 
       {step === "plan" && (
-        <PlanStep
-          project={project}
-          patchProject={patchProject}
-          directionBlock={directionBlock}
-          onBack={() => goto("idea")}
-          onNext={() => goto("branch")}
-        />
+        <PlanStep project={project} patchProject={patchProject} directionBlock={directionBlock} onBack={() => goto("idea")} onNext={() => goto("branch")} />
       )}
 
       {step === "branch" && (
-        <BranchStep
-          project={project}
-          patchProject={patchProject}
-          directionBlock={directionBlock}
-          onBack={() => goto("plan")}
-          onNext={() => goto("final")}
-        />
+        <BranchStep project={project} patchProject={patchProject} onBack={() => goto("plan")} onNext={() => goto("final")} />
       )}
 
-      {step === "final" && (
-        <FinalStep
-          project={project}
-          patchProject={patchProject}
-          onBack={() => goto("branch")}
-        />
-      )}
+      {step === "final" && <FinalStep project={project} patchProject={patchProject} onBack={() => goto("branch")} />}
     </div>
   );
 }

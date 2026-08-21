@@ -1,23 +1,38 @@
 import React, { useState } from "react";
 import { Loader2, ArrowRight, Sparkles } from "lucide-react";
-import { WORKSHOPS, WORKSHOP_LIST } from "@/lib/gameScriptProject/syntaxGuide";
+import { WORKSHOP_LIST } from "@/lib/gameScriptProject/syntaxGuide";
 
-const GENRES = [
-  "Tiên Hiệp / Tu Tiên", "Huyền Huyễn", "Võ Hiệp / Giang Hồ", "Ngôn Tình / Cổ Đại",
-  "Fantasy / Kỳ Ảo", "Dark Fantasy / Ma Pháp", "Cyberpunk / Tương Lai", "Khoa Học Viễn Tưởng",
-  "Steampunk / Cơ Khí", "Trinh Thám / Án Mạng", "Kinh Dị / Tâm Linh", "Hậu Tận Thế",
-  "Lịch Sử / Cổ Đại", "Tâm Lý / Đời Thường", "Học Đường", "Doanh Nhân / Trọng Sinh",
-];
-
-// Bước 1 — nhập ý tưởng + thông số (loại game, thể loại, số cảnh, số lựa chọn, số nhánh).
-export default function IdeaStep({ project, updateField, patchProject, onNext, storyName }) {
+// Bước 1 — dán ý tưởng đầy đủ (nguồn duy nhất) + chọn xưởng + thông số.
+export default function IdeaStep({ project, updateField, patchProject, onNext }) {
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const payloadFromProject = () => ({
+    workshop: project.workshop,
+    title: project.title,
+    idea: project.idea,
+    genre: project.genre,
+    scene_count: project.scene_count,
+    choices_per_scene: project.choices_per_scene,
+    branch_count: project.branch_count,
+    notes: project.notes,
+    player_name: project.player_name,
+    player_desc: project.player_desc,
+    main_quest: project.main_quest,
+  });
 
   const handleNext = async () => {
+    setErr("");
+    if (!String(project.idea || "").trim()) {
+      setErr("Hãy dán / nhập Ý TƯỞNG đầy đủ trước — đây là nguồn duy nhất để AI phát triển kịch bản.");
+      return;
+    }
     setSaving(true);
     try {
-      await patchProject({ status: "idea" });
+      await patchProject({ ...payloadFromProject(), status: "idea" });
       onNext();
+    } catch (e) {
+      setErr("Không lưu được ý tưởng: " + (e?.message || "lỗi"));
     } finally {
       setSaving(false);
     }
@@ -28,18 +43,20 @@ export default function IdeaStep({ project, updateField, patchProject, onNext, s
       <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
-          <h3 className="font-display font-semibold text-base">1. Ý Tưởng & Thông Số</h3>
+          <h3 className="font-display font-semibold text-base">1. Ý Tưởng — nguồn duy nhất</h3>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
-          Chọn loại game (xưởng sản xuất — quyết định cú pháp kịch bản cuối), nhập ý tưởng và các thông số.
+          Dán toàn bộ ý tưởng (nhân vật, tuyến, hệ thống, chỉ số, twist, ending...). AI <b>chỉ phát triển từ đây</b>, không được bịa thế giới khác.
+          Tên nhân vật / nhiệm vụ có thể để trống — AI sẽ trích từ ý tưởng.
         </p>
 
         <div>
-          <div className="text-xs font-semibold text-muted-foreground mb-2">Loại game (xưởng sản xuất)</div>
+          <div className="text-xs font-semibold text-muted-foreground mb-2">Loại game (xưởng sản xuất — cú pháp kịch bản cuối)</div>
           <div className="grid sm:grid-cols-2 gap-2">
             {WORKSHOP_LIST.map((w) => (
               <button
                 key={w.id}
+                type="button"
                 onClick={() => updateField("workshop", w.id)}
                 className={`text-left rounded-xl border p-3 transition ${
                   project.workshop === w.id ? "border-primary/60 bg-primary/10" : "border-border hover:bg-muted"
@@ -58,75 +75,61 @@ export default function IdeaStep({ project, updateField, patchProject, onNext, s
             value={project.title || ""}
             onChange={(e) => updateField("title", e.target.value)}
             className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            placeholder="VD: Hệ Thống Bắt Tôi Cứu Nữ Phụ Khỏi Kết Cục BE"
           />
         </label>
 
         <label className="block text-xs text-muted-foreground">
-          Thể loại
-          <select
-            value={project.genre || ""}
-            onChange={(e) => updateField("genre", e.target.value)}
-            className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">(chọn thể loại)</option>
-            {GENRES.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block text-xs text-muted-foreground">
-          Ý tưởng / bối cảnh
+          Ý tưởng đầy đủ <span className="text-destructive">*</span>
           <textarea
             value={project.idea || ""}
             onChange={(e) => updateField("idea", e.target.value)}
-            rows={4}
-            placeholder={`VD: Nữ hiệp mất ký ức ở thế giới ${WORKSHOPS[project.workshop]?.label || ""}, phải tìm lại danh tính qua các thành bang, có 1 âm mưu lớn phía sau...`}
-            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y"
+            rows={16}
+            placeholder="Dán toàn bộ ý tưởng ở đây: bối cảnh, hệ thống, nhân vật nhập vai, 4 tuyến, gameplay, chỉ số, twist, ending..."
+            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y font-sans leading-relaxed min-h-[280px]"
           />
+          <span className="text-[10px] text-muted-foreground">{(project.idea || "").length} ký tự</span>
         </label>
 
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block text-xs text-muted-foreground">
-            Nhân vật người chơi nhập vai (tên)
+            Nhân vật nhập vai (tuỳ chọn — để trống AI trích từ ý tưởng)
             <input
               value={project.player_name || ""}
               onChange={(e) => updateField("player_name", e.target.value)}
-              placeholder="VD: Linh — Nữ Hiệp Mất Ký Ức"
+              placeholder="VD: Lâm Tịch"
               className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </label>
           <label className="block text-xs text-muted-foreground">
-            Lai lịch / xuất thân (tuỳ chọn)
+            Nhiệm vụ chính (tuỳ chọn)
             <input
-              value={project.player_desc || ""}
-              onChange={(e) => updateField("player_desc", e.target.value)}
-              placeholder="VD: Từng là thủ lĩnh hội kiếm sĩ, mất trí nhớ sau trận chiến..."
+              value={project.main_quest || ""}
+              onChange={(e) => updateField("main_quest", e.target.value)}
+              placeholder="VD: Sửa BE các nữ phụ, đạt 100 Điểm Vận Mệnh"
               className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </label>
         </div>
 
         <label className="block text-xs text-muted-foreground">
-          Nhiệm vụ chính / mục tiêu
-          <textarea
-            value={project.main_quest || ""}
-            onChange={(e) => updateField("main_quest", e.target.value)}
-            rows={2}
-            placeholder="VD: Tìm lại danh tính của mình và vạch trần âm mưu đứng sau trận chiến đã cướp đi ký ức..."
-            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y"
+          Lai lịch ngắn (tuỳ chọn)
+          <input
+            value={project.player_desc || ""}
+            onChange={(e) => updateField("player_desc", e.target.value)}
+            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
           />
         </label>
 
         <div className="grid sm:grid-cols-3 gap-3">
           <label className="block text-xs text-muted-foreground">
-            Số cảnh (dàn tổng)
+            Số cảnh
             <input
               type="number"
               min={5}
-              max={200}
+              max={120}
               value={project.scene_count ?? 50}
-              onChange={(e) => updateField("scene_count", Math.max(5, Math.min(200, Number(e.target.value) || 50)))}
+              onChange={(e) => updateField("scene_count", Math.max(5, Math.min(120, Number(e.target.value) || 50)))}
               className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </label>
@@ -142,7 +145,7 @@ export default function IdeaStep({ project, updateField, patchProject, onNext, s
             />
           </label>
           <label className="block text-xs text-muted-foreground">
-            Số nhánh truyện
+            Số nhánh
             <input
               type="number"
               min={2}
@@ -153,27 +156,19 @@ export default function IdeaStep({ project, updateField, patchProject, onNext, s
             />
           </label>
         </div>
-
-        <label className="block text-xs text-muted-foreground">
-          Ghi chú thêm (tuỳ chọn)
-          <textarea
-            value={project.notes || ""}
-            onChange={(e) => updateField("notes", e.target.value)}
-            rows={2}
-            placeholder="Tông, mức độ trưởng thành, ràng buộc, điều muốn tránh..."
-            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y"
-          />
-        </label>
       </div>
+
+      {err && <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{err}</div>}
 
       <div className="flex items-center justify-end">
         <button
+          type="button"
           onClick={handleNext}
           disabled={saving}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-          Tiếp tục: AI gợi ý bộ khung
+          Lưu ý tưởng → AI phát triển bộ khung
         </button>
       </div>
     </div>
