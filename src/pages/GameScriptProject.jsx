@@ -184,6 +184,8 @@ export default function GameScriptProject() {
                 <p className="text-xs text-muted-foreground mt-1">
                   {p.scene_count} cảnh · {p.branch_count} nhánh · {p.choices_per_scene} lựa chọn/cảnh
                 </p>
+                {p.player_name && <p className="text-[11px] text-muted-foreground mt-1 truncate">🎮 {p.player_name}</p>}
+                {p.main_quest && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">🎯 {p.main_quest}</p>}
                 <p className="text-[11px] text-muted-foreground mt-2 capitalize">Trạng thái: {p.status}</p>
                 <span
                   onClick={(e) => handleDelete(e, p.id)}

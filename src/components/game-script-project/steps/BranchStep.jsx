@@ -96,6 +96,9 @@ export default function BranchStep({ project, patchProject, directionBlock, onBa
         planBlock,
         branch,
         scenes: branchScenes,
+        playerName: project.player_name,
+        playerDesc: project.player_desc,
+        mainQuest: project.main_quest,
       });
       const res = await aiCall(prompt, { jsonSchema: BRANCH_DRAFT_SCHEMA });
       const drafts = res?.scenes || [];

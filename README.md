@@ -39,10 +39,10 @@ Nếu bạn đã có database Supabase từ trước: bảng `writer_docs` là b
 
 Trang `/xuong-kich-ban-game` — luồng wizard viết kịch bản game theo đúng "quy ước trình bày" của từng xưởng sản xuất game (để dán thẳng vào Xưởng Game là chạy được):
 
-1. **Ý tưởng** — nhập loại game (xưởng sản xuất: Thiết Kế / Hệ Thống / NPC / Cung Đấu / Trọng Sinh Làm Giàu), thể loại, số cảnh (VD 50), số lựa chọn/cảnh, số nhánh.
-2. **Bộ khung & duyệt** — AI gợi ý nhân vật, bối cảnh, dàn cảnh (kèm lựa chọn + đích nhánh), kết thúc dự kiến; bạn duyệt/chỉnh sửa từng mục và đánh dấu điểm rẽ nhánh.
-3. **4 nhánh truyện** — AI viết bản thảo văn xuôi cho từng nhánh; bạn đọc, sửa, chốt.
-4. **Kịch bản chuẩn form** — AI viết từng phân cảnh theo **đúng cú pháp parser** của xưởng đã chọn (`## CẢNH N`, `**A —**`, `→ Chỉ số`, `→ Cờ`, `→ Vật phẩm`, `→ Đến cảnh`, `→ Kết thúc [LOẠI]`, và riêng `→ Hệ thống:` / `→ Chỉ dụ:` / `→ Cơ hội:` / `→ Ảnh:` tuỳ xưởng) → bạn copy dán vào Xưởng Game tương ứng để sản xuất.
+1. **Ý tưởng** — nhập loại game (xưởng sản xuất: Thiết Kế / Hệ Thống / NPC / Cung Đấu / Trọng Sinh Làm Giàu), thể loại, số cảnh (VD 50), số lựa chọn/cảnh, số nhánh, **nhân vật người chơi nhập vai** và **nhiệm vụ chính**.
+2. **Bộ khung & duyệt** — AI gợi ý nhân vật (bắt đầu bằng nhân vật nhập vai), bối cảnh, dàn cảnh (kèm lựa chọn + đích nhánh), kết thúc dự kiến; bạn duyệt/chỉnh sửa từng mục và đánh dấu điểm rẽ nhánh. Mọi cảnh đều đẩy mạch về nhiệm vụ chính.
+3. **4 nhánh truyện** — AI viết bản thảo văn xuôi cho từng nhánh (lấy nhân vật nhập vai làm trung tâm); bạn đọc, sửa, chốt.
+4. **Kịch bản chuẩn form** — AI viết từng phân cảnh theo **đúng cú pháp parser** của xưởng đã chọn (`## CẢNH N`, `**A —**`, `→ Chỉ số`, `→ Cờ`, `→ Vật phẩm`, `→ Đến cảnh`, `→ Kết thúc [LOẠI]`, và riêng `→ Hệ thống:` / `→ Chỉ dụ:` / `→ Cơ hội:` / `→ Ảnh:` tuỳ xưởng). Mỗi kịch bản mở đầu bằng khối `## GIỚI THIỆU` nêu rõ nhân vật nhập vai + nhiệm vụ chính → bạn copy dán vào Xưởng Game tương ứng để sản xuất.
 
 ### Bảng mới (luồng wizard)
 

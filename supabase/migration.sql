@@ -310,10 +310,17 @@ create table if not exists public.game_script_projects (
   choices_per_scene integer not null default 3,
   branch_count integer not null default 4,
   notes text,
+  player_name text,
+  player_desc text,
+  main_quest text,
   status text not null default 'idea',
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+-- Nâng cấp: thêm cột nhân vật nhập vai + nhiệm vụ chính cho bảng đã tồn tại từ trước
+alter table public.game_script_projects add column if not exists player_name text;
+alter table public.game_script_projects add column if not exists player_desc text;
+alter table public.game_script_projects add column if not exists main_quest text;
 create index if not exists game_script_projects_story_idx on public.game_script_projects (story_id);
 create index if not exists game_script_projects_updated_idx on public.game_script_projects (updated_at desc);
 

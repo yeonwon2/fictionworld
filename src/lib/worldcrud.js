@@ -412,7 +412,7 @@ export async function deleteGameScene(id) {
 
 // ---------- Xưởng Kịch Bản Game (luồng mới) — game_script_projects ----------
 // Wizard: ý tưởng → AI gợi ý bộ khung → duyệt → 4 nhánh → chốt → xuất kịch bản.
-const GSP_COLUMNS = "id, story_id, workshop, title, idea, genre, scene_count, choices_per_scene, branch_count, notes, status, updated_at, created_at";
+const GSP_COLUMNS = "id, story_id, workshop, title, idea, genre, scene_count, choices_per_scene, branch_count, notes, player_name, player_desc, main_quest, status, updated_at, created_at";
 const GPM_COLUMNS = "project_id, characters, settings, endings, branches, notes, updated_at, created_at";
 const GPS_COLUMNS = "id, project_id, scene_order, title, description, location, characters, foreshadow, choices, is_branch_point, branch_index, status, updated_at, created_at";
 const GPB_COLUMNS = "id, project_id, branch_index, name, description, scene_order_ids, status, updated_at, created_at";

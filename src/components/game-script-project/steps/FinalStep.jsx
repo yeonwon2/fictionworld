@@ -93,6 +93,9 @@ export default function FinalStep({ project, patchProject, onBack }) {
           isFirst: i === 0,
           isLast,
           totalScenes: branchScenes.length,
+          playerName: project.player_name,
+          playerDesc: project.player_desc,
+          mainQuest: project.main_quest,
         });
         const res = await aiCall(prompt);
         const script = String(res || "").trim();
@@ -128,7 +131,10 @@ export default function FinalStep({ project, patchProject, onBack }) {
   function buildFullScript(branch) {
     const list = (contents[branch.id] || []).slice().sort((a, b) => a.scene_order - b.scene_order);
     const blocks = list.filter((c) => c.script?.trim()).map((c) => c.script.trim());
-    const header = `# ${project.title} — ${branch.name}\n**Thể loại:** ${project.genre || ""}\n**Tác giả:** FictionWorld`.trim();
+    const playerLine = project.player_name ? `**Nhân vật nhập vai:** ${project.player_name}${project.player_desc ? ` — ${project.player_desc}` : ""}` : "";
+    const questLine = project.main_quest ? `**Nhiệm vụ chính:** ${project.main_quest}` : "";
+    const metaExtra = [playerLine, questLine].filter(Boolean).join("\n");
+    const header = `# ${project.title} — ${branch.name}\n**Thể loại:** ${project.genre || ""}\n**Tác giả:** FictionWorld${metaExtra ? `\n${metaExtra}` : ""}`.trim();
     const body = blocks.join("\n\n");
     const ending = `\n\n## KẾT THÚC ${slugify(branch.name)} — ${branch.name} [NORMAL_END]\n(Đây là phần kết thúc tổng của nhánh. Bạn có thể chỉnh tên/loại kết thúc cho phù hợp trước khi sản xuất.)`;
     return `${header}\n\n${body}${body && !/KẾT THÚC/i.test(body) ? ending : ""}`;

@@ -80,8 +80,40 @@ export default function IdeaStep({ project, updateField, patchProject, onNext, s
           <textarea
             value={project.idea || ""}
             onChange={(e) => updateField("idea", e.target.value)}
-            rows={5}
+            rows={4}
             placeholder={`VD: Nữ hiệp mất ký ức ở thế giới ${WORKSHOPS[project.workshop]?.label || ""}, phải tìm lại danh tính qua các thành bang, có 1 âm mưu lớn phía sau...`}
+            className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y"
+          />
+        </label>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block text-xs text-muted-foreground">
+            Nhân vật người chơi nhập vai (tên)
+            <input
+              value={project.player_name || ""}
+              onChange={(e) => updateField("player_name", e.target.value)}
+              placeholder="VD: Linh — Nữ Hiệp Mất Ký Ức"
+              className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-xs text-muted-foreground">
+            Lai lịch / xuất thân (tuỳ chọn)
+            <input
+              value={project.player_desc || ""}
+              onChange={(e) => updateField("player_desc", e.target.value)}
+              placeholder="VD: Từng là thủ lĩnh hội kiếm sĩ, mất trí nhớ sau trận chiến..."
+              className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+
+        <label className="block text-xs text-muted-foreground">
+          Nhiệm vụ chính / mục tiêu
+          <textarea
+            value={project.main_quest || ""}
+            onChange={(e) => updateField("main_quest", e.target.value)}
+            rows={2}
+            placeholder="VD: Tìm lại danh tính của mình và vạch trần âm mưu đứng sau trận chiến đã cướp đi ký ức..."
             className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm resize-y"
           />
         </label>

@@ -55,6 +55,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
         branchCount: project.branch_count,
         notes: project.notes,
         directionBlock,
+        playerName: project.player_name,
+        playerDesc: project.player_desc,
+        mainQuest: project.main_quest,
       });
       const res = await aiCall(prompt, { jsonSchema: PLAN_SCHEMA });
 
@@ -165,6 +168,28 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
         </div>
       ) : (
         <>
+          {/* Nhân vật nhập vai + nhiệm vụ chính */}
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🎮</span>
+              <h4 className="font-display font-semibold text-sm">Nhân vật người chơi nhập vai & Nhiệm vụ chính</h4>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] font-semibold text-muted-foreground mb-1">Nhân vật nhập vai (Player)</div>
+                <p className="text-sm font-medium">{project.player_name?.trim() || "(chưa đặt — AI sẽ gợi ý, chỉnh ở đây)"}</p>
+                {project.player_desc?.trim() && <p className="text-xs text-muted-foreground mt-0.5">{project.player_desc}</p>}
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-muted-foreground mb-1">Nhiệm vụ chính (Main Quest)</div>
+                <p className="text-sm">{project.main_quest?.trim() || "(chưa đặt — AI sẽ gợi ý)"}</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Đây là vai người chơi điều khiển và mục tiêu cốt lõi — AI sẽ dựng mọi cảnh xoay quanh nhân vật này và đẩy mạch về nhiệm vụ chính. Muốn đổi, quay lại bước Ý tưởng hoặc sửa trực tiếp.
+            </p>
+          </div>
+
           {/* Thanh điều khiển */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
