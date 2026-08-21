@@ -20,7 +20,7 @@ import Worldbook from '@/pages/Worldbook';
 import AICreative from '@/pages/AICreative';
 import WritingFactory from '@/pages/WritingFactory';
 import GameStudio from '@/pages/GameStudio';
-import GameScriptFactory from '@/pages/GameScriptFactory';
+import GameScriptProject from '@/pages/GameScriptProject';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -62,7 +62,7 @@ const AuthenticatedApp = () => {
           <Route path="/sang-tac-ai" element={<AICreative />} />
           <Route path="/xuong-viet-truyen" element={<WritingFactory />} />
           <Route path="/xuong-game" element={<GameStudio />} />
-          <Route path="/xuong-kich-ban-game" element={<GameScriptFactory />} />
+          <Route path="/xuong-kich-ban-game" element={<GameScriptProject />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

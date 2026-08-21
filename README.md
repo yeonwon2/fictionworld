@@ -35,6 +35,25 @@ Trang `/xuong-viet-truyen` — workspace mô hình "xưởng" kiểu tác giả 
 
 Nếu bạn đã có database Supabase từ trước: bảng `writer_docs` là bảng MỚI — hãy chạy lại `supabase/migration.sql` trong SQL Editor (an toàn, dùng `IF NOT EXISTS`).
 
+## Xưởng Kịch Bản Game
+
+Trang `/xuong-kich-ban-game` — luồng wizard viết kịch bản game theo đúng "quy ước trình bày" của từng xưởng sản xuất game (để dán thẳng vào Xưởng Game là chạy được):
+
+1. **Ý tưởng** — nhập loại game (xưởng sản xuất: Thiết Kế / Hệ Thống / NPC / Cung Đấu / Trọng Sinh Làm Giàu), thể loại, số cảnh (VD 50), số lựa chọn/cảnh, số nhánh.
+2. **Bộ khung & duyệt** — AI gợi ý nhân vật, bối cảnh, dàn cảnh (kèm lựa chọn + đích nhánh), kết thúc dự kiến; bạn duyệt/chỉnh sửa từng mục và đánh dấu điểm rẽ nhánh.
+3. **4 nhánh truyện** — AI viết bản thảo văn xuôi cho từng nhánh; bạn đọc, sửa, chốt.
+4. **Kịch bản chuẩn form** — AI viết từng phân cảnh theo **đúng cú pháp parser** của xưởng đã chọn (`## CẢNH N`, `**A —**`, `→ Chỉ số`, `→ Cờ`, `→ Vật phẩm`, `→ Đến cảnh`, `→ Kết thúc [LOẠI]`, và riêng `→ Hệ thống:` / `→ Chỉ dụ:` / `→ Cơ hội:` / `→ Ảnh:` tuỳ xưởng) → bạn copy dán vào Xưởng Game tương ứng để sản xuất.
+
+### Bảng mới (luồng wizard)
+
+- `game_script_projects` — dự án kịch bản (loại game, ý tưởng, thông số, trạng thái).
+- `game_plan_meta` — bộ khung: nhân vật, bối cảnh, kết thúc, nhánh (jsonb).
+- `game_plan_scenes` — dàn cảnh tổng (mô tả, lựa chọn, điểm rẽ nhánh).
+- `game_plan_branches` — các nhánh truyện.
+- `game_plan_scene_content` — bản thảo văn xuôi + kịch bản chuẩn form theo từng cảnh/nhánh.
+
+Nếu bạn đã có database từ trước: chạy lại `supabase/migration.sql` trong SQL Editor để tạo các bảng mới (an toàn, dùng `IF NOT EXISTS`).
+
 ## Cấu trúc dữ liệu
 
-Xem `supabase/migration.sql` để biết schema đầy đủ (8 bảng + RLS + storage bucket `fictionworld-media`). `base44/entities/*.jsonc` chỉ còn là tài liệu tham khảo mô tả field, không được app đọc lúc chạy.
+Xem `supabase/migration.sql` để biết schema đầy đủ (15 bảng + RLS + storage bucket `fictionworld-media`). `base44/entities/*.jsonc` chỉ còn là tài liệu tham khảo mô tả field, không được app đọc lúc chạy.

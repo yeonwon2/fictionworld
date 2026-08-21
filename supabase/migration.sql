@@ -290,11 +290,105 @@ create table if not exists public.game_scenes (
 );
 create index if not exists game_scenes_story_route_idx on public.game_scenes (story_id, route_key, scene_order);
 
+-- =========================================================================
+-- Xưởng Kịch Bản Game (luồng mới) — wizard: ý tưởng → AI gợi ý bộ khung →
+-- duyệt/chỉnh → viết 4 nhánh truyện → chốt → xuất kịch bản chuẩn form
+-- theo đúng cú pháp của từng xưởng sản xuất game (Thiết Kế / Hệ Thống / NPC /
+-- Cung Đấu / Trọng Sinh Làm Giàu) để dán thẳng vào Xưởng Game chạy được.
+-- =========================================================================
+
+-- Dự án kịch bản: 1 dòng / dự án — loại game (workshop), tên, ý tưởng, các
+-- thông số (số cảnh, số lựa chọn/cảnh, số nhánh) và trạng thái tiến trình wizard.
+create table if not exists public.game_script_projects (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete set null,
+  workshop text not null default 'studio',
+  title text not null default 'Dự Án Kịch Bản Mới',
+  idea text not null default '',
+  genre text,
+  scene_count integer not null default 50,
+  choices_per_scene integer not null default 3,
+  branch_count integer not null default 4,
+  notes text,
+  status text not null default 'idea',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists game_script_projects_story_idx on public.game_script_projects (story_id);
+create index if not exists game_script_projects_updated_idx on public.game_script_projects (updated_at desc);
+
+-- Bộ khung (dàn tổng) — các mục AI gợi ý để tác giả duyệt/chỉnh sửa:
+-- nhân vật, bối cảnh, các kết thúc dự kiến (jsonb), ghi chú tổng thể.
+create table if not exists public.game_plan_meta (
+  project_id uuid primary key references public.game_script_projects (id) on delete cascade,
+  characters jsonb not null default '[]'::jsonb,
+  settings jsonb not null default '[]'::jsonb,
+  endings jsonb not null default '[]'::jsonb,
+  branches jsonb not null default '[]'::jsonb,
+  notes text,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- Dàn cảnh tổng (bộ khung): mỗi cảnh thuộc project, có thứ tự, mô tả sự kiện,
+-- địa điểm, nhân vật, phục bút và các lựa chọn (jsonb: [{text, effect, target}])
+-- cùng đánh dấu điểm rẽ (là cảnh có lựa chọn quan trọng dẫn 1 trong các nhánh).
+create table if not exists public.game_plan_scenes (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.game_script_projects (id) on delete cascade,
+  scene_order integer not null default 0,
+  title text not null default 'Cảnh',
+  description text not null default '',
+  location text,
+  characters text,
+  foreshadow text,
+  choices jsonb not null default '[]'::jsonb,
+  is_branch_point boolean not null default false,
+  branch_index integer,
+  status text not null default 'nháp',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists game_plan_scenes_project_idx on public.game_plan_scenes (project_id, scene_order);
+
+-- 4 nhánh truyện: mỗi nhánh tương ứng 1 đáp án/lựa chọn chính. Lưu danh sách
+-- cảnh (mảng scene id hoặc thứ tự) và trạng thái duyệt/viết của nhánh.
+create table if not exists public.game_plan_branches (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.game_script_projects (id) on delete cascade,
+  branch_index integer not null default 0,
+  name text not null default 'Nhánh',
+  description text not null default '',
+  scene_order_ids uuid[] not null default '{}',
+  status text not null default 'nháp',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists game_plan_branches_project_idx on public.game_plan_branches (project_id, branch_index);
+
+-- Nội dung kịch bản theo cảnh của từng nhánh: lưu bản thảo văn xuôi (draft)
+-- và kịch bản chuẩn form (script) theo đúng cú pháp xưởng game của project.
+create table if not exists public.game_plan_scene_content (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.game_script_projects (id) on delete cascade,
+  branch_id uuid references public.game_plan_branches (id) on delete cascade,
+  scene_id uuid references public.game_plan_scenes (id) on delete cascade,
+  scene_order integer not null default 0,
+  title text not null default 'Phân cảnh',
+  draft text not null default '',
+  script text not null default '',
+  status text not null default 'nháp',
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (branch_id, scene_id)
+);
+create index if not exists game_plan_scene_content_branch_idx on public.game_plan_scene_content (project_id, branch_id, scene_order);
+
 -- updated_at tự cập nhật ở mọi bảng nội dung
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -308,7 +402,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);

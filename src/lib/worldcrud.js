@@ -410,6 +410,105 @@ export async function deleteGameScene(id) {
   return deleteRow("game_scenes", id);
 }
 
+// ---------- Xưởng Kịch Bản Game (luồng mới) — game_script_projects ----------
+// Wizard: ý tưởng → AI gợi ý bộ khung → duyệt → 4 nhánh → chốt → xuất kịch bản.
+const GSP_COLUMNS = "id, story_id, workshop, title, idea, genre, scene_count, choices_per_scene, branch_count, notes, status, updated_at, created_at";
+const GPM_COLUMNS = "project_id, characters, settings, endings, branches, notes, updated_at, created_at";
+const GPS_COLUMNS = "id, project_id, scene_order, title, description, location, characters, foreshadow, choices, is_branch_point, branch_index, status, updated_at, created_at";
+const GPB_COLUMNS = "id, project_id, branch_index, name, description, scene_order_ids, status, updated_at, created_at";
+const GPC_COLUMNS = "id, project_id, branch_id, scene_id, scene_order, title, draft, script, status, updated_at, created_at";
+
+export async function listGameScriptProjects(storyId) {
+  let q = supabase.from("game_script_projects").select(GSP_COLUMNS).order("updated_at", { ascending: false });
+  if (storyId) q = q.eq("story_id", storyId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function getGameScriptProject(id) {
+  const { data, error } = await supabase.from("game_script_projects").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+export async function createGameScriptProject(data) {
+  return createRow("game_script_projects", data);
+}
+export async function updateGameScriptProject(id, data) {
+  return updateRow("game_script_projects", id, data);
+}
+export async function deleteGameScriptProject(id) {
+  return deleteRow("game_script_projects", id);
+}
+
+export async function getGamePlanMeta(projectId) {
+  const { data, error } = await supabase
+    .from("game_plan_meta")
+    .select(GPM_COLUMNS)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+export async function upsertGamePlanMeta(projectId, data) {
+  const payload = { project_id: projectId, ...data };
+  const { data: row, error } = await supabase.from("game_plan_meta").upsert(payload, { onConflict: "project_id" }).select().single();
+  if (error) throw error;
+  return row;
+}
+
+export async function listGamePlanScenes(projectId) {
+  let q = supabase.from("game_plan_scenes").select(GPS_COLUMNS).order("scene_order", { ascending: true });
+  if (projectId) q = q.eq("project_id", projectId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function createGamePlanScene(data) {
+  return createRow("game_plan_scenes", data);
+}
+export async function updateGamePlanScene(id, data) {
+  return updateRow("game_plan_scenes", id, data);
+}
+export async function deleteGamePlanScene(id) {
+  return deleteRow("game_plan_scenes", id);
+}
+
+export async function listGamePlanBranches(projectId) {
+  let q = supabase.from("game_plan_branches").select(GPB_COLUMNS).order("branch_index", { ascending: true });
+  if (projectId) q = q.eq("project_id", projectId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function createGamePlanBranch(data) {
+  return createRow("game_plan_branches", data);
+}
+export async function updateGamePlanBranch(id, data) {
+  return updateRow("game_plan_branches", id, data);
+}
+export async function deleteGamePlanBranch(id) {
+  return deleteRow("game_plan_branches", id);
+}
+
+export async function listGamePlanSceneContent(projectId, branchId) {
+  let q = supabase.from("game_plan_scene_content").select(GPC_COLUMNS).order("scene_order", { ascending: true });
+  if (projectId) q = q.eq("project_id", projectId);
+  if (branchId) q = q.eq("branch_id", branchId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+export async function upsertGamePlanSceneContent(projectId, branchId, sceneId, data) {
+  const payload = { project_id: projectId, branch_id: branchId, scene_id: sceneId, ...data };
+  const { data: row, error } = await supabase
+    .from("game_plan_scene_content")
+    .upsert(payload, { onConflict: "branch_id,scene_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return row;
+}
+
 // ---------- Tiện ích: tải tệp lên Storage (tự nén ảnh trước khi lưu) ----------
 export async function uploadFile(file) {
   const compressed = await compressImage(file);
