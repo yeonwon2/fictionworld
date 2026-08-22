@@ -10,8 +10,8 @@ import FinalStep from "./steps/FinalStep";
 const STEPS = [
   { id: "idea", label: "Ý Tưởng", icon: Lightbulb },
   { id: "plan", label: "Bộ Khung & Duyệt", icon: ListTree },
-  { id: "branch", label: "4 Nhánh Truyện", icon: GitBranch },
-  { id: "final", label: "Kịch Bản Chuẩn Form", icon: FileCheck2 },
+  { id: "branch", label: "Duyệt Nhánh Truyện", icon: GitBranch },
+  { id: "final", label: "Ghép & Copy Kịch Bản", icon: FileCheck2 },
 ];
 
 function stepIndex(id) {
@@ -121,7 +121,7 @@ export default function ProjectWizard({ projectId, storyName, directionBlock, on
           </span>
         </div>
         <p className="text-muted-foreground text-sm mt-1">
-          Luồng: Ý tưởng → Bộ khung & duyệt → Viết 4 nhánh → Kịch bản chuẩn form (cú pháp {workshop.label}).
+          Luồng: Ý tưởng → Bộ khung & duyệt → Duyệt từng nhánh → Ghép một kịch bản chuẩn form để copy sang {workshop.label}.
         </p>
       </header>
 
