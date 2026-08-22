@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check, Copy, FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Copy, FileText, ListTree, Loader2, Plus, Sparkles, Wand2 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
-import { buildSceneScriptPrompt, extractItemsAndFlags } from "@/lib/gameScriptProject/prompts";
+import { buildSceneScriptPrompt, buildSceneScriptRevisionPrompt, buildPlanScenesChunkPrompt, PLAN_SCENES_CHUNK_SCHEMA, extractItemsAndFlags } from "@/lib/gameScriptProject/prompts";
 import { WORKSHOPS, buildSyntaxBlock } from "@/lib/gameScriptProject/syntaxGuide";
 import { realParseCheck, parserForWorkshop } from "@/lib/gameScriptProject/parserBridge";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
-import { getGamePlanMeta, listGamePlanBranches, listGamePlanSceneContent, listGamePlanScenes, upsertGamePlanSceneContent } from "@/lib/worldcrud";
+import AiReviseBox from "@/components/game-script-project/AiReviseBox";
+import { getGamePlanMeta, listGamePlanBranches, listGamePlanSceneContent, listGamePlanScenes, createGamePlanScene, upsertGamePlanSceneContent } from "@/lib/worldcrud";
 
 // Ghép MỘT kịch bản duy nhất chứa toàn bộ cảnh và nhánh để copy sang Xưởng Game.
 export default function FinalStep({ project, patchProject, onBack }) {
@@ -21,6 +22,8 @@ export default function FinalStep({ project, patchProject, onBack }) {
   const [fixedScript, setFixedScript] = useState(""); // bản đã qua "Tự động sửa bằng AI" (chỉ giữ ở state, không lưu DB)
   const [fixing, setFixing] = useState(false);
   const [fixExplanations, setFixExplanations] = useState([]);
+  const [addingScenes, setAddingScenes] = useState(false);
+  const [addCount, setAddCount] = useState(6);
   const workshop = WORKSHOPS[project.workshop] || WORKSHOPS.studio;
 
   const load = async () => {
@@ -114,6 +117,104 @@ export default function FinalStep({ project, patchProject, onBack }) {
     finally { setWriting(false); }
   };
 
+  // Sửa/góp ý sửa MỘT cảnh cụ thể trong bản kịch bản cuối — dùng lại
+  // buildSceneScriptRevisionPrompt (đã có sẵn trong prompts.js từ trước,
+  // trước đây chưa từng được gắn vào UI nào).
+  const reviseScene = async (scene, feedback) => {
+    const branch = branchForScene(scene);
+    const currentContent = scriptByScene.get(scene.id) || "";
+    const revised = String(await aiCall(buildSceneScriptRevisionPrompt({
+      workshop: project.workshop, title: project.title, planBlock: planBlock(), branch, scene, currentContent, feedback, idea: project.idea,
+    })) || "").trim();
+    const old = contents.find((c) => c.scene_id === scene.id);
+    await upsertGamePlanSceneContent(project.id, branch.id, scene.id, {
+      scene_order: scene.scene_order, title: scene.title, draft: old?.draft || "", script: revised, status: "đã sửa",
+    });
+    await load();
+  };
+
+  // "Thêm cảnh vào cuối" — kịch bản đã ghép xong nhưng thấy ít cảnh quá thì
+  // nối thêm NGAY LẬP TỨC (dựng bộ khung cho cảnh mới + viết luôn kịch bản
+  // chuẩn form), không phải quay lại bước Bộ Khung làm lại từ đầu. Cảnh cuối
+  // cùng ĐANG CÓ (vốn đã tự kết thúc câu chuyện) được nhờ AI nối lại sang
+  // cảnh mới thay vì tiếp tục dẫn tới kết thúc — nếu không làm bước này, cảnh
+  // mới sẽ không có lựa chọn nào trỏ tới (cảnh mồ côi).
+  const addScenesToEnd = async () => {
+    const extra = Math.max(1, Math.min(30, Number(addCount) || 0));
+    if (!scenes.length) { setError("Hãy ghép kịch bản trước khi thêm cảnh."); return; }
+    setAddingScenes(true); setError("");
+    try {
+      const oldLast = scenes[scenes.length - 1];
+      const startOrder = oldLast.scene_order + 1;
+      const target = startOrder - 1 + extra;
+      const branchCount = Math.max(2, Number(project.branch_count) || 4);
+      const choicesPer = Math.max(1, Math.min(6, Number(project.choices_per_scene) || 3));
+      const coreBlock = planBlock();
+      const prevSummary = scenes.slice(-6).map((s) => `${s.scene_order}. ${s.title}: ${(s.description || "").slice(0, 120)}`).join("\n");
+
+      setProgress(`Đang dựng bộ khung cho ${extra} cảnh mới...`);
+      const chunk = await aiCall(
+        buildPlanScenesChunkPrompt({
+          workshop: project.workshop, idea: project.idea, coreBlock, branchCount, choicesPerScene: choicesPer,
+          startOrder, count: extra, totalScenes: target, prevScenesSummary: prevSummary,
+        }),
+        { jsonSchema: PLAN_SCENES_CHUNK_SCHEMA }
+      );
+      const list = chunk?.scenes || [];
+      const newScenes = [];
+      let order = startOrder;
+      for (const sc of list) {
+        if (order > target) break;
+        const row = await createGamePlanScene({
+          project_id: project.id, scene_order: order, title: sc.title || `Cảnh ${order}`, description: sc.description || "",
+          location: sc.location || "", characters: sc.characters || "", foreshadow: sc.foreshadow || "",
+          choices: sc.choices || [], is_branch_point: !!sc.is_branch_point, branch_index: sc.branch_index ?? null, status: "nháp",
+        });
+        newScenes.push(row);
+        order++;
+      }
+      if (!newScenes.length) throw new Error("AI không trả về cảnh nào.");
+
+      // Nối cảnh cuối CŨ sang cảnh mới thay vì kết thúc ở đó.
+      setProgress("Đang nối cảnh cuối cũ sang cảnh mới...");
+      await reviseScene(oldLast, `Câu chuyện KHÔNG kết thúc ở cảnh này nữa — sẽ có tiếp cảnh ${startOrder} ("${newScenes[0].title}") trở đi. Đổi lựa chọn đang dẫn tới "→ Kết thúc ..." thành "→ Đến cảnh ${startOrder}" (giữ nguyên các hiệu ứng khác của lựa chọn đó, chỉ đổi đích), phần còn lại giữ nguyên.`);
+
+      const sceneMap = [...scenes, ...newScenes].map((s) => ({ scene_order: s.scene_order, title: s.title }));
+      const endingLabels = (meta?.endings || []).map((e) => e.name).filter(Boolean);
+      const known = extractItemsAndFlags(fullScript);
+      const knownItems = new Set(known.items);
+      const knownFlags = new Set(known.flags);
+      let previous = fullScript.slice(-1200);
+      for (let i = 0; i < newScenes.length; i++) {
+        const scene = newScenes[i];
+        const branch = branchForScene(scene);
+        setProgress(`Đang viết cảnh mới ${i + 1}/${newScenes.length}: ${scene.title}`);
+        const script = String(await aiCall(buildSceneScriptPrompt({
+          workshop: project.workshop, title: project.title, idea: project.idea, planBlock: planBlock(),
+          branch, scene, prevScript: previous, nextScene: newScenes[i + 1] || null,
+          isFirst: false, isLast: i === newScenes.length - 1, totalScenes: target,
+          playerName: project.player_name, playerDesc: project.player_desc, mainQuest: project.main_quest,
+          knownItems: [...knownItems], knownFlags: [...knownFlags], sceneMap, endingLabels,
+        })) || "").trim();
+        await upsertGamePlanSceneContent(project.id, branch.id, scene.id, {
+          scene_order: scene.scene_order, title: scene.title, draft: "", script, status: "đã ghép kịch bản chung",
+        });
+        const found = extractItemsAndFlags(script);
+        for (const it of found.items) knownItems.add(it);
+        for (const fl of found.flags) knownFlags.add(fl);
+        previous = script;
+      }
+      await patchProject({ scene_count: target });
+      setProgress(`Đã thêm ${newScenes.length} cảnh. Xem báo cáo kiểm tra bên dưới — nếu còn cảnh mồ côi, bấm "Tự động sửa bằng AI".`);
+      await load();
+    } catch (e) {
+      setError("Thêm cảnh lỗi: " + (e?.message || "lỗi"));
+      setProgress("");
+    } finally {
+      setAddingScenes(false);
+    }
+  };
+
   // Nhờ AI tự sửa CHÍNH các lỗi mà báo cáo (report) vừa bắt được — dùng lại
   // NGUYÊN VẸN cơ chế "verifyAndFixScript" mà Xưởng Game dùng cho nút "Kiểm
   // Tra Kịch Bản": mỗi vòng chỉ chấp nhận bản mới nếu SỐ LỖI GIẢM, nên kết quả
@@ -150,9 +251,24 @@ export default function FinalStep({ project, patchProject, onBack }) {
         <h3 className="font-display font-semibold flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Một kịch bản hoàn chỉnh</h3>
         <p className="text-xs text-muted-foreground mt-1">Toàn bộ {project.scene_count} cảnh và {project.branch_count} nhánh được nối trong một file đúng cú pháp {workshop.label}. Bạn chỉ cần copy một lần.</p>
       </div>
-      <button onClick={writeCompleteScript} disabled={writing} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
-        {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} {writing ? "Đang ghép..." : fullScript ? "Ghép lại kịch bản cuối" : "Ghép kịch bản cuối"}
-      </button>
+      <div className="flex items-center gap-2">
+        {!!fullScript && (
+          <>
+            <input
+              type="number" min={1} max={30} value={addCount}
+              onChange={(e) => setAddCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+              className="w-14 rounded-md border border-input bg-background px-1.5 py-2 text-xs"
+              title="Số cảnh muốn thêm"
+            />
+            <button onClick={addScenesToEnd} disabled={addingScenes || writing} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary/40 text-primary text-xs font-medium hover:bg-primary/10 disabled:opacity-50" title="Kịch bản ít cảnh quá? Thêm ngay, không cần dựng lại từ đầu">
+              {addingScenes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Thêm cảnh
+            </button>
+          </>
+        )}
+        <button onClick={writeCompleteScript} disabled={writing || addingScenes} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
+          {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} {writing ? "Đang ghép..." : fullScript ? "Ghép lại kịch bản cuối" : "Ghép kịch bản cuối"}
+        </button>
+      </div>
     </div>
     {progress && <div className="text-xs rounded-lg bg-primary/10 text-primary px-3 py-2">{progress}</div>}
     {!!displayScript && <div className={`rounded-xl border p-3 text-xs ${!report.ok || report.blocking.length ? "border-destructive/40 bg-destructive/5" : "border-emerald-500/40 bg-emerald-500/5"}`}>
@@ -188,6 +304,30 @@ export default function FinalStep({ project, patchProject, onBack }) {
       </div>
       <pre className="p-4 text-xs leading-5 whitespace-pre-wrap overflow-auto max-h-[70vh] font-mono">{displayScript || "Chưa có kịch bản cuối. Bấm “Ghép kịch bản cuối”."}</pre>
     </div>
+    {!!scenes.length && !!scriptByScene.size && (
+      <details className="rounded-2xl border border-border bg-card overflow-hidden">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold flex items-center gap-2"><ListTree className="w-4 h-4 text-primary" /> Sửa từng cảnh riêng ({scenes.length} cảnh)</summary>
+        <div className="p-3 space-y-2 max-h-[60vh] overflow-y-auto border-t border-border">
+          {scenes.map((s) => {
+            const script = scriptByScene.get(s.id) || "";
+            return (
+              <div key={s.id} className="rounded-lg border border-border bg-muted/10 p-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-mono text-muted-foreground">#{s.scene_order}</span>
+                  <span className="text-xs font-medium">{s.title}</span>
+                </div>
+                {script ? (
+                  <p className="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed line-clamp-3 mb-1.5">{script}</p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground italic mb-1.5">Chưa ghép cảnh này.</p>
+                )}
+                {script && <AiReviseBox onRevise={(fb) => reviseScene(s, fb)} label="Sửa cảnh này" placeholder="VD: đổi kết thúc bi kịch hơn, thêm twist, viết lại lựa chọn C..." />}
+              </div>
+            );
+          })}
+        </div>
+      </details>
+    )}
     <div className="flex items-center justify-between"><button onClick={onBack} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted"><ArrowLeft className="w-4 h-4" /> Quay lại duyệt nhánh</button><span className="text-xs text-muted-foreground">Copy → dán vào {workshop.label} → Sản xuất game</span></div>
   </div>;
 }

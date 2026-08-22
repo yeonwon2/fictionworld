@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2, Wand2, ArrowLeft, CheckCircle2, Pencil } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
-import { buildBranchDraftPrompt, BRANCH_DRAFT_SCHEMA } from "@/lib/gameScriptProject/prompts";
+import { buildBranchDraftPrompt, BRANCH_DRAFT_SCHEMA, buildBranchDraftRevisionPrompt, BRANCH_DRAFT_REVISION_SCHEMA } from "@/lib/gameScriptProject/prompts";
+import AiReviseBox from "@/components/game-script-project/AiReviseBox";
 import {
   listGamePlanScenes, getGamePlanMeta,
   listGamePlanBranches, createGamePlanBranch, updateGamePlanBranch,
@@ -172,6 +173,21 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
     setTimeout(() => setStatus(""), 3000);
   };
 
+  const handleAiReviseDraft = async (branch, contentRow, feedback) => {
+    const res = await aiCall(
+      buildBranchDraftRevisionPrompt({
+        workshop: project.workshop, title: project.title, idea: project.idea,
+        planBlock: buildPlanBlockText(), branch, scene: { scene_order: contentRow.scene_order, title: contentRow.title },
+        currentDraft: contentRow.draft, feedback,
+      }),
+      { jsonSchema: BRANCH_DRAFT_REVISION_SCHEMA }
+    );
+    await upsertGamePlanSceneContent(project.id, branch.id, contentRow.scene_id, {
+      scene_order: contentRow.scene_order, title: contentRow.title, draft: res.draft || contentRow.draft, status: "đã sửa",
+    });
+    await load();
+  };
+
   const handleSaveDraft = async () => {
     if (!editScene) return;
     const { branchId, sceneId, draft } = editScene;
@@ -255,6 +271,7 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
                         </button>
                       </div>
                       <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed line-clamp-4">{c.draft}</p>
+                      <div className="mt-1.5"><AiReviseBox onRevise={(fb) => handleAiReviseDraft(br, c, fb)} label="Nhờ AI sửa cảnh này" /></div>
                     </div>
                   ))
                 )}

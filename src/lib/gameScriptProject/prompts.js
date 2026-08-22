@@ -204,6 +204,88 @@ export function formatCoreBlock(core) {
   return lines.join("\n");
 }
 
+// ---------- Sửa 1 mục của bộ cốt lõi theo góp ý (nhân vật/bối cảnh/kết thúc/nhánh) ----------
+const CORE_SECTION_LABEL = { characters: "nhân vật", settings: "bối cảnh/địa điểm", endings: "kết thúc", branches: "nhánh truyện" };
+const CORE_SECTION_ITEM_SCHEMA = {
+  characters: { name: { type: "string" }, role: { type: "string" }, personality: { type: "string" }, motive: { type: "string" } },
+  settings: { name: { type: "string" }, description: { type: "string" } },
+  endings: { name: { type: "string" }, type: { type: "string" }, description: { type: "string" } },
+  branches: { name: { type: "string" }, description: { type: "string" } },
+};
+
+export function coreSectionRevisionSchema(section) {
+  return {
+    type: "object",
+    properties: { items: { type: "array", items: { type: "object", properties: CORE_SECTION_ITEM_SCHEMA[section] || {} } } },
+    required: ["items"],
+  };
+}
+
+/**
+ * Sửa/góp ý sửa MỘT mục trong bộ cốt lõi (vd chỉ riêng danh sách "kết thúc")
+ * theo phản hồi của tác giả — dùng cho nút "Nhờ AI sửa" ở mỗi MetaCard, thay
+ * vì phải tự tay sửa JSON. Giữ nguyên các mục khác, chỉ trả lại đúng mục này.
+ */
+export function buildCoreSectionRevisionPrompt({ workshop, idea, title, section, currentValue, feedback }) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  const label = CORE_SECTION_LABEL[section] || section;
+  return `Bạn là BIÊN KỊCH CHÍNH (${w.label}) của game "${title}". Tác giả muốn sửa lại phần "${label}" trong bộ cốt lõi theo góp ý dưới đây.
+
+${stickToIdeaRules(idea)}
+
+# PHẦN "${label.toUpperCase()}" HIỆN TẠI
+${JSON.stringify(currentValue || [], null, 2)}
+
+# GÓP Ý CỦA TÁC GIẢ
+"""${feedback}"""
+
+# YÊU CẦU
+- CHỈ sửa đúng theo góp ý — không đổi những gì không liên quan tới góp ý.
+- Vẫn phải khớp ý tưởng nguồn (tên nhân vật/hệ thống/tuyến đã nêu ở ý tưởng).
+- Trả lại TOÀN BỘ danh sách "${label}" đã sửa (không chỉ phần tử bị sửa).
+
+Trả JSON: { items: [...] } đúng schema.`;
+}
+
+// ---------- Sửa/góp ý sửa 1 cảnh trong dàn cảnh (bộ khung) ----------
+export const PLAN_SCENE_REVISION_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    description: { type: "string" },
+    location: { type: "string" },
+    characters: { type: "string" },
+    foreshadow: { type: "string" },
+    choices: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { text: { type: "string" }, effect: { type: "string" }, target: { type: "string" } },
+        required: ["text"],
+      },
+    },
+  },
+  required: ["title", "description"],
+};
+
+export function buildPlanSceneRevisionPrompt({ workshop, idea, coreBlock, scene, feedback }) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  return `Bạn là BIÊN KỊCH CHÍNH (${w.label}). Sửa lại MỘT cảnh trong dàn cảnh theo góp ý của tác giả — chỉ trả lại đúng cảnh này (đã sửa), không viết cảnh khác.
+
+${stickToIdeaRules(idea)}
+
+# BỘ CỐT LÕI
+${coreBlock}
+
+# CẢNH ${scene.scene_order} HIỆN TẠI
+${JSON.stringify({ title: scene.title, description: scene.description, location: scene.location, characters: scene.characters, foreshadow: scene.foreshadow, choices: scene.choices }, null, 2)}
+
+# GÓP Ý CỦA TÁC GIẢ
+"""${feedback}"""
+
+Trả JSON đúng schema (title, description, location, characters, foreshadow, choices[]).`;
+}
+
 // ---------- Bản thảo 1 nhánh (chia lô nếu nhiều cảnh) ----------
 export function buildBranchDraftPrompt({ workshop, title, idea, planBlock, branch, scenes, playerName, playerDesc, mainQuest }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
@@ -253,6 +335,34 @@ export const BRANCH_DRAFT_SCHEMA = {
   },
   required: ["scenes"],
 };
+
+// ---------- Sửa/góp ý sửa bản thảo 1 cảnh của 1 nhánh ----------
+export const BRANCH_DRAFT_REVISION_SCHEMA = {
+  type: "object",
+  properties: { draft: { type: "string" } },
+  required: ["draft"],
+};
+
+export function buildBranchDraftRevisionPrompt({ workshop, title, idea, planBlock, branch, scene, currentDraft, feedback }) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  return `Bạn là BIÊN KỊCH (${w.label}). Viết lại bản thảo văn xuôi của MỘT cảnh theo góp ý của tác giả — không phải cú pháp kịch bản game, vẫn là bản thảo để đọc thử.
+
+${stickToIdeaRules(idea)}
+
+# GAME: ${title} — NHÁNH: ${branch.name}
+# BỘ KHUNG
+${planBlock}
+
+# CẢNH ${scene.scene_order}: ${scene.title}
+
+# BẢN THẢO HIỆN TẠI
+"""${currentDraft}"""
+
+# GÓP Ý CỦA TÁC GIẢ
+"""${feedback}"""
+
+Trả JSON: { draft: "..." } — chỉ bản thảo cảnh này đã sửa, 150-280 từ.`;
+}
 
 // ---------- Kịch bản chuẩn form 1 cảnh ----------
 export function buildSceneScriptPrompt({
