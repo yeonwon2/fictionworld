@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Loader2, Wand2, ArrowLeft, CheckCircle2, Pencil } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { buildBranchDraftPrompt, BRANCH_DRAFT_SCHEMA } from "@/lib/gameScriptProject/prompts";
@@ -21,6 +21,12 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [editScene, setEditScene] = useState(null); // { branchId, sceneId, draft }
+  // sceneId -> { title, draft } — cache SỐNG (không phụ thuộc React state/render)
+  // để phát hiện cảnh chung đã có bản thảo NGAY TRONG CÙNG 1 lượt "Viết tất cả
+  // nhánh": state `contents` chỉ cập nhật sau khi re-render, nhưng vòng lặp
+  // await trong handleWriteAll chạy trong cùng 1 closure nên sẽ đọc phải giá
+  // trị `contents` CŨ nếu dùng state trực tiếp — dùng ref để luôn đọc giá trị mới nhất.
+  const commonDraftsRef = useRef({});
 
   const load = async () => {
     setLoading(true);
@@ -49,6 +55,11 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
       for (const br of b) {
         const list = (await listGamePlanSceneContent(project.id, br.id)) || [];
         cc[br.id] = list;
+        for (const row of list) {
+          if (row.draft?.trim() && !commonDraftsRef.current[row.scene_id]) {
+            commonDraftsRef.current[row.scene_id] = { title: row.title, draft: row.draft };
+          }
+        }
       }
       setContents(cc);
     } catch (e) {
@@ -93,8 +104,24 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
     setWritingBranch(branch.id);
     try {
       const planBlock = buildPlanBlockText();
-      for (let i = 0; i < branchScenes.length; i += DRAFT_CHUNK) {
-        const chunk = branchScenes.slice(i, i + DRAFT_CHUNK);
+      // Cảnh CHUNG (không gắn nhánh) được `scenesForBranch()` đưa vào MỌI
+      // nhánh — nếu đã có bản thảo (từ nhánh này hoặc nhánh khác, kể cả
+      // trong CÙNG lượt "Viết tất cả nhánh" đang chạy) thì CHÉP LẠI, không
+      // gọi AI viết thêm lần nữa (tránh tốn ${branch_count}x chi phí AI cho
+      // cùng 1 cảnh, và tránh mỗi nhánh kể một dị bản khác nhau cho đúng 1 cảnh chung).
+      const toGenerate = [];
+      for (const sc of branchScenes) {
+        const existing = !sc.is_branch_point ? commonDraftsRef.current[sc.id] : null;
+        if (existing) {
+          await upsertGamePlanSceneContent(project.id, branch.id, sc.id, {
+            scene_order: sc.scene_order, title: existing.title || sc.title, draft: existing.draft, status: "đã viết (chép từ nhánh khác)",
+          });
+          continue;
+        }
+        toGenerate.push(sc);
+      }
+      for (let i = 0; i < toGenerate.length; i += DRAFT_CHUNK) {
+        const chunk = toGenerate.slice(i, i + DRAFT_CHUNK);
         setStatus(`Nhánh "${branch.name}": bản thảo cảnh ${chunk[0].scene_order}–${chunk[chunk.length - 1].scene_order}...`);
         const prompt = buildBranchDraftPrompt({
           workshop: project.workshop,
@@ -117,6 +144,9 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
             draft: d.draft || "",
             status: "đã viết",
           });
+          if (!sc.is_branch_point && d.draft?.trim() && !commonDraftsRef.current[sc.id]) {
+            commonDraftsRef.current[sc.id] = { title: d.title || sc.title, draft: d.draft };
+          }
         }
       }
       await updateGamePlanBranch(branch.id, { status: "đã viết" });

@@ -270,12 +270,33 @@ export function buildSceneScriptPrompt({
   playerName,
   playerDesc,
   mainQuest,
+  knownItems,
+  knownFlags,
+  sceneMap,
+  endingLabels,
 }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
   const sceneNumber = scene.scene_order;
   const choicesBlock = (scene.choices || [])
     .map((c) => `- "${c.text}"${c.effect ? ` → ${c.effect}` : ""}${c.target ? ` → ${c.target}` : ""}`)
     .join("\n");
+  // Sổ theo dõi toàn cục — chống 2 lỗi hay gặp nhất khi mỗi cảnh được viết
+  // RIÊNG LẺ bằng 1 lệnh AI độc lập: (1) "vật phẩm/cờ mồ côi" do đặt tên khác
+  // đi ở mỗi cảnh cho cùng 1 thứ, (2) "cảnh mồ côi"/"→ Đến cảnh N" trỏ vào số
+  // cảnh không có thật do AI đoán mò số cảnh chưa từng thấy.
+  const registryBlock = [
+    `# SỔ THEO DÕI TOÀN CỤC (BẮT BUỘC tuân thủ — đây là NGUỒN SỰ THẬT duy nhất về số cảnh/vật phẩm/cờ đã có)`,
+    `- Toàn bộ số cảnh HỢP LỆ trong kịch bản: chỉ được dùng "→ Đến cảnh N" với N nằm trong danh sách sau, TUYỆT ĐỐI không bịa số khác:\n${(sceneMap || []).map((s) => `  ${s.scene_order} — ${s.title}`).join("\n") || "  (chưa có cảnh nào khác)"}`,
+    endingLabels?.length ? `- Nhãn kết thúc hợp lệ (dùng đúng chữ khi "→ Kết thúc <nhãn>"): ${endingLabels.join(", ")}` : "",
+    knownItems?.length
+      ? `- Vật phẩm ĐÃ TỒN TẠI (nếu cảnh này cần dùng lại thứ đã có, PHẢI chép đúng nguyên văn tên sau, không đổi cách viết): ${knownItems.join(", ")}`
+      : "- Chưa có vật phẩm nào được tạo trước đó.",
+    knownFlags?.length
+      ? `- Cờ ĐÃ TỒN TẠI (dùng lại đúng nguyên văn nếu cần kiểm tra lại): ${knownFlags.join(", ")}`
+      : "- Chưa có cờ nào được tạo trước đó.",
+    `- Nếu cảnh này ĐẶT ĐIỀU KIỆN "→ Cần vật phẩm: X" hoặc "→ Cần cờ: X", X PHẢI là 1 trong danh sách "ĐÃ TỒN TẠI" ở trên (đã được cấp ở cảnh trước) — KHÔNG được yêu cầu vật phẩm/cờ chưa từng xuất hiện.`,
+    `- Nếu cảnh này CẦN 1 vật phẩm/cờ MỚI hoàn toàn chưa có trong danh sách, PHẢI tự cấp nó bằng "→ Vật phẩm: <tên mới>" / "→ Cờ: <tên mới>" NGAY TRONG CHÍNH CẢNH NÀY hoặc một cảnh trước đó — không được vừa yêu cầu vừa không cấp.`,
+  ].filter(Boolean).join("\n");
   return `Bạn là BIÊN KỊCH CHÍNH (${w.label}). Viết PHÂN CẢNH KỊCH BẢN GAME hoàn chỉnh — đúng cú pháp xưởng. Không meta.
 
 ${buildSyntaxBlock(workshop)}
@@ -290,6 +311,8 @@ ${stickToIdeaRules(idea)}
 # BỘ KHUNG
 ${planBlock}
 
+${registryBlock}
+
 # CẢNH ${sceneNumber}/${totalScenes}: ${scene.title}
 - Sự kiện: ${scene.description}
 - Địa điểm: ${scene.location || "?"}
@@ -303,6 +326,24 @@ ${!isFirst && prevScript ? `# Cảnh trước (nối mạch)\n"""${prevScript.sl
 ${isLast ? "CẢNH CUỐI: lựa chọn dẫn ## KẾT THÚC <nhãn> — <Tên> [LOẠI] viết kèm trong bài trả lời." : `Cảnh kế: ## CẢNH ${nextScene?.scene_order} — ${nextScene?.title || ""}. Dùng → Đến cảnh ${nextScene?.scene_order} khi cần.`}
 
 Chỉ trả nội dung kịch bản phân cảnh.`;
+}
+
+// Trích tên vật phẩm/cờ ĐÃ ĐƯỢC CẤP từ 1 đoạn kịch bản vừa AI viết ra — dùng để
+// cộng dồn "sổ theo dõi toàn cục" (knownItems/knownFlags) truyền cho các cảnh
+// VIẾT SAU, để AI tái dùng đúng tên thay vì bịa tên khác cho cùng 1 thứ.
+export function extractItemsAndFlags(scriptText) {
+  const text = String(scriptText || "");
+  const items = new Set();
+  const flags = new Set();
+  for (const m of text.matchAll(/(?:→|->|=>)\s*(?:Nhận\s+)?Vật phẩm\s*:\s*(.+)$/gim)) {
+    const name = m[1].trim();
+    if (name) items.add(name);
+  }
+  for (const m of text.matchAll(/(?:→|->|=>)\s*Cờ\s*:\s*(.+)$/gim)) {
+    const name = m[1].trim();
+    if (name) flags.add(name);
+  }
+  return { items: [...items], flags: [...flags] };
 }
 
 export function buildSceneScriptRevisionPrompt({ workshop, title, planBlock, branch, scene, currentContent, feedback, idea }) {
