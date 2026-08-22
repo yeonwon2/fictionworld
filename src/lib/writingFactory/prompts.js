@@ -708,6 +708,32 @@ export const REPETITION_CHECK_SCHEMA = {
   required: ["issues"],
 };
 
+// ---------- Gợi ý mục tiêu chương tiếp theo (tự động, từ đại cương + tóm tắt hiện tại) ----------
+export function buildNextChapterGoalPrompt({ genre, bibleText, prevTail, nextChapterNumber }) {
+  return `Bạn là ĐẠI CƯƠNG SƯ của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Tác giả sắp viết CHƯƠNG ${nextChapterNumber || "tiếp theo"} nhưng chưa nghĩ ra mục tiêu chương (biến cố/xung đột cần xảy ra). Hãy đọc BỘ TÀI LIỆU XƯỞNG (đặc biệt 04_DAI_CUONG và tóm tắt hiện tại) rồi đề xuất.
+
+# BỘ TÀI LIỆU XƯỞNG (bible)
+${bibleText}
+
+# Đoạn cuối chương gần nhất (để nối mạch)
+${prevTail?.trim() || "(chưa có — đây là chương đầu)"}
+
+# Yêu cầu
+- Dựa vào 04_DAI_CUONG (arc hiện đang viết tới đâu) và tóm tắt hiện tại (xung đột đang leo thang) để suy ra chương tiếp theo LOGIC PHẢI xảy ra chuyện gì.
+- goal: 1-2 câu súc tích, đủ cụ thể để biên kịch lên beats được ngay (nêu rõ biến cố/xung đột/nhân vật liên quan).
+- reasoning: 1 câu giải thích ngắn vì sao đây là bước tiếp theo hợp lý (dựa vào đại cương/arc nào).
+Trả JSON đúng schema: { goal: string, reasoning: string }.`;
+}
+
+export const NEXT_CHAPTER_GOAL_SCHEMA = {
+  type: "object",
+  properties: {
+    goal: { type: "string" },
+    reasoning: { type: "string" },
+  },
+  required: ["goal"],
+};
+
 // ---------- Sinh backstory / sách bách khoa nhân vật phụ ----------
 export function buildBackstoryPrompt({ genre, bibleText, characterName, numScenes, focus }) {
   return `Bạn là THIẾT LẬP SƯ + QUẢN LÝ NHÂN VẬT của xưởng viết tiểu thuyết. ${genreStyleLine(genre)} Hãy viết backstory chi tiết cho nhân vật phụ "${characterName}" — biến nhân vật phụ thành nhân vật ĐƯỢC NHỚ, có chiều sâu, có mục tiêu riêng, có bí mật.

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Users, RefreshCw, Loader2, MessageSquareQuote } from "lucide-react";
+import { Users, RefreshCw, Loader2, MessageSquareQuote, BookPlus } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { listChapters, upsertWriterDoc } from "@/lib/worldcrud";
-import { buildVoiceExtractionPrompt, VOICE_EXTRACTION_SCHEMA, DOC_DEFS_BY_KEY } from "@/lib/writingFactory/prompts";
+import { buildVoiceExtractionPrompt, VOICE_EXTRACTION_SCHEMA, buildBackstoryPrompt, buildBibleBlock, DOC_DEFS_BY_KEY } from "@/lib/writingFactory/prompts";
 
 // Parse trạng thái nhân vật từ doc `07_TRANG_THAI_NHAN_VAT.md`.
 // Giả định mỗi nhân vật là một mục bắt đầu bằng `### Tên` hoặc `## Tên`.
@@ -33,6 +33,7 @@ export default function CharacterStateDashboard({
   currentStoryId,
   stateDoc,
   characterDoc,
+  docsByKey,
   genre,
   onDocsUpdated,
 }) {
@@ -40,6 +41,9 @@ export default function CharacterStateDashboard({
   const [extracting, setExtracting] = useState(false);
   const [extractFor, setExtractFor] = useState(null);
   const [extractPreview, setExtractPreview] = useState(null);
+  const [backstoryFor, setBackstoryFor] = useState(null);
+  const [generatingBackstory, setGeneratingBackstory] = useState(false);
+  const [backstoryPreview, setBackstoryPreview] = useState(null); // { name, markdown }
 
   useEffect(() => {
     listChapters(currentStoryId).then((list) => setChapters(list || []));
@@ -47,6 +51,31 @@ export default function CharacterStateDashboard({
   }, [currentStoryId]);
 
   const characters = useMemo(() => parseCharacterStates(stateDoc?.content), [stateDoc?.content]);
+  const bibleText = useMemo(() => buildBibleBlock(docsByKey), [docsByKey]);
+
+  // Nhân vật phụ dễ bị "phẳng" (thiếu chiều sâu) — AI viết backstory + gợi ý
+  // cảnh xuất hiện, biến họ thành nhân vật được nhớ thay vì bù nhìn cho có.
+  const handleGenerateBackstory = async (name) => {
+    setBackstoryFor(name);
+    setBackstoryPreview(null);
+    setGeneratingBackstory(true);
+    try {
+      const md = await aiCall(buildBackstoryPrompt({ genre, bibleText, characterName: name, numScenes: 3 }));
+      setBackstoryPreview({ name, markdown: String(md || "").trim() });
+    } catch (e) {
+      alert("Lỗi sinh backstory: " + (e?.message || "lỗi"));
+    } finally {
+      setGeneratingBackstory(false);
+    }
+  };
+
+  const applyBackstoryToCharacterDoc = async () => {
+    if (!backstoryPreview || !characterDoc) return;
+    const newContent = (characterDoc.content || "").trim() + `\n\n## Backstory: ${backstoryPreview.name}\n${backstoryPreview.markdown}`;
+    await upsertWriterDoc(currentStoryId, "nhan_vat", { title: DOC_DEFS_BY_KEY["nhan_vat"].title, content: newContent });
+    setBackstoryPreview(null);
+    onDocsUpdated?.();
+  };
 
   const handleExtractVoice = async (name) => {
     setExtractFor(name);
@@ -111,20 +140,35 @@ ${extractPreview.samples.map((s) => `- "${s}"`).join("\n")}`;
       <div className="grid sm:grid-cols-2 gap-3">
         {characters.map((c) => (
           <div key={c.name} className="rounded-xl border border-border bg-card p-3.5">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="font-display font-semibold text-sm">{c.name}</h3>
-              <button
-                onClick={() => handleExtractVoice(c.name)}
-                disabled={extracting}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
-              >
-                {extractFor === c.name && extracting ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <MessageSquareQuote className="w-3 h-3" />
-                )}
-                Trích giọng
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleGenerateBackstory(c.name)}
+                  disabled={generatingBackstory}
+                  title="Nhân vật phụ đang phẳng? AI viết backstory + gợi ý cảnh xuất hiện"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {backstoryFor === c.name && generatingBackstory ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <BookPlus className="w-3 h-3" />
+                  )}
+                  Sinh backstory
+                </button>
+                <button
+                  onClick={() => handleExtractVoice(c.name)}
+                  disabled={extracting}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {extractFor === c.name && extracting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <MessageSquareQuote className="w-3 h-3" />
+                  )}
+                  Trích giọng
+                </button>
+              </div>
             </div>
             <div className="mt-2 space-y-1 text-xs">
               {Object.entries(c.fields).length === 0 && (
@@ -164,6 +208,32 @@ ${extractPreview.samples.map((s) => `- "${s}"`).join("\n")}`;
             </button>
             <button
               onClick={() => setExtractPreview(null)}
+              className="px-3 py-1.5 rounded-md border border-border text-xs hover:bg-muted"
+            >
+              Huỷ
+            </button>
+          </div>
+        </div>
+      )}
+
+      {backstoryPreview && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center gap-2">
+            <BookPlus className="w-4 h-4 text-primary" />
+            <h3 className="font-display font-semibold text-sm">Backstory: {backstoryPreview.name}</h3>
+          </div>
+          <div className="mt-2 text-xs whitespace-pre-wrap max-h-64 overflow-y-auto rounded-md bg-background/60 p-3 leading-relaxed">
+            {backstoryPreview.markdown || "(trống)"}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={applyBackstoryToCharacterDoc}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs hover:opacity-90"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Thêm vào 02_NHAN_VAT
+            </button>
+            <button
+              onClick={() => setBackstoryPreview(null)}
               className="px-3 py-1.5 rounded-md border border-border text-xs hover:bg-muted"
             >
               Huỷ

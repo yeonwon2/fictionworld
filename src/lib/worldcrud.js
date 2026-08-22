@@ -180,6 +180,42 @@ export async function deleteChapter(id) {
   return deleteRow("chapters", id);
 }
 
+// ---------- Snapshot chương (chapter_snapshots) ----------
+// Cùng nguyên lý writer_doc_snapshots: chụp lại nội dung CŨ trước khi một lần
+// lưu ghi đè nó (đặc biệt sau khi AI viết lại/sửa theo góp ý) — có đường quay
+// lại nếu bản mới tệ hơn.
+export async function createChapterSnapshot(storyId, chapterId, { title, content, chapterNumber, label }) {
+  const { data: row, error } = await supabase
+    .from("chapter_snapshots")
+    .insert({ story_id: storyId, chapter_id: chapterId, title, content, chapter_number: chapterNumber, label })
+    .select()
+    .single();
+  if (error) throw error;
+  return row;
+}
+
+export async function listChapterSnapshots(chapterId, limit = 20) {
+  const { data, error } = await supabase
+    .from("chapter_snapshots")
+    .select("id, chapter_id, title, label, chapter_number, created_at")
+    .eq("chapter_id", chapterId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getChapterSnapshot(id) {
+  const { data, error } = await supabase.from("chapter_snapshots").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteChapterSnapshot(id) {
+  const { error } = await supabase.from("chapter_snapshots").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- Xưởng Viết Truyện (writer_docs) — bộ tài liệu sống theo bộ truyện ----------
 // doc_key cố định: quy_tac_viet | the_gioi | nhan_vat | quan_he | dai_cuong | fuc_but | timeline | tom_tat_hien_tai
 const WRITER_DOC_COLUMNS = "id, story_id, doc_key, title, content, updated_at, created_at";

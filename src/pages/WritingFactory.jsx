@@ -473,6 +473,7 @@ export default function WritingFactory() {
           currentStoryId={currentStoryId}
           stateDoc={docsByKey?.trang_thai_nhan_vat}
           characterDoc={docsByKey?.nhan_vat}
+          docsByKey={docsByKey}
           genre={currentStory?.genre || ""}
           onDocsUpdated={loadDocs}
         />

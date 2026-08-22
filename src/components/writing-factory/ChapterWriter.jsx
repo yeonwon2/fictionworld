@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   PenLine,
   Loader2,
@@ -19,6 +19,12 @@ import {
   DoorOpen,
   Flag,
   Copy,
+  History,
+  RotateCcw,
+  Camera,
+  X,
+  Rocket,
+  Target,
 } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
@@ -29,6 +35,10 @@ import {
   deleteChapter,
   upsertWriterDoc,
   createWriterDocSnapshot,
+  createChapterSnapshot,
+  listChapterSnapshots,
+  getChapterSnapshot,
+  deleteChapterSnapshot,
 } from "@/lib/worldcrud";
 import {
   buildBibleBlock,
@@ -50,6 +60,8 @@ import {
   REPETITION_CHECK_SCHEMA,
   buildRollupPrompt,
   ROLLUP_SCHEMA,
+  buildNextChapterGoalPrompt,
+  NEXT_CHAPTER_GOAL_SCHEMA,
   DOC_DEFS_BY_KEY,
 } from "@/lib/writingFactory/prompts";
 
@@ -111,6 +123,18 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [rollupSaving, setRollupSaving] = useState(false);
   const [autoRollup, setAutoRollup] = useState(true);
 
+  // Lịch sử phiên bản chương (snapshot trước mỗi lần lưu ghi đè nội dung khác)
+  const originalContentRef = useRef(""); // nội dung ĐANG CÓ TRONG DB của chương đang mở — để biết có đổi thật không trước khi snapshot
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  // Gợi ý mục tiêu chương tiếp theo + Tự động viết chương tiếp theo (auto-pilot)
+  const [suggestingGoal, setSuggestingGoal] = useState(false);
+  const [autoPiloting, setAutoPiloting] = useState(false);
+  const [autoPilotStep, setAutoPilotStep] = useState("");
+
   const load = async () => {
     const list = (await listChapters(currentStoryId)) || [];
     list.sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0));
@@ -135,6 +159,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         setTitle(full.title || "");
         setNumber(full.chapter_number ?? "");
         setContent(full.content || "");
+        originalContentRef.current = full.content || "";
         try {
           setBeats(full.outline_beats ? JSON.parse(full.outline_beats) : []);
         } catch {
@@ -146,9 +171,12 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setTitle("");
       setNumber(String((chapters?.[chapters.length - 1]?.chapter_number || 0) + 1));
       setContent("");
+      originalContentRef.current = "";
       setBeats([]);
       setBeatsApproved(false);
     }
+    setHistoryOpen(false);
+    setSnapshots([]);
     return () => {
       cancelled = true;
     };
@@ -158,7 +186,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const bibleText = useMemo(() => buildBibleBlock(docsByKey), [docsByKey]);
 
   // Parse 05_FUC_BUT, tìm phục bút "đang treo" / "đã cài" có resolve_by_chapter <= số chương hiện tại.
-  const getOverdueForeshadows = useMemo(() => {
+  const overdueForeshadows = useMemo(() => {
     const content = docsByKey?.fuc_but?.content || "";
     const curNum = Number(number) || 1;
     const items = [];
@@ -240,7 +268,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         orientation,
         beats: beatsApproved ? beats : undefined,
         targetWords,
-        overdueForeshadows: getOverdueForeshadows(),
+        overdueForeshadows,
       });
       if (qualityMode) {
         // Pass 1 — viết nháp
@@ -490,12 +518,23 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     setSaving(true);
     setError("");
     try {
+      // Chụp lại bản CŨ trước khi ghi đè — chỉ khi nội dung thực sự đổi (tránh
+      // snapshot rác mỗi lần bấm Lưu mà không đổi gì). Đây là lưới an toàn cho
+      // "Viết 2 pass"/"Sửa theo góp ý" — 2 tính năng ghi đè TOÀN BỘ chương.
+      if (activeId && originalContentRef.current.trim() && originalContentRef.current !== content) {
+        try {
+          await createChapterSnapshot(currentStoryId, activeId, {
+            title, content: originalContentRef.current, chapterNumber: number === "" ? null : Number(number), label: "trước khi lưu đè",
+          });
+        } catch { /* không chặn lưu nếu snapshot lỗi */ }
+      }
       const num = number === "" ? undefined : Number(number);
       const payload = { title, chapter_number: num, content };
       if (beats.length) payload.outline_beats = JSON.stringify(beats);
       let saved;
       if (activeId) {
         saved = await updateChapter(activeId, payload);
+        originalContentRef.current = content;
       } else {
         saved = await createChapter({
           story_id: currentStoryId,
@@ -580,6 +619,135 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     }
   };
 
+  // ---------- Lịch sử phiên bản chương ----------
+  const loadSnapshots = async () => {
+    if (!activeId) return;
+    setHistoryLoading(true);
+    try {
+      setSnapshots((await listChapterSnapshots(activeId)) || []);
+    } catch {
+      setSnapshots([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleToggleHistory = () => {
+    setHistoryOpen((o) => {
+      const next = !o;
+      if (next) loadSnapshots();
+      return next;
+    });
+  };
+
+  const handleRestoreSnapshot = async (snapId) => {
+    setRestoring(true);
+    try {
+      const snap = await getChapterSnapshot(snapId);
+      if (snap?.content != null) {
+        setContent(snap.content);
+        setHistoryOpen(false);
+        setStatusNote("Đã khôi phục bản cũ vào ô soạn thảo — bấm Lưu chương để áp dụng thật.");
+      }
+    } catch (e) {
+      setError("Khôi phục snapshot lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleDeleteSnapshot = async (snapId) => {
+    try {
+      await deleteChapterSnapshot(snapId);
+      setSnapshots((s) => s.filter((x) => x.id !== snapId));
+    } catch (e) {
+      setError("Xoá snapshot lỗi: " + (e?.message || "lỗi"));
+    }
+  };
+
+  // ---------- Gợi ý mục tiêu chương tiếp theo (đọc đại cương + tóm tắt hiện tại) ----------
+  const suggestNextGoal = async () => {
+    setError("");
+    setSuggestingGoal(true);
+    try {
+      const nextNum = activeId ? number : String((chapters?.[chapters.length - 1]?.chapter_number || 0) + 1);
+      const res = await aiCall(
+        buildNextChapterGoalPrompt({ genre, bibleText, prevTail: prevTail || getLastWords(content, 800), nextChapterNumber: nextNum }),
+        { jsonSchema: NEXT_CHAPTER_GOAL_SCHEMA }
+      );
+      if (res?.goal) setGoal(res.goal);
+      setStatusNote(res?.reasoning ? `AI gợi ý mục tiêu — lý do: ${res.reasoning}` : "AI đã điền mục tiêu chương.");
+    } catch (e) {
+      setError("Gợi ý mục tiêu lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setSuggestingGoal(false);
+    }
+  };
+
+  // ---------- Tự động viết chương tiếp theo (auto-pilot): tạo chương mới, gợi ý
+  // mục tiêu → lên beats → viết → lưu, gộp lại thành 1 click cho tác giả viết
+  // nhiều chương liên tục. Rollup vẫn để tác giả tự bấm sau (không tự ý sửa bible).
+  const handleAutoPilotNext = async () => {
+    setError("");
+    setAutoPiloting(true);
+    setAutoPilotStep("Đang chuẩn bị chương mới...");
+    try {
+      const lastChapter = chapters[chapters.length - 1];
+      let lastContent = "";
+      if (lastChapter) {
+        try {
+          const full = await getChapter(lastChapter.id);
+          lastContent = full?.content || "";
+        } catch { /* bỏ qua */ }
+      }
+      const nextNum = String((lastChapter?.chapter_number || 0) + 1);
+      const tail = getLastWords(lastContent, 800);
+
+      setAutoPilotStep("Đang gợi ý mục tiêu chương...");
+      const goalRes = await aiCall(
+        buildNextChapterGoalPrompt({ genre, bibleText, prevTail: tail, nextChapterNumber: nextNum }),
+        { jsonSchema: NEXT_CHAPTER_GOAL_SCHEMA }
+      );
+      const nextGoal = goalRes?.goal || "";
+
+      setAutoPilotStep("Đang lên dàn beats...");
+      const beatsRes = await aiCall(
+        buildBeatPlannerPrompt({ genre, chapterTitle: "", chapterNumber: nextNum, chapterGoal: nextGoal, bibleText, prevTail: tail, orientation: "" }),
+        { jsonSchema: BEAT_PLANNER_SCHEMA }
+      );
+      const nextBeats = beatsRes?.beats || [];
+
+      setAutoPilotStep("Đang viết chương...");
+      const written = String(
+        await aiCall(
+          buildWriteChapterPrompt({
+            genre, chapterTitle: "", chapterNumber: nextNum, chapterGoal: nextGoal, bibleText, prevTail: tail,
+            orientation: "", beats: nextBeats, targetWords, overdueForeshadows,
+          })
+        ) || ""
+      ).trim();
+
+      setAutoPilotStep("Đang lưu chương...");
+      const saved = await createChapter({
+        story_id: currentStoryId,
+        chapter_number: Number(nextNum),
+        title: `Chương ${nextNum}`,
+        content: written,
+        outline_beats: JSON.stringify(nextBeats),
+      });
+      setChapters((cs) => [...cs.filter((c) => c.id !== saved.id), saved].sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0)));
+      setActiveId(saved.id);
+      setGoal(nextGoal);
+      onChapterWritten?.(saved);
+      setStatusNote(`Đã tự động viết xong Chương ${nextNum}. Đọc lại, kiểm tra nhất quán rồi bấm "Cập nhật bible" (rollup) khi ưng ý.`);
+    } catch (e) {
+      setError("Tự động viết chương tiếp theo lỗi: " + (e?.message || "lỗi"));
+    } finally {
+      setAutoPilotStep("");
+      setAutoPiloting(false);
+    }
+  };
+
   const rollupKeys = rollupProposal ? Object.keys(rollupProposal) : [];
   const rollupAllSaved = rollupKeys.length > 0 && rollupKeys.every((k) => rollupProposal[k].saved);
 
@@ -607,6 +775,24 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           >
             Mới
           </button>
+          <button
+            onClick={handleAutoPilotNext}
+            disabled={autoPiloting || writing}
+            title="Tự động: gợi ý mục tiêu + lên beats + viết + lưu chương kế tiếp — chỉ 1 lần bấm"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-gradient-to-r from-primary to-accent text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 shrink-0"
+          >
+            {autoPiloting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
+            {autoPiloting ? autoPilotStep || "Đang tự động viết..." : "Tự động viết chương tiếp"}
+          </button>
+          {activeId && (
+            <button
+              onClick={handleToggleHistory}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border text-xs hover:bg-muted"
+              title="Lịch sử phiên bản chương (snapshot tự động trước mỗi lần AI ghi đè)"
+            >
+              <History className="w-3.5 h-3.5" />
+            </button>
+          )}
           {activeId && (
             <button
               onClick={handleDelete}
@@ -616,6 +802,48 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             </button>
           )}
         </div>
+
+        {/* Lịch sử phiên bản chương */}
+        {historyOpen && (
+          <div className="px-4 py-2.5 border-b border-border bg-muted/10 max-h-44 overflow-y-auto">
+            <div className="flex items-center gap-2 mb-2">
+              <History className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-semibold">Lịch sử phiên bản chương</span>
+              <button onClick={loadSnapshots} disabled={historyLoading} className="ml-auto text-[10px] text-primary hover:underline disabled:opacity-50">
+                {historyLoading ? "Đang tải..." : "Làm mới"}
+              </button>
+              <button onClick={() => setHistoryOpen(false)} className="p-0.5 text-muted-foreground hover:bg-muted rounded">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {snapshots.length === 0 && (
+              <p className="text-[10px] text-muted-foreground italic">
+                Chưa có snapshot nào. Mỗi lần Lưu ghi đè nội dung khác, bản cũ sẽ tự động được chụp lại ở đây.
+              </p>
+            )}
+            <ul className="space-y-1.5">
+              {snapshots.map((s) => (
+                <li key={s.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
+                  <Camera className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium truncate">{s.label || "Snapshot"}</div>
+                    <div className="text-[9px] text-muted-foreground">{new Date(s.created_at).toLocaleString("vi-VN")}</div>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreSnapshot(s.id)}
+                    disabled={restoring}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    {restoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />} Khôi phục
+                  </button>
+                  <button onClick={() => handleDeleteSnapshot(s.id)} className="p-1 text-muted-foreground hover:text-destructive text-[10px]" title="Xoá snapshot">
+                    <X className="w-3 h-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="grid sm:grid-cols-[1fr_100px] gap-2.5 px-4 pt-3">
           <div>
@@ -656,13 +884,23 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
               từ
             </label>
           </div>
-          <textarea
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            rows={2}
-            placeholder="VD: Nữ chính phát hiện thân phận thật của nam chính, đối chất, xảy ra hiểu lầm..."
-            className="mt-1 w-full rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs resize-y"
-          />
+          <div className="mt-1 flex items-start gap-1.5">
+            <textarea
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              rows={2}
+              placeholder="VD: Nữ chính phát hiện thân phận thật của nam chính, đối chất, xảy ra hiểu lầm..."
+              className="flex-1 rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs resize-y"
+            />
+            <button
+              onClick={suggestNextGoal}
+              disabled={suggestingGoal}
+              title="Chưa nghĩ ra mục tiêu? Để AI đọc đại cương + tóm tắt hiện tại rồi gợi ý"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-primary/40 text-primary text-[10px] hover:bg-primary/10 disabled:opacity-50"
+            >
+              {suggestingGoal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />} Gợi ý
+            </button>
+          </div>
         </div>
 
         <div className="px-4 pt-2.5">

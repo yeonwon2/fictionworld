@@ -221,6 +221,21 @@ create table if not exists public.writer_doc_snapshots (
 );
 create index if not exists writer_doc_snapshots_story_key_idx on public.writer_doc_snapshots (story_id, doc_key);
 
+-- Snapshot/version lịch sử của từng CHƯƠNG — cùng nguyên lý writer_doc_snapshots,
+-- nhưng cho bảng chapters: AI "Viết 2 pass"/"Sửa theo góp ý" ghi đè toàn bộ nội
+-- dung chương khi lưu, nếu không có bản trước thì không có đường quay lại.
+create table if not exists public.chapter_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid references public.stories (id) on delete cascade,
+  chapter_id uuid references public.chapters (id) on delete cascade,
+  title text not null default 'Snapshot',
+  content text not null default '',
+  chapter_number numeric,
+  label text,
+  created_at timestamptz not null default now()
+);
+create index if not exists chapter_snapshots_chapter_idx on public.chapter_snapshots (chapter_id, created_at desc);
+
 -- =========================================================================
 -- Xưởng Kịch Bản Game (game_script_*) — viết kịch bản game theo từng loại game
 -- Hoạt động theo đúng mô hình xưởng của WritingFactory: mỗi bộ truyện (story)
@@ -395,7 +410,7 @@ create index if not exists game_plan_scene_content_branch_idx on public.game_pla
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','chapter_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format('create trigger set_updated_at before update on public.%I for each row execute function public.set_updated_at()', t);
@@ -409,7 +424,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
+  foreach t in array array['stories','chapters','characters','locations','events','relationships','glossary_terms','games','custom_themes','writer_docs','writer_doc_snapshots','chapter_snapshots','game_script_config','game_script_docs','game_routes','game_scenes','game_script_projects','game_plan_meta','game_plan_scenes','game_plan_branches','game_plan_scene_content']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "%I_authenticated_all" on public.%I', t, t);
