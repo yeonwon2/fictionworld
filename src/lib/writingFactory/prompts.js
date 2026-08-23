@@ -35,44 +35,44 @@ export const DOC_DEFS_BY_KEY = Object.fromEntries(DOC_DEFS.map((d) => [d.key, d]
 export const TEAM_ROLES = [
   {
     key: "tong_bien_tap",
-    name: "Tổng biên tập",
+    name: "Architect",
     emoji: "🎬",
-    desc: "Giữ tông truyện, định hướng tổng thể, đánh giá chất lượng chương.",
+    desc: "Dựng Master Plan, lời hứa truyện, theme và đích kết thúc.",
     system: `Bạn là TỔNG BIÊN TẬP của một xưởng viết tiểu thuyết mạng. Bạn chịu trách nhiệm giữ đúng tông truyện, nhịp độ kể chuyện và định hướng tác giả. Bạn đánh giá thẳng thắn chất lượng bản thảo, đề xuất cải thiện về kịch tính, cảm xúc, nhịp, và kiểm tra cấu trúc tổng thể. Luôn trả lời bằng tiếng Việt, cụ thể, không lặp lại ngữ cảnh.`,
   },
   {
     key: "thiet_lap_su",
-    name: "Thiết lập sư",
+    name: "Planner",
     emoji: "🌍",
-    desc: "Chuyên thế giới quan: bối cảnh, luật lệ, văn hoá, địa danh.",
+    desc: "Lập Volume/Arc, rolling Chapter Map, Contract và Scene Plan.",
     system: `Bạn là THIẾT LẬP SƯ chuyên xây dựng và bảo toàn THẾ GIỚI QUAN của tiểu thuyết: bối cảnh địa lý, xã hội, văn hoá, chính trị, lực lượng, luật lệ, phép thuật/năng lực, thuật ngữ riêng. Bạn giữ cho thế giới luôn nhất quán với bộ tài liệu bible, phát hiện chỗ viết chệch và đề xuất bổ sung hợp lý. Luôn trả lời bằng tiếng Việt, cụ thể, bám tài liệu.`,
   },
   {
     key: "nhan_vat_quan_ly",
-    name: "Quản lý nhân vật",
+    name: "Writer",
     emoji: "👤",
-    desc: "Chuyên hồ sơ nhân vật: tính cách, động cơ, bí mật, giọng văn.",
+    desc: "Viết prose theo contract, scene plan và content budget.",
     system: `Bạn là QUẢN LÝ NHÂN VẬT của một xưởng viết tiểu thuyết. Bạn nắm rõ hồ sơ, tính cách, mục tiêu, bí mật, mâu thuẫn nội tâm, giọng văn/xưng hô của từng nhân vật. Bạn đảm bảo nhân vật hành động và nói năng ĐÚNG tính cách mọi lúc, phát hiện chỗ "nhân vật lạc tính cách" và gợi ý cách sửa. Luôn trả lời bằng tiếng Việt, cụ thể.`,
   },
   {
     key: "phuc_but_quan_ly",
-    name: "Phục bút quản lý",
+    name: "Continuity Editor",
     emoji: "🚩",
-    desc: "Chuyên sổ phục bút (伏笔): cài đặt, hồi đáp, thời điểm.",
+    desc: "Hard gate timeline, knowledge, state, open plots và foreshadow.",
     system: `Bạn là PHỤC BÚT QUẢN LÝ — chuyên gia quản lý 伏笔 (cài đặt phục bút và hồi đáp) trong tiểu thuyết dài kỳ. Bạn duy trì sổ phục bút: mỗi phục bút có trạng thái (chưa cài / đã cài / đang treo / đã hồi đáp), thời điểm cài, dự kiến hồi đáp. Bạn gợi ý cài phục bút mới ở vị trí tự nhiên, nhắc khi nào cần hồi đáp để không quên, và đánh giá mức độ hợp lý. Luôn trả lời bằng tiếng Việt, cụ thể.`,
   },
   {
     key: "bien_tap_nhat_quan",
-    name: "Biên tập nhất quán",
+    name: "Quality",
     emoji: "🔍",
-    desc: "Rà soát mâu thuẫn: ngoại hình, xưng hô, timeline, sự kiện.",
+    desc: "Chấm logic, pacing, repetition, description bloat và hook.",
     system: `Bạn là BIÊN TẬP NHẤT QUÁN của một xưởng viết tiểu thuyết. Nhiệm vụ của bạn là soát MÂU THUẪN giữa bản thảo chương và bộ tài liệu bible (quy tắc, thế giới, nhân vật, quan hệ, timeline, phục bút). Chỉ báo lỗi THẬT SỰ (đổi ngoại hình cố định, sai xưng hô, nhắc sự kiện chưa xảy ra, hành động trái tính cách, bỏ sót phục bút cần hồi đáp...). Mỗi lỗi nêu rõ mức độ nghiêm trọng, vị trí, và cách sửa đề xuất. Luôn trả lời bằng tiếng Việt, không báo lỗi mơ hồ.`,
   },
   {
     key: "tro_ly_tac_gia",
-    name: "Trợ lý tác giả",
+    name: "Canon Keeper",
     emoji: "✍️",
-    desc: "Hỗ trợ toàn diện mọi yêu cầu tự do của tác giả.",
+    desc: "Chỉ cập nhật canon/current state sau khi chương quality-pass.",
     system: `Bạn là TRỢ LÝ TÁC GIẢ toàn diện của một xưởng viết tiểu thuyết. Tác giả có thể yêu cầu TỰ DO bất cứ điều gì: brainstorm ý tưởng, viết thử đoạn văn, gợi ý tình tiết, kiểm tra logic, mở rộng hoặc rút gọn bản thảo, chuyển thể văn phong... Bạn luôn dựa vào bộ tài liệu bible để trả lời chính xác, cụ thể và hữu ích. Luôn trả lời bằng tiếng Việt.`,
   },
 ];
@@ -111,7 +111,7 @@ Hãy trả về TOÀN BỘ 8 tài liệu, MỖI tài liệu là một chuỗi Ma
 - 01_THE_GIOI: thế giới quan — bối cảnh, địa lý, xã hội/chính trị/văn hoá, luật lệ, phép thuật/năng lệ/đẳng cấp, thuật ngữ riêng.
 - 02_NHAN_VAT: hồ sơ nhân vật — mỗi nhân vật 1 mục đầy đủ (thân phận, tuổi, ngoại hình CỐ ĐỊNH, tính cách, mục tiêu, bí mật, mâu thuẫn nội tâm, giọng văn/xưng hô, quan hệ, sự kiện định hình).
 - 03_QUAN_HE: ma trận quan hệ & xưng hô giữa các nhân vật (ai với ai, kiểu quan hệ, thái độ hiện tại, xưng hô đúng giọng).
-- 04_DAI_CUONG: đại cương — tổng số chương dự kiến, các arc (tên, từ-chương-đến-chương, bước ngoặt chính), đại cương sự kiện cho vài chương đầu.
+- 04_DAI_CUONG: MASTER PLAN đa tầng — premise, thematic question, lời hứa với độc giả, ending đích, trục biến đổi nhân vật; Volume/Arc plan (mục tiêu, xung đột, midpoint, climax, hệ quả, phạm vi chương); và ROLLING CHAPTER MAP chi tiết cho 5–10 chương gần nhất. Mỗi chương có promise, tiến triển plot, state change, knowledge/reveal, phục bút và hook. Không khóa vào một thể loại.
 - 05_FUC_BUT: sổ phục bút — danh sách phục bút nên cài (mô tả, thời điểm cài, dự kiến hồi đáp, trạng thái "đang treo").
 - 06_TIMELINE: dòng thời gian các sự kiện đã xác lập (sự kiện, thời điểm, nơi, nhân vật liên quan).
 - 07_TRANG_THAI_NHAN_VAT: trạng thái sống của từng nhân vật NGAY BÂY GIỜ — địa điểm hiện tại, hành động đang làm, tâm lý, vật phẩm, bí mật đã biết, thương tích/địa vị mới nhất (dùng Markdown, mỗi nhân vật 1 mục '### Tên').
@@ -148,7 +148,7 @@ export function buildDocGenPrompt({ key, genre, idea, existingBible, currentDoc,
     quan_he:
       "Soạn ma trận quan hệ & xưng hô: từng cặp nhân vật — kiểu quan hệ, thái độ hiện tại, xưng hô đúng giọng từng người.",
     dai_cuong:
-      "Soạn đại cương: tổng số chương dự kiến, các arc (tên, từ-chương-đến-chương, bước ngoặt chính), và đại cương sự kiện chi tiết cho các chương.",
+      "Soạn MASTER PLAN: premise/theme/reader promise/ending/trục biến đổi; Volume → Arc plan với midpoint/climax/hệ quả; rolling Chapter Map chi tiết 5–10 chương kế tiếp (promise, plot, state, knowledge, relationship, foreshadow, hook). Dùng được cho mọi thể loại.",
     fuc_but:
       "Soạn sổ phục bút: mỗi phục bút có mô tả, thời điểm cài, dự kiến hồi đáp, trạng thái (chưa cài / đã cài / đang treo / đã hồi đáp).",
     timeline:
@@ -222,6 +222,116 @@ export const BEAT_PLANNER_SCHEMA = {
   required: ["beats"],
 };
 
+// ---------- Chapter Contract + Scene Plan: cam kết đầu ra trước khi viết ----------
+export function buildChapterContractPrompt({ genre, chapterNumber, chapterTitle, chapterGoal, bibleText, prevTail, targetWords }) {
+  return `Bạn là PLANNER của xưởng viết truyện dài đa thể loại. ${genreStyleLine(genre)} Hãy lập CHAPTER CONTRACT và SCENE PLAN có thể kiểm chứng trước khi Writer viết.
+
+# CANON/CURRENT STATE
+${bibleText}
+
+# Chương ${chapterNumber || "?"}: ${chapterTitle || "(chưa đặt tên)"}
+- Mục tiêu tác giả: ${chapterGoal?.trim() || "(suy ra từ đại cương và chapter map)"}
+- Content budget: ${targetWords || 1200} từ, dung sai ±15%.
+- Đoạn nối: ${prevTail?.trim() || "(mở đầu truyện)"}
+
+Contract phải nêu: promise (thay đổi không thể bỏ), start_state, end_state, required_reveals, forbidden_reveals, open_plots_advanced, foreshadow_actions, timeline_window, knowledge_constraints, relationship_changes và content_budget phân bổ theo cảnh. Scene plan gồm 3–7 cảnh; mỗi cảnh có goal, conflict, turn, outcome, pov, location, characters, knowledge_used, state_changes, words. Tổng words gần target; không tạo cảnh chỉ để miêu tả hoặc kéo chữ.
+Trả JSON đúng schema.`;
+}
+
+export const CHAPTER_CONTRACT_SCHEMA = {
+  type: "object",
+  properties: {
+    contract: {
+      type: "object",
+      properties: {
+        promise: { type: "string" }, start_state: { type: "string" }, end_state: { type: "string" },
+        required_reveals: { type: "array", items: { type: "string" } }, forbidden_reveals: { type: "array", items: { type: "string" } },
+        open_plots_advanced: { type: "array", items: { type: "string" } }, foreshadow_actions: { type: "array", items: { type: "string" } },
+        timeline_window: { type: "string" }, knowledge_constraints: { type: "array", items: { type: "string" } },
+        relationship_changes: { type: "array", items: { type: "string" } }, content_budget: { type: "string" },
+      },
+      required: ["promise", "start_state", "end_state", "required_reveals", "forbidden_reveals", "open_plots_advanced", "foreshadow_actions", "timeline_window", "knowledge_constraints", "relationship_changes", "content_budget"],
+    },
+    scenes: { type: "array", items: { type: "object", properties: {
+      goal: { type: "string" }, conflict: { type: "string" }, turn: { type: "string" }, outcome: { type: "string" },
+      pov: { type: "string" }, location: { type: "string" }, characters: { type: "array", items: { type: "string" } },
+      knowledge_used: { type: "array", items: { type: "string" } }, state_changes: { type: "array", items: { type: "string" } }, words: { type: "number" },
+    }, required: ["goal", "conflict", "turn", "outcome", "words"] } },
+  }, required: ["contract", "scenes"],
+};
+
+export function buildLogicGatePrompt({ genre, phase, bibleText, contract, scenes, chapterContent = "" }) {
+  return `Bạn là CONTINUITY EDITOR kiêm Logic/Canon/Current State engine. ${genreStyleLine(genre)} Đây là HARD GATE ${phase === "pre" ? "TRƯỚC KHI VIẾT" : "SAU KHI VIẾT"}.
+
+# CANON/CURRENT STATE
+${bibleText}
+# CHAPTER CONTRACT
+${JSON.stringify(contract || {}, null, 2)}
+# SCENE PLAN
+${JSON.stringify(scenes || [], null, 2)}
+${phase === "post" ? `# BẢN THẢO\n"""${chapterContent || ""}"""` : ""}
+
+Kiểm riêng từng miền: timeline, knowledge (nhân vật chỉ biết điều đã học), character_state, relationship_state, open_plots, foreshadow, và world_rules. Lỗi mâu thuẫn logic/canon là hard_fail=true; thiếu dữ liệu cần thiết để xác nhận cũng hard fail và ghi rõ cần bổ sung gì. passed chỉ true khi không có hard fail. Không chấm văn phong.
+Trả JSON đúng schema.`;
+}
+
+export const LOGIC_GATE_SCHEMA = {
+  type: "object", properties: {
+    passed: { type: "boolean" }, summary: { type: "string" },
+    issues: { type: "array", items: { type: "object", properties: {
+      domain: { type: "string" }, severity: { type: "string" }, hard_fail: { type: "boolean" }, problem: { type: "string" }, suggestion: { type: "string" },
+    }, required: ["domain", "severity", "hard_fail", "problem"] } },
+  }, required: ["passed", "issues", "summary"],
+};
+
+export function buildQualityGatePrompt({ genre, bibleText, contract, scenes, chapterContent, targetWords }) {
+  return `Bạn là QUALITY EDITOR. ${genreStyleLine(genre)} Chấm bản thảo sau khi Continuity Editor kiểm canon. Logic/canon là HARD FAIL; pacing, repetition và description_bloat là quality checks. Content budget ${targetWords || "mặc định"} từ ±15%.
+# BIBLE\n${bibleText}\n# CONTRACT\n${JSON.stringify(contract || {}, null, 2)}\n# SCENES\n${JSON.stringify(scenes || [], null, 2)}\n# BẢN THẢO\n"""${chapterContent}"""
+Kiểm: hoàn thành promise/start→end state; mọi scene có tiến triển; nhịp; lặp ý/câu/tình tiết; miêu tả không phục vụ mood, thông tin, nhân vật hoặc tension; padding; hook. Mọi lỗi logic đặt hard_fail=true. passed=false nếu có hard fail hoặc chất lượng tổng thể dưới 7/10. Trả JSON đúng schema.`;
+}
+
+export const QUALITY_GATE_SCHEMA = {
+  type: "object", properties: {
+    passed: { type: "boolean" }, score: { type: "number" }, summary: { type: "string" },
+    checks: { type: "object", additionalProperties: { type: "number" } },
+    issues: { type: "array", items: { type: "object", properties: {
+      domain: { type: "string" }, severity: { type: "string" }, hard_fail: { type: "boolean" }, problem: { type: "string" }, suggestion: { type: "string" },
+    }, required: ["domain", "severity", "hard_fail", "problem"] } },
+  }, required: ["passed", "score", "summary", "issues"],
+};
+
+// ---------- P6–P10: kiểm sức khỏe toàn truyện + Story Promise/trackers ----------
+export function buildNovelHealthPrompt({ genre, bibleText, chapters }) {
+  const chapterEvidence = (chapters || []).map((c) => {
+    const text = String(c.content || "");
+    const excerpt = text.length > 2400 ? `${text.slice(0, 1200)}\n…\n${text.slice(-1200)}` : text;
+    return `## Chương ${c.chapter_number ?? "?"}: ${c.title || ""}\n${excerpt}`;
+  }).join("\n\n");
+  return `Bạn là NOVEL TESTER kiểm định truyện dài đa thể loại. ${genreStyleLine(genre)} Đọc Master Plan/Bible và bằng chứng chương để tạo HEALTH REPORT dựa trên bằng chứng, không đoán.
+# BIBLE / MASTER PLAN / CURRENT STATE\n${bibleText}
+# CHƯƠNG (đầu+cuối mỗi chương nếu dài)\n${chapterEvidence || "(chưa có)"}
+
+Kiểm các tracker: story_promise, main_plot, subplots/open_plots, character_arcs, relationship_progression, knowledge/mystery, foreshadow/payoff, timeline, pacing, repetition và description_bloat. Với mỗi tracker: score 0–100, status good/warning/critical, evidence có số chương, neglected_for_chapters và next_action. Chỉ critical khi có mâu thuẫn hoặc lời hứa trọng tâm bị bỏ quên rõ ràng. health_score là trung bình có trọng số, logic/canon/story promise nặng nhất. regressions là lỗi xuất hiện hoặc tệ hơn ở các chương gần đây. priorities tối đa 7 hành động cụ thể cho 3–10 chương tới.
+Trả JSON đúng schema.`;
+}
+
+export const NOVEL_HEALTH_SCHEMA = {
+  type: "object", properties: {
+    health_score: { type: "number" }, summary: { type: "string" },
+    trackers: { type: "array", items: { type: "object", properties: {
+      key: { type: "string" }, label: { type: "string" }, score: { type: "number" }, status: { type: "string" }, evidence: { type: "array", items: { type: "string" } }, neglected_for_chapters: { type: "number" }, next_action: { type: "string" },
+    }, required: ["key", "label", "score", "status", "evidence", "next_action"] } },
+    regressions: { type: "array", items: { type: "string" } }, priorities: { type: "array", items: { type: "string" } },
+  }, required: ["health_score", "summary", "trackers", "regressions", "priorities"],
+};
+
+export function buildGateRepairPrompt({ genre, bibleText, contract, scenes, chapterContent, gateReport, targetWords }) {
+  return `Bạn là WRITER nhận phiếu sửa từ Continuity Editor/Quality. ${genreStyleLine(genre)} Viết lại TOÀN BỘ chương, giữ phần đạt, sửa hết hard fail và lỗi chất lượng. Không được sửa canon để hợp thức hóa bản thảo.
+# BIBLE\n${bibleText}\n# CONTRACT\n${JSON.stringify(contract || {}, null, 2)}\n# SCENE PLAN\n${JSON.stringify(scenes || [], null, 2)}\n# GATE REPORT\n${JSON.stringify(gateReport || {}, null, 2)}\n# BẢN THẢO\n"""${chapterContent}"""
+# CONTENT BUDGET\n${targetWords || 1200} từ ±15%. Không padding; mỗi đoạn phải phục vụ plot, character, relationship, knowledge, mood có chủ đích hoặc tension.
+Chỉ trả chương Markdown hoàn chỉnh, không giải thích meta.`;
+}
+
 // ---------- Viết chương bám bible ----------
 export function buildWriteChapterPrompt({
   genre,
@@ -234,6 +344,8 @@ export function buildWriteChapterPrompt({
   beats,
   targetWords,
   overdueForeshadows,
+  contract,
+  scenes,
 }) {
   const wordRule =
     targetWords && Number(targetWords) > 0
@@ -250,6 +362,8 @@ ${chapterGoal?.trim() || "(chưa có — hãy viết chương nối tiếp tự 
 # Đoạn cuối chương trước (nối mạch, giữ tông)
 ${prevTail?.trim() ? prevTail.trim() : "(chưa có — viết như mở đầu)"}
 
+${contract ? `# CHAPTER CONTRACT (cam kết bắt buộc)\n${JSON.stringify(contract, null, 2)}` : ""}
+${scenes?.length ? `# SCENE PLAN (thực hiện đúng thứ tự và content budget)\n${JSON.stringify(scenes, null, 2)}` : ""}
 ${beats?.length ? `# DÀN BEATS ĐÃ DUYỆT (细纲 — bám sát 100% từng beat theo thứ tự)\n${beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : ""}
 
 ${orientation?.trim() ? `# Định hướng thêm của tác giả\n${orientation.trim()}` : ""}
@@ -262,6 +376,7 @@ ${overdueForeshadows?.length ? `# PHỤC BÚT CẦN HỒI ĐÁP TRONG CHƯƠNG N
 - Địa danh, luật lệ, thuật ngữ ĐÚNG 01_THE_GIOI.
 - Trạng thái nhân vật bắt đầu chương phải KHỚP với 07_TRANG_THAI_NHAN_VAT (vị trí, hành động, tâm lý, vật phẩm).
 - ${wordRule}
+- Chấp nhận dung sai độ dài ±15%. Nếu thiếu chữ, tăng xung đột/hành động/thông tin; KHÔNG padding bằng miêu tả, hồi tưởng hoặc lặp cảm xúc.
 - Chia đoạn rõ ràng, kết chương có móc treo (hook) tự nhiên hoặc khoảnh khắc cảm xúc.
 - Nếu hợp lý, cài 1 phục bút mới theo 05_FUC_BUT hoặc hồi đáp một phục bút đang treo.
 - Không mâu thuẫn 06_TIMELINE và summaries/tom_tat_hien_tai.md.
@@ -571,11 +686,12 @@ ${daiCuong?.trim() || "(trống)"}
 ${chaptersBlock || "(chưa có)"}
 
 # Yêu cầu
-- Xác định TẤT CẢ các arc có trong đại cương (arc chính + arc phụ nếu có): tên, số chương bắt đầu, số chương kết thúc, mục tiêu/bước ngoặt chính.
+- Xác định TẤT CẢ volume và arc có trong đại cương: volume, tên arc, số chương bắt đầu/kết thúc, mục tiêu/bước ngoặt chính.
 - Nếu đại cương không nêu rõ số chương từng arc, hãy ước lượng hợp lý từ mô tả và thứ tự.
 - Ghi chú tiến độ: arc nào đã bắt đầu/đang viết/hoàn tất dựa trên số chương đã viết.
-- Cảnh báo những chương đã viết NẰM NGOÀI mọi arc (lạc đề) — đưa vào warning_chapters.
-Trả JSON đúng schema: { arcs: [{ name, start_chapter, end_chapter, goal, progress_note }], warnings: [string] }.`;
+- Tạo rolling chapter_map cho 5–10 chương kể từ chương kế tiếp; mỗi mục có chapter, promise, plot_advance, state_change, reveal, foreshadow, hook. Chỉ dùng thông tin đại cương, không tự đổi canon.
+- Cảnh báo những chương đã viết NẰM NGOÀI mọi arc (lạc đề).
+Trả JSON đúng schema.`;
 }
 
 export const ARC_MAP_SCHEMA = {
@@ -587,6 +703,7 @@ export const ARC_MAP_SCHEMA = {
         type: "object",
         properties: {
           name: { type: "string" },
+          volume: { type: "string" },
           start_chapter: { type: "number" },
           end_chapter: { type: "number" },
           goal: { type: "string" },
@@ -596,6 +713,9 @@ export const ARC_MAP_SCHEMA = {
       },
     },
     warnings: { type: "array", items: { type: "string" } },
+    chapter_map: { type: "array", items: { type: "object", properties: {
+      chapter: { type: "number" }, promise: { type: "string" }, plot_advance: { type: "string" }, state_change: { type: "string" }, reveal: { type: "string" }, foreshadow: { type: "string" }, hook: { type: "string" },
+    }, required: ["chapter", "promise", "plot_advance", "state_change", "hook"] } },
   },
   required: ["arcs"],
 };

@@ -9,6 +9,7 @@ import { buildArcMapPrompt, ARC_MAP_SCHEMA } from "@/lib/writingFactory/prompts"
 export default function ArcMapPanel({ currentStoryId, genre, docsByKey }) {
   const [arcs, setArcs] = useState(null);
   const [warnings, setWarnings] = useState([]);
+  const [chapterMap, setChapterMap] = useState([]);
   const [maxChapter, setMaxChapter] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -27,6 +28,7 @@ export default function ArcMapPanel({ currentStoryId, genre, docsByKey }) {
       );
       setArcs(res?.arcs || []);
       setWarnings(res?.warnings || []);
+      setChapterMap(res?.chapter_map || []);
     } catch (e) {
       setError("Vẽ bản đồ arc lỗi: " + (e?.message || "lỗi"));
     } finally {
@@ -110,6 +112,7 @@ export default function ArcMapPanel({ currentStoryId, genre, docsByKey }) {
                       {done ? "Hoàn tất" : inRange ? "Đang viết" : notStarted ? "Chưa bắt đầu" : "Sắp tới"}
                     </span>
                   </div>
+                  {a.volume ? <div className="text-[10px] text-primary mt-1">{a.volume}</div> : null}
                   <div className="text-[11px] text-muted-foreground mt-1">
                     Chương {a.start_chapter}{a.end_chapter ? ` → ${a.end_chapter}` : "+"}
                   </div>
@@ -132,6 +135,21 @@ export default function ArcMapPanel({ currentStoryId, genre, docsByKey }) {
               );
             })}
           </div>
+
+          {chapterMap.length > 0 && <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="font-display font-semibold text-sm">Rolling Chapter Map · 5–10 chương kế tiếp</h3>
+            <p className="text-[11px] text-muted-foreground mt-1">Bản đồ gần được tái tính từ Master Plan và tiến độ hiện tại, tránh đóng cứng toàn bộ truyện dài.</p>
+            <div className="mt-3 space-y-2">
+              {chapterMap.map((c, i) => <div key={i} className="rounded-lg border border-border p-3 text-xs">
+                <div className="font-semibold text-primary">Chương {c.chapter}: {c.promise}</div>
+                <div className="mt-1">Plot: {c.plot_advance}</div>
+                <div>State: {c.state_change}</div>
+                {c.reveal ? <div>Knowledge/reveal: {c.reveal}</div> : null}
+                {c.foreshadow ? <div>Phục bút: {c.foreshadow}</div> : null}
+                <div>Hook: {c.hook}</div>
+              </div>)}
+            </div>
+          </div>}
 
           {(warnings || []).length > 0 && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">

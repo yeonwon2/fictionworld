@@ -3,6 +3,7 @@ import { RefreshCw, Loader2, CheckCircle2, FileText, Check } from "lucide-react"
 import { aiCall } from "@/lib/aiCall";
 import { getChapter, listChapters, upsertWriterDoc } from "@/lib/worldcrud";
 import { buildBibleBlock, buildRollupPrompt, ROLLUP_SCHEMA, DOC_DEFS_BY_KEY } from "@/lib/writingFactory/prompts";
+import { canUpdateCanon } from "@/lib/writingFactory/workflow";
 
 // Rollup: sau khi viết xong chương, AI đọc nội dung chương + bible hiện tại,
 // trả về các tài liệu CẦN cập nhật (timeline, tóm tắt hiện tại, phục bút,
@@ -11,6 +12,7 @@ export default function RollupPanel({ currentStoryId, genre, docsByKey, onDocsUp
   const [chapters, setChapters] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [chapterContent, setChapterContent] = useState("");
+  const [canonAllowed, setCanonAllowed] = useState(false);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [proposal, setProposal] = useState(null); // { key: { new, old, saved } }
@@ -29,9 +31,11 @@ export default function RollupPanel({ currentStoryId, genre, docsByKey, onDocsUp
       getChapter(activeId).then((full) => {
         if (cancelled) return;
         setChapterContent(full?.content || "");
+        setCanonAllowed(canUpdateCanon(full?.outline_beats));
       });
     } else {
       setChapterContent("");
+      setCanonAllowed(false);
     }
     return () => {
       cancelled = true;
@@ -47,6 +51,10 @@ export default function RollupPanel({ currentStoryId, genre, docsByKey, onDocsUp
     }
     if (!chapterContent.trim()) {
       setError("Chương được chọn đang trống nội dung.");
+      return;
+    }
+    if (!canonAllowed) {
+      setError("Canon Keeper từ chối cập nhật: chương này chưa có Chapter Quality Gate PASS. Hãy mở bước VIẾT, chạy gate và lưu lại chương.");
       return;
     }
     setError("");
@@ -143,13 +151,16 @@ export default function RollupPanel({ currentStoryId, genre, docsByKey, onDocsUp
           </select>
           <button
             onClick={run}
-            disabled={running}
+            disabled={running || !canonAllowed}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             {running ? "AI đang đọc & đề xuất..." : "Đề xuất cập nhật"}
           </button>
         </div>
+        {activeId && <div className={`mt-2 text-xs rounded-md px-3 py-2 ${canonAllowed ? "bg-emerald-500/10 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
+          {canonAllowed ? "Quality PASS — Canon Keeper được phép cập nhật state." : "Chưa Quality PASS — hard gate đang khóa cập nhật canon."}
+        </div>}
         {error && <p className="text-xs text-destructive mt-2">{error}</p>}
       </div>
 

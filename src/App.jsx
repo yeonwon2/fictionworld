@@ -8,14 +8,21 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import Layout from '@/components/Layout';
-import WritingFactory from '@/pages/WritingFactory';
-import GameStudio from '@/pages/GameStudio';
-import GameScriptProject from '@/pages/GameScriptProject';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 // Add page imports here
+
+const WritingFactory = lazy(() => import('@/pages/WritingFactory'));
+const GameStudio = lazy(() => import('@/pages/GameStudio'));
+const GameScriptProject = lazy(() => import('@/pages/GameScriptProject'));
+
+const lazyPage = (node) => (
+  <Suspense fallback={<div className="p-10 text-center text-sm text-muted-foreground">Đang mở xưởng...</div>}>
+    {node}
+  </Suspense>
+);
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth } = useAuth();
@@ -49,9 +56,9 @@ const AuthenticatedApp = () => {
           <Route path="/cot-truyen" element={<Navigate to="/xuong-viet-truyen" replace />} />
           <Route path="/so-tay-the-gioi" element={<Navigate to="/xuong-viet-truyen" replace />} />
           <Route path="/sang-tac-ai" element={<Navigate to="/xuong-viet-truyen" replace />} />
-          <Route path="/xuong-viet-truyen" element={<WritingFactory />} />
-          <Route path="/xuong-game" element={<GameStudio />} />
-          <Route path="/xuong-kich-ban-game" element={<GameScriptProject />} />
+          <Route path="/xuong-viet-truyen" element={lazyPage(<WritingFactory />)} />
+          <Route path="/xuong-game" element={lazyPage(<GameStudio />)} />
+          <Route path="/xuong-kich-ban-game" element={lazyPage(<GameScriptProject />)} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
@@ -77,3 +84,4 @@ function App() {
 }
 
 export default App
+import React, { lazy, Suspense } from 'react';

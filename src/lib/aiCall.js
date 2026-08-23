@@ -344,10 +344,14 @@ export async function testAIConnection({ provider, key, model, baseUrl, provider
 
 // Giữ lại tên cũ (tương thích ngược) — mặc định test Gemini.
 export async function testGeminiConnection(key, model) {
-  return testAIConnection({ provider: "gemini", key, model });
+  return testAIConnection({ provider: "gemini", key, model, baseUrl: "", providerId: "gemini" });
 }
 
 // Gọi AI — bắt buộc phải có cấu hình (Gemini key, hoặc Cổng API tuỳ chỉnh đầy đủ).
+/**
+ * @param {string} prompt
+ * @param {{ jsonSchema?: Record<string, any>, useCache?: boolean, forceRefresh?: boolean }} [options]
+ */
 export async function aiCall(prompt, { jsonSchema, useCache = true, forceRefresh = false } = {}) {
   if (!hasCustomKey()) {
     throw new Error(

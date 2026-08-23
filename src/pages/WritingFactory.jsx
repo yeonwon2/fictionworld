@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2, Map, Flag, BarChart3, Network, Clock, BookOpen } from "lucide-react";
+import { Factory, Loader2, PenLine, RefreshCw, Bot, Users, Download, BookMarked, Archive, FileCode2, FileText, FileType2, Map, Flag, BarChart3, Network, Clock, BookOpen, Activity } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import { useStory } from "@/lib/StoryContext";
 import {
@@ -47,18 +47,20 @@ import ReadingMode from "@/components/writing-factory/ReadingMode";
 import WritingStats from "@/components/writing-factory/WritingStats";
 import RelationshipGraph from "@/components/writing-factory/RelationshipGraph";
 import TimelinePanel from "@/components/writing-factory/TimelinePanel";
+import NovelHealthPanel from "@/components/writing-factory/NovelHealthPanel";
 import { buildBundleZip } from "@/lib/writingFactory/exporters";
 
 const TABS = [
-  { key: "docs", label: "Bộ Tài Liệu", icon: Factory },
-  { key: "state", label: "Trạng Thái NV", icon: Users },
-  { key: "arc", label: "Bản Đồ Arc", icon: Map },
+  { key: "docs", label: "1. THIẾT KẾ", icon: Factory },
+  { key: "arc", label: "2. DÀN Ý", icon: Map },
+  { key: "write", label: "3. VIẾT", icon: PenLine },
+  { key: "rollup", label: "4. KIỂM TRA", icon: RefreshCw },
+  { key: "health", label: "5. SỨC KHỎE TRUYỆN", icon: Activity },
+  { key: "state", label: "Canon", icon: Users },
   { key: "timeline", label: "Timeline", icon: Clock },
   { key: "relationships", label: "Quan Hệ", icon: Network },
   { key: "fucbut", label: "Phục Bút", icon: Flag },
-  { key: "write", label: "Viết Chương", icon: PenLine },
   { key: "stats", label: "Thống Kê", icon: BarChart3 },
-  { key: "rollup", label: "Cập Nhật Bible", icon: RefreshCw },
   { key: "team", label: "Team AI", icon: Bot },
 ];
 
@@ -69,7 +71,7 @@ export default function WritingFactory() {
   const [activeTab, setActiveTab] = useState("docs");
   const [activeKey, setActiveKey] = useState(DOC_DEFS[0].key);
   const [docs, setDocs] = useState([]);
-  const [docsByKey, setDocsByKey] = useState({});
+  const [docsByKey, setDocsByKey] = useState(/** @type {Record<string, any>} */ ({}));
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [bootstrapOpen, setBootstrapOpen] = useState(false);
   const [idea, setIdea] = useState("");
@@ -306,8 +308,7 @@ export default function WritingFactory() {
           <Factory className="w-6 h-6 text-primary" /> Xưởng Viết Truyện
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Mô hình xưởng kiểu tác giả web-novel: bộ tài liệu bible sống là "trí nhớ dài hạn" của AI —
-          viết chương bám bible, rồi tự cập nhật bible sau mỗi chương để không bao giờ lệch.
+          Flow: THIẾT KẾ Master Plan → DÀN Ý Volume/Arc/Chapter Map → VIẾT theo Contract → KIỂM TRA & cập nhật Canon.
         </p>
         <div className="relative mt-3 inline-block">
           <button
@@ -520,6 +521,10 @@ export default function WritingFactory() {
 
       {!loadingDocs && activeTab === "stats" && (
         <WritingStats currentStoryId={currentStoryId} storyName={currentStory?.name} />
+      )}
+
+      {!loadingDocs && activeTab === "health" && (
+        <NovelHealthPanel currentStoryId={currentStoryId} genre={currentStory?.genre || ""} docsByKey={docsByKey} />
       )}
 
       {/* Chế độ đọc full-screen */}

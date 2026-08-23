@@ -41,7 +41,6 @@ import {
   deleteChapterSnapshot,
 } from "@/lib/worldcrud";
 import {
-  buildBibleBlock,
   buildWriteChapterPrompt,
   buildBeatPlannerPrompt,
   BEAT_PLANNER_SCHEMA,
@@ -62,8 +61,16 @@ import {
   ROLLUP_SCHEMA,
   buildNextChapterGoalPrompt,
   NEXT_CHAPTER_GOAL_SCHEMA,
+  buildChapterContractPrompt,
+  CHAPTER_CONTRACT_SCHEMA,
+  buildLogicGatePrompt,
+  LOGIC_GATE_SCHEMA,
+  buildQualityGatePrompt,
+  QUALITY_GATE_SCHEMA,
+  buildGateRepairPrompt,
   DOC_DEFS_BY_KEY,
 } from "@/lib/writingFactory/prompts";
+import { canPassQuality, canWriteChapter, compactBibleContext, decodeChapterPlan, encodeChapterPlan, findPreviousChapter, getWordBudgetStatus } from "@/lib/writingFactory/workflow";
 
 function getLastWords(text, n) {
   if (!text) return "";
@@ -86,6 +93,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [orientation, setOrientation] = useState("");
   const [targetWords, setTargetWords] = useState("2000");
   const [prevTail, setPrevTail] = useState("");
+  const [autoPrevTail, setAutoPrevTail] = useState("");
   const [writing, setWriting] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
@@ -116,6 +124,14 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   const [beats, setBeats] = useState([]);
   const [planningBeats, setPlanningBeats] = useState(false);
   const [beatsApproved, setBeatsApproved] = useState(false);
+  const [contract, setContract] = useState(null);
+  const [scenes, setScenes] = useState([]);
+  const [planningContract, setPlanningContract] = useState(false);
+  const [preflight, setPreflight] = useState(null);
+  const [runningPreflight, setRunningPreflight] = useState(false);
+  const [qualityGate, setQualityGate] = useState(null);
+  const [runningQuality, setRunningQuality] = useState(false);
+  const [repairingGate, setRepairingGate] = useState(false);
 
   // Auto-rollup
   const [rollingUp, setRollingUp] = useState(false);
@@ -160,12 +176,13 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         setNumber(full.chapter_number ?? "");
         setContent(full.content || "");
         originalContentRef.current = full.content || "";
-        try {
-          setBeats(full.outline_beats ? JSON.parse(full.outline_beats) : []);
-        } catch {
-          setBeats([]);
-        }
-        setBeatsApproved(!!full.outline_beats);
+        const plan = decodeChapterPlan(full.outline_beats);
+        setBeats(plan.beats);
+        setContract(plan.contract);
+        setScenes(plan.scenes);
+        setBeatsApproved(Boolean(plan.beats.length));
+        setPreflight(null);
+        setQualityGate(plan.quality);
       });
     } else {
       setTitle("");
@@ -173,6 +190,10 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setContent("");
       originalContentRef.current = "";
       setBeats([]);
+      setContract(null);
+      setScenes([]);
+      setPreflight(null);
+      setQualityGate(null);
       setBeatsApproved(false);
     }
     setHistoryOpen(false);
@@ -183,7 +204,17 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-  const bibleText = useMemo(() => buildBibleBlock(docsByKey), [docsByKey]);
+  useEffect(() => {
+    let cancelled = false;
+    const previous = findPreviousChapter(chapters, activeId, number);
+    if (!previous) { setAutoPrevTail(""); return undefined; }
+    getChapter(previous.id).then((row) => {
+      if (!cancelled) setAutoPrevTail(getLastWords(row?.content || "", 800));
+    }).catch(() => { if (!cancelled) setAutoPrevTail(""); });
+    return () => { cancelled = true; };
+  }, [chapters, activeId, number]);
+
+  const bibleText = useMemo(() => compactBibleContext(docsByKey), [docsByKey]);
 
   // Parse 05_FUC_BUT, tìm phục bút "đang treo" / "đã cài" có resolve_by_chapter <= số chương hiện tại.
   const overdueForeshadows = useMemo(() => {
@@ -225,7 +256,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         chapterNumber: number,
         chapterGoal: goal,
         bibleText,
-        prevTail: prevTail || getLastWords(content, 800),
+        prevTail: prevTail || autoPrevTail,
         orientation,
       });
       const res = await aiCall(prompt, { jsonSchema: BEAT_PLANNER_SCHEMA });
@@ -236,6 +267,58 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     } finally {
       setPlanningBeats(false);
     }
+  };
+
+  const handlePlanContract = async () => {
+    setError("");
+    setPlanningContract(true);
+    setPreflight(null);
+    setQualityGate(null);
+    try {
+      const res = await aiCall(buildChapterContractPrompt({
+        genre, chapterNumber: number, chapterTitle: title, chapterGoal: goal, bibleText,
+        prevTail: prevTail || autoPrevTail, targetWords,
+      }), { jsonSchema: CHAPTER_CONTRACT_SCHEMA });
+      setContract(res?.contract || null);
+      setScenes(res?.scenes || []);
+      setStatusNote("Planner đã lập Chapter Contract + Scene Plan. Hãy chạy hard gate trước khi viết.");
+    } catch (e) {
+      setError("Không thể lập hợp đồng chương: " + (e?.message || "lỗi"));
+    } finally { setPlanningContract(false); }
+  };
+
+  const handlePreflight = async () => {
+    if (!contract || !scenes.length) { setError("Hãy lập Chapter Contract + Scene Plan trước."); return; }
+    setError(""); setRunningPreflight(true); setPreflight(null);
+    try {
+      const res = await aiCall(buildLogicGatePrompt({ genre, phase: "pre", bibleText, contract, scenes }), { jsonSchema: LOGIC_GATE_SCHEMA });
+      setPreflight(res);
+    } catch (e) { setError("Hard gate trước viết lỗi: " + (e?.message || "lỗi")); }
+    finally { setRunningPreflight(false); }
+  };
+
+  const handleQualityGate = async () => {
+    if (!content.trim()) return;
+    setError(""); setRunningQuality(true); setQualityGate(null);
+    try {
+      const logic = await aiCall(buildLogicGatePrompt({ genre, phase: "post", bibleText, contract, scenes, chapterContent: content }), { jsonSchema: LOGIC_GATE_SCHEMA });
+      if (!logic?.passed) { setQualityGate({ ...logic, score: 0, stage: "logic" }); return; }
+      const quality = await aiCall(buildQualityGatePrompt({ genre, bibleText, contract, scenes, chapterContent: content, targetWords }), { jsonSchema: QUALITY_GATE_SCHEMA });
+      setQualityGate({ ...quality, stage: "quality" });
+    } catch (e) { setError("Quality Gate lỗi: " + (e?.message || "lỗi")); }
+    finally { setRunningQuality(false); }
+  };
+
+  const handleRepairGate = async () => {
+    if (!qualityGate || !content.trim()) return;
+    setRepairingGate(true); setError("");
+    try {
+      const revised = await aiCall(buildGateRepairPrompt({ genre, bibleText, contract, scenes, chapterContent: content, gateReport: qualityGate, targetWords }));
+      setContent(String(revised || ""));
+      setQualityGate(null);
+      setStatusNote("Writer đã sửa theo phiếu gate. Hãy chạy lại Chapter Quality Gate để xác nhận.");
+    } catch (e) { setError("Tự sửa theo gate lỗi: " + (e?.message || "lỗi")); }
+    finally { setRepairingGate(false); }
   };
 
   const updateBeat = (i, value) => {
@@ -252,8 +335,13 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
   };
 
   const handleWrite = async () => {
+    if (!canWriteChapter({ contract, scenes, preflight })) {
+      setError("Hard gate chưa pass. Hãy lập Chapter Contract + Scene Plan và sửa mọi lỗi logic/canon trước khi viết.");
+      return;
+    }
     setError("");
     setIssues(null);
+    setQualityGate(null);
     setCritique(null);
     setWriteStep("");
     setWriting(true);
@@ -264,11 +352,13 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         chapterNumber: number,
         chapterGoal: goal,
         bibleText,
-        prevTail: prevTail || getLastWords(content, 800),
+        prevTail: prevTail || autoPrevTail,
         orientation,
         beats: beatsApproved ? beats : undefined,
         targetWords,
         overdueForeshadows,
+        contract,
+        scenes,
       });
       if (qualityMode) {
         // Pass 1 — viết nháp
@@ -323,7 +413,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         chapterNumber: number,
         chapterGoal: goal,
         bibleText,
-        prevTail: prevTail || getLastWords(content, 800),
+        prevTail: prevTail || autoPrevTail,
         orientation,
       });
       const res = await aiCall(p, { jsonSchema: CHAPTER_OPTIONS_SCHEMA });
@@ -337,6 +427,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
 
   const applyOpening = (opt) => {
     setContent((prev) => (prev.trim() ? `${opt.trim()}\n\n${prev.trim()}` : opt.trim()));
+    setQualityGate(null);
     setOpeningOptions(null);
     setStatusNote("Đã chèn mở màn vào đầu chương.");
   };
@@ -362,6 +453,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
 
   const applyHook = (opt) => {
     setContent((prev) => (prev.trim() ? `${prev.trim()}\n\n${opt.trim()}` : opt.trim()));
+    setQualityGate(null);
     setHookOptions(null);
     setStatusNote("Đã chèn hook vào cuối chương.");
   };
@@ -425,6 +517,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       });
       const res = await aiCall(prompt);
       setContent(String(res));
+      setQualityGate(null);
       setRevisionNote("");
       setStatusNote("Đã sửa chương theo góp ý. Xem lại rồi Lưu chương để cập nhật.");
     } catch (e) {
@@ -492,7 +585,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       const prompt = buildRollupPrompt({
         genre,
         chapterTitle: chapterRow?.title || title,
-        chapterContent: content,
+        chapterContent: chapterRow?.content || content,
         bibleText,
         pastSummary: docsByKey?.tom_tat_hien_tai?.content || "",
       });
@@ -515,6 +608,11 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       setError("Chưa có tên chương.");
       return;
     }
+    const budget = getWordBudgetStatus(content, targetWords);
+    if (!canPassQuality({ report: qualityGate, budget })) {
+      setError(`Chưa thể lưu/pass: cần Quality Gate đạt, logic không có hard fail và độ dài trong ${budget.min}–${budget.max} từ (hiện ${budget.words}).`);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -530,7 +628,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       }
       const num = number === "" ? undefined : Number(number);
       const payload = { title, chapter_number: num, content };
-      if (beats.length) payload.outline_beats = JSON.stringify(beats);
+      payload.outline_beats = encodeChapterPlan({ contract, scenes, beats, quality: qualityGate });
       let saved;
       if (activeId) {
         saved = await updateChapter(activeId, payload);
@@ -547,7 +645,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       );
       setActiveId(saved.id);
       onChapterWritten?.(saved);
-      if (autoRollup && content.trim()) {
+      if (autoRollup && content.trim() && canPassQuality({ report: qualityGate, budget })) {
         await runRollup(saved);
       }
     } catch (e) {
@@ -646,6 +744,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       const snap = await getChapterSnapshot(snapId);
       if (snap?.content != null) {
         setContent(snap.content);
+        setQualityGate(null);
         setHistoryOpen(false);
         setStatusNote("Đã khôi phục bản cũ vào ô soạn thảo — bấm Lưu chương để áp dụng thật.");
       }
@@ -672,7 +771,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
     try {
       const nextNum = activeId ? number : String((chapters?.[chapters.length - 1]?.chapter_number || 0) + 1);
       const res = await aiCall(
-        buildNextChapterGoalPrompt({ genre, bibleText, prevTail: prevTail || getLastWords(content, 800), nextChapterNumber: nextNum }),
+        buildNextChapterGoalPrompt({ genre, bibleText, prevTail: prevTail || autoPrevTail, nextChapterNumber: nextNum }),
         { jsonSchema: NEXT_CHAPTER_GOAL_SCHEMA }
       );
       if (res?.goal) setGoal(res.goal);
@@ -710,22 +809,31 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
       );
       const nextGoal = goalRes?.goal || "";
 
-      setAutoPilotStep("Đang lên dàn beats...");
-      const beatsRes = await aiCall(
-        buildBeatPlannerPrompt({ genre, chapterTitle: "", chapterNumber: nextNum, chapterGoal: nextGoal, bibleText, prevTail: tail, orientation: "" }),
-        { jsonSchema: BEAT_PLANNER_SCHEMA }
-      );
-      const nextBeats = beatsRes?.beats || [];
+      setAutoPilotStep("Planner đang lập contract + scene plan...");
+      const planRes = await aiCall(buildChapterContractPrompt({ genre, chapterNumber: nextNum, chapterTitle: `Chương ${nextNum}`, chapterGoal: nextGoal, bibleText, prevTail: tail, targetWords }), { jsonSchema: CHAPTER_CONTRACT_SCHEMA });
+      const nextContract = planRes?.contract;
+      const nextScenes = planRes?.scenes || [];
+
+      setAutoPilotStep("Continuity Editor đang kiểm trước viết...");
+      const pre = await aiCall(buildLogicGatePrompt({ genre, phase: "pre", bibleText, contract: nextContract, scenes: nextScenes }), { jsonSchema: LOGIC_GATE_SCHEMA });
+      if (!canWriteChapter({ contract: nextContract, scenes: nextScenes, preflight: pre })) throw new Error("Chapter plan không vượt qua hard gate logic/canon.");
 
       setAutoPilotStep("Đang viết chương...");
       const written = String(
         await aiCall(
           buildWriteChapterPrompt({
             genre, chapterTitle: "", chapterNumber: nextNum, chapterGoal: nextGoal, bibleText, prevTail: tail,
-            orientation: "", beats: nextBeats, targetWords, overdueForeshadows,
+            orientation: "", beats: [], targetWords, overdueForeshadows, contract: nextContract, scenes: nextScenes,
           })
         ) || ""
       ).trim();
+
+      setAutoPilotStep("Đang chạy Chapter Quality Gate...");
+      const post = await aiCall(buildLogicGatePrompt({ genre, phase: "post", bibleText, contract: nextContract, scenes: nextScenes, chapterContent: written }), { jsonSchema: LOGIC_GATE_SCHEMA });
+      if (!post?.passed) throw new Error("Bản thảo bị hard fail logic/canon; chưa lưu.");
+      const quality = await aiCall(buildQualityGatePrompt({ genre, bibleText, contract: nextContract, scenes: nextScenes, chapterContent: written, targetWords }), { jsonSchema: QUALITY_GATE_SCHEMA });
+      const budget = getWordBudgetStatus(written, targetWords);
+      if (!canPassQuality({ report: quality, budget })) throw new Error(`Bản thảo chưa đạt Quality Gate hoặc ngoài ${budget.min}–${budget.max} từ; chưa lưu.`);
 
       setAutoPilotStep("Đang lưu chương...");
       const saved = await createChapter({
@@ -733,13 +841,15 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         chapter_number: Number(nextNum),
         title: `Chương ${nextNum}`,
         content: written,
-        outline_beats: JSON.stringify(nextBeats),
+        outline_beats: encodeChapterPlan({ contract: nextContract, scenes: nextScenes, beats: [], quality }),
       });
       setChapters((cs) => [...cs.filter((c) => c.id !== saved.id), saved].sort((a, b) => (a.chapter_number || 0) - (b.chapter_number || 0)));
       setActiveId(saved.id);
       setGoal(nextGoal);
+      setContract(nextContract); setScenes(nextScenes); setPreflight(pre); setQualityGate(quality);
       onChapterWritten?.(saved);
-      setStatusNote(`Đã tự động viết xong Chương ${nextNum}. Đọc lại, kiểm tra nhất quán rồi bấm "Cập nhật bible" (rollup) khi ưng ý.`);
+      if (autoRollup) await runRollup({ ...saved, title: `Chương ${nextNum}`, content: written });
+      setStatusNote(`Chương ${nextNum} đã vượt contract → logic gate → quality gate, được lưu và chuyển Canon Keeper cập nhật state.`);
     } catch (e) {
       setError("Tự động viết chương tiếp theo lỗi: " + (e?.message || "lỗi"));
     } finally {
@@ -878,7 +988,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
                 max={10000}
                 step={100}
                 value={targetWords}
-                onChange={(e) => setTargetWords(e.target.value)}
+                onChange={(e) => { setTargetWords(e.target.value); setPreflight(null); setQualityGate(null); }}
                 className="w-20 rounded-md border border-input bg-transparent px-2 py-1 text-xs text-foreground"
               />
               từ
@@ -887,7 +997,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
           <div className="mt-1 flex items-start gap-1.5">
             <textarea
               value={goal}
-              onChange={(e) => setGoal(e.target.value)}
+              onChange={(e) => { setGoal(e.target.value); setPreflight(null); setQualityGate(null); }}
               rows={2}
               placeholder="VD: Nữ chính phát hiện thân phận thật của nam chính, đối chất, xảy ra hiểu lầm..."
               className="flex-1 rounded-md border border-input bg-transparent px-2.5 py-1.5 text-xs resize-y"
@@ -900,6 +1010,27 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             >
               {suggestingGoal ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Target className="w-3.5 h-3.5" />} Gợi ý
             </button>
+          </div>
+        </div>
+
+        {/* Chapter Contract → Scene Plan → pre-write hard gate */}
+        <div className="px-4 pt-2.5">
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Target className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold">1. Chapter Contract + Scene Plan</span>
+              <button onClick={handlePlanContract} disabled={planningContract} className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50">
+                {planningContract ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} {contract ? "Lập lại" : "Planner lập kế hoạch"}
+              </button>
+              <button onClick={handlePreflight} disabled={runningPreflight || !contract || !scenes.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[11px] disabled:opacity-50">
+                {runningPreflight ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />} 2. Kiểm logic trước viết
+              </button>
+            </div>
+            {contract && <div className="mt-2 text-[11px]"><b>Cam kết:</b> {contract.promise} <span className="text-muted-foreground">· {scenes.length} cảnh</span></div>}
+            {preflight && <div className={`mt-2 rounded-md px-2.5 py-2 text-[11px] ${preflight.passed ? "bg-emerald-500/10 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
+              <b>{preflight.passed ? "PASS — được phép viết" : "HARD FAIL — chưa được viết"}</b> · {preflight.summary}
+              {(preflight.issues || []).map((x, i) => <div key={i}>• [{x.domain}] {x.problem}</div>)}
+            </div>}
           </div>
         </div>
 
@@ -1063,7 +1194,7 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
         <div className="flex items-center gap-2 px-4 py-2.5 flex-wrap">
           <button
             onClick={handleWrite}
-            disabled={writing}
+            disabled={writing || !canWriteChapter({ contract, scenes, preflight })}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {writing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
@@ -1104,6 +1235,9 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             {checkingRep ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
             Kiểm tra đạo nhại
           </button>
+          <button onClick={handleQualityGate} disabled={runningQuality || !content.trim() || !contract} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md border border-primary/40 text-primary text-sm hover:bg-primary/10 disabled:opacity-50">
+            {runningQuality ? <Loader2 className="w-4 h-4 animate-spin" /> : <Gauge className="w-4 h-4" />} Chapter Quality Gate
+          </button>
           <label className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
@@ -1142,21 +1276,32 @@ export default function ChapterWriter({ currentStoryId, genre, docsByKey, onChap
             </div>
           </div>
         )}
+        {qualityGate && (() => {
+          const budget = getWordBudgetStatus(content, targetWords);
+          const passed = canPassQuality({ report: qualityGate, budget });
+          return <div className={`mx-4 mb-2 rounded-xl px-3 py-2 text-xs ${passed ? "bg-emerald-500/10 text-emerald-700" : "bg-destructive/10 text-destructive"}`}>
+            <b>{passed ? "QUALITY PASS — có thể lưu" : qualityGate.stage === "logic" ? "LOGIC HARD FAIL" : "QUALITY FAIL"}</b>
+            {qualityGate.score != null && qualityGate.stage !== "logic" ? ` · ${qualityGate.score}/10` : ""} · {budget.words}/{budget.target} từ (cho phép {budget.min}–{budget.max})
+            <div>{qualityGate.summary}</div>
+            {(qualityGate.issues || []).map((x, i) => <div key={i}>• [{x.domain}] {x.problem}</div>)}
+            {!passed && <button onClick={handleRepairGate} disabled={repairingGate} className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[11px] disabled:opacity-50">{repairingGate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} Tự sửa theo phiếu gate</button>}
+          </div>;
+        })()}
 
         <textarea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => { setContent(e.target.value); setQualityGate(null); }}
           placeholder="Bản thảo chương — bấm 'Viết chương bằng AI' để Xưởng viết dựa trên toàn bộ bible..."
           className="flex-1 min-h-[360px] resize-y px-4 py-3 text-[15px] leading-7 bg-card focus:outline-none font-body"
         />
 
         <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-border bg-muted/20">
           <span className="mr-auto text-[11px] text-muted-foreground">
-            {content.trim() ? `${content.split(/\s+/).filter(Boolean).length} từ` : "Bản nháp trống"}
+            {content.trim() ? (() => { const b = getWordBudgetStatus(content, targetWords); return `${b.words} từ · mục tiêu ${b.min}–${b.max}${b.within ? " ✓" : ""}`; })() : "Bản nháp trống"}
           </span>
           <button
             onClick={handleSave}
-            disabled={saving || rollingUp || !title.trim()}
+            disabled={saving || rollingUp || !title.trim() || !canPassQuality({ report: qualityGate, budget: getWordBudgetStatus(content, targetWords) })}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
