@@ -348,9 +348,18 @@ create table if not exists public.game_plan_meta (
   endings jsonb not null default '[]'::jsonb,
   branches jsonb not null default '[]'::jsonb,
   notes text,
+  game_bible jsonb not null default '{}'::jsonb,
+  scene_contracts jsonb not null default '[]'::jsonb,
+  compiler_report jsonb not null default '{}'::jsonb,
+  invariants jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+-- Phase 1 narrative compiler metadata (safe for databases created before it).
+alter table public.game_plan_meta add column if not exists game_bible jsonb not null default '{}'::jsonb;
+alter table public.game_plan_meta add column if not exists scene_contracts jsonb not null default '[]'::jsonb;
+alter table public.game_plan_meta add column if not exists compiler_report jsonb not null default '{}'::jsonb;
+alter table public.game_plan_meta add column if not exists invariants jsonb not null default '[]'::jsonb;
 
 -- Dàn cảnh tổng (bộ khung): mỗi cảnh thuộc project, có thứ tự, mô tả sự kiện,
 -- địa điểm, nhân vật, phục bút và các lựa chọn (jsonb: [{text, effect, target}])
@@ -364,6 +373,9 @@ create table if not exists public.game_plan_scenes (
   location text,
   characters text,
   foreshadow text,
+  state_contract jsonb not null default '{}'::jsonb,
+  chapter_index integer not null default 1,
+  is_checkpoint boolean not null default false,
   choices jsonb not null default '[]'::jsonb,
   is_branch_point boolean not null default false,
   branch_index integer,
@@ -372,6 +384,9 @@ create table if not exists public.game_plan_scenes (
   created_at timestamptz not null default now()
 );
 create index if not exists game_plan_scenes_project_idx on public.game_plan_scenes (project_id, scene_order);
+alter table public.game_plan_scenes add column if not exists state_contract jsonb not null default '{}'::jsonb;
+alter table public.game_plan_scenes add column if not exists chapter_index integer not null default 1;
+alter table public.game_plan_scenes add column if not exists is_checkpoint boolean not null default false;
 
 -- 4 nhánh truyện: mỗi nhánh tương ứng 1 đáp án/lựa chọn chính. Lưu danh sách
 -- cảnh (mảng scene id hoặc thứ tự) và trạng thái duyệt/viết của nhánh.

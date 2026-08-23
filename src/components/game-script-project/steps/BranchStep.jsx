@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Loader2, Wand2, ArrowLeft, CheckCircle2, Pencil } from "lucide-react";
-import { aiCall } from "@/lib/aiCall";
+import { aiCall, getAIUsageToday } from "@/lib/aiCall";
+import { estimateGeminiCalls } from "@/lib/gameScriptProject/quotaPlanner";
 import { buildBranchDraftPrompt, BRANCH_DRAFT_SCHEMA, buildBranchDraftRevisionPrompt, BRANCH_DRAFT_REVISION_SCHEMA } from "@/lib/gameScriptProject/prompts";
 import AiReviseBox from "@/components/game-script-project/AiReviseBox";
 import {
@@ -94,7 +95,7 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
 
   const DRAFT_CHUNK = 6;
 
-  const handleWriteBranch = async (branch) => {
+  const handleWriteBranch = async (branch, forceRefresh = false) => {
     const branchScenes = scenesForBranch(branch.branch_index);
     if (!branchScenes.length) return;
     if (!String(project.idea || "").trim()) {
@@ -111,7 +112,10 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
       // gọi AI viết thêm lần nữa (tránh tốn ${branch_count}x chi phí AI cho
       // cùng 1 cảnh, và tránh mỗi nhánh kể một dị bản khác nhau cho đúng 1 cảnh chung).
       const toGenerate = [];
+      const currentRows = contents[branch.id] || [];
       for (const sc of branchScenes) {
+        const ownExisting = currentRows.find((row) => row.scene_id === sc.id && row.draft?.trim());
+        if (ownExisting && !forceRefresh) continue;
         const existing = !sc.is_branch_point ? commonDraftsRef.current[sc.id] : null;
         if (existing) {
           await upsertGamePlanSceneContent(project.id, branch.id, sc.id, {
@@ -121,8 +125,15 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
         }
         toGenerate.push(sc);
       }
+      let previousDraftSummary = "";
       for (let i = 0; i < toGenerate.length; i += DRAFT_CHUNK) {
         const chunk = toGenerate.slice(i, i + DRAFT_CHUNK);
+        if (!previousDraftSummary) {
+          const before = branchScenes.filter((scene) => Number(scene.scene_order) < Number(chunk[0].scene_order)).reverse();
+          const priorRows = contents[branch.id] || [];
+          const prior = before.map((scene) => commonDraftsRef.current[scene.id] || priorRows.find((row) => row.scene_id === scene.id)).find((row) => row?.draft?.trim());
+          if (prior) previousDraftSummary = `Cảnh trước đã chốt: ${prior.title || ""}\n${prior.draft.slice(-1200)}`;
+        }
         setStatus(`Nhánh "${branch.name}": bản thảo cảnh ${chunk[0].scene_order}–${chunk[chunk.length - 1].scene_order}...`);
         const prompt = buildBranchDraftPrompt({
           workshop: project.workshop,
@@ -131,11 +142,14 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
           planBlock,
           branch,
           scenes: chunk,
+          allScenes: scenes,
           playerName: project.player_name,
           playerDesc: project.player_desc,
           mainQuest: project.main_quest,
+          gameBible: meta?.game_bible,
+          previousDraftSummary,
         });
-        const res = await aiCall(prompt, { jsonSchema: BRANCH_DRAFT_SCHEMA });
+        const res = await aiCall(prompt, { jsonSchema: BRANCH_DRAFT_SCHEMA, forceRefresh });
         for (const d of res?.scenes || []) {
           const sc = chunk.find((s) => s.scene_order === d.scene_order) || chunk.find((s) => s.title === d.title);
           if (!sc) continue;
@@ -149,6 +163,7 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
             commonDraftsRef.current[sc.id] = { title: d.title || sc.title, draft: d.draft };
           }
         }
+        previousDraftSummary = (res?.scenes || []).slice(-2).map((draft) => `Cảnh ${draft.scene_order} — ${draft.title || ""}: ${String(draft.draft || "").slice(-800)}`).join("\n");
       }
       await updateGamePlanBranch(branch.id, { status: "đã viết" });
       await load();
@@ -166,7 +181,9 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
     setWritingAll(true);
     for (const br of branches) {
       if (writingBranch) continue;
-      await handleWriteBranch(br);
+      const writtenIds = new Set((contents[br.id] || []).filter((row) => row.draft?.trim()).map((row) => row.scene_id));
+      if (scenesForBranch(br.branch_index).every((scene) => writtenIds.has(scene.id))) continue;
+      await handleWriteBranch(br, false);
     }
     setWritingAll(false);
     setStatus("Đã viết bản thảo tất cả các nhánh.");
@@ -210,12 +227,22 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
     );
   }
 
-  const allWritten = branches.every((b) => (contents[b.id] || []).length > 0);
+  const allWritten = branches.every((branch) => {
+    const writtenSceneIds = new Set((contents[branch.id] || []).filter((row) => row.draft?.trim()).map((row) => row.scene_id));
+    return scenesForBranch(branch.branch_index).every((scene) => writtenSceneIds.has(scene.id));
+  });
+  const missingDraftScenes = branches.reduce((sum, branch) => {
+    const written = new Set((contents[branch.id] || []).filter((row) => row.draft?.trim()).map((row) => row.scene_id));
+    return sum + scenesForBranch(branch.branch_index).filter((scene) => !written.has(scene.id)).length;
+  }, 0);
+  const quotaEstimate = estimateGeminiCalls({ missingDraftScenes });
+  const usageToday = getAIUsageToday();
 
   return (
     <div className="space-y-5">
       {error && <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       {status && <div className="text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2">{status}</div>}
+      <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">Còn {missingDraftScenes} cảnh chưa có bản thảo · dự kiến khoảng {quotaEstimate.drafts} lượt Gemini theo lô · hôm nay đã gọi {usageToday.calls} lượt, cache tránh {usageToday.cacheHits} lượt.</div>
 
       <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-[240px]">
@@ -237,8 +264,10 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
       <div className="space-y-4">
         {branches.map((br, bi) => {
           const list = contents[br.id] || [];
-          const written = list.length > 0;
           const branchScenes = scenesForBranch(br.branch_index);
+          const writtenIds = new Set(list.filter((row) => row.draft?.trim()).map((row) => row.scene_id));
+          const written = branchScenes.length > 0 && branchScenes.every((scene) => writtenIds.has(scene.id));
+          const hasAny = writtenIds.size > 0;
           return (
             <div key={br.id} className="rounded-2xl border border-border bg-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-2 flex-wrap">
@@ -249,16 +278,16 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
                   {written ? "đã viết" : "chưa viết"}
                 </span>
                 <button
-                  onClick={() => handleWriteBranch(br)}
+                  onClick={() => handleWriteBranch(br, written)}
                   disabled={writingBranch !== null || writingAll}
                   className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary/40 text-primary text-[11px] hover:bg-primary/10 disabled:opacity-50"
                 >
                   {writingBranch === br.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                  {written ? "Viết lại" : "Viết bản thảo"}
+                  {written ? "Viết lại" : hasAny ? "Tiếp tục phần thiếu" : "Viết bản thảo"}
                 </button>
               </div>
               <div className="p-3 space-y-2">
-                {!written ? (
+                {!hasAny ? (
                   <p className="text-xs text-muted-foreground italic">Chưa có bản thảo. Bấm "Viết bản thảo" để AI viết {branchScenes.length} cảnh của nhánh này.</p>
                 ) : (
                   list.map((c) => (
@@ -307,7 +336,9 @@ export default function BranchStep({ project, patchProject, onBack, onNext }) {
         </button>
         <button
           onClick={() => patchProject({ status: "final" }).then(onNext)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+          disabled={!allWritten || writingAll || writingBranch !== null}
+          title={!allWritten ? "Hãy viết đủ mọi cảnh của tất cả nhánh trước khi xuất" : ""}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40"
         >
           <CheckCircle2 className="w-4 h-4" /> Đã chốt — Xuất kịch bản chuẩn form
         </button>

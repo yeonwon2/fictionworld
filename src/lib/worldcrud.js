@@ -449,8 +449,9 @@ export async function deleteGameScene(id) {
 // ---------- Xưởng Kịch Bản Game (luồng mới) — game_script_projects ----------
 // Wizard: ý tưởng → AI gợi ý bộ khung → duyệt → 4 nhánh → chốt → xuất kịch bản.
 const GSP_COLUMNS = "id, story_id, workshop, title, idea, genre, scene_count, choices_per_scene, branch_count, notes, player_name, player_desc, main_quest, status, updated_at, created_at";
-const GPM_COLUMNS = "project_id, characters, settings, endings, branches, notes, updated_at, created_at";
-const GPS_COLUMNS = "id, project_id, scene_order, title, description, location, characters, foreshadow, choices, is_branch_point, branch_index, status, updated_at, created_at";
+const GPM_LEGACY_COLUMNS = "project_id, characters, settings, endings, branches, notes, updated_at, created_at";
+const GPM_COLUMNS = "project_id, characters, settings, endings, branches, notes, game_bible, scene_contracts, compiler_report, invariants, updated_at, created_at";
+const GPS_COLUMNS = "id, project_id, scene_order, title, description, location, characters, foreshadow, state_contract, chapter_index, is_checkpoint, choices, is_branch_point, branch_index, status, updated_at, created_at";
 const GPB_COLUMNS = "id, project_id, branch_index, name, description, scene_order_ids, status, updated_at, created_at";
 const GPC_COLUMNS = "id, project_id, branch_id, scene_id, scene_order, title, draft, script, status, updated_at, created_at";
 
@@ -477,17 +478,30 @@ export async function deleteGameScriptProject(id) {
 }
 
 export async function getGamePlanMeta(projectId) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("game_plan_meta")
     .select(GPM_COLUMNS)
     .eq("project_id", projectId)
     .maybeSingle();
+  // Databases that have not run the Phase 1 migration can still open and edit
+  // existing projects. Only persisting compiler snapshots requires migration.
+  if (error && /game_bible|scene_contracts|compiler_report|invariants/i.test(error.message || "")) {
+    const fallback = await supabase.from("game_plan_meta").select(GPM_LEGACY_COLUMNS).eq("project_id", projectId).maybeSingle();
+    data = fallback.data ? { ...fallback.data, game_bible: {}, scene_contracts: [], compiler_report: {}, invariants: [] } : fallback.data;
+    error = fallback.error;
+  }
   if (error) throw error;
   return data || null;
 }
 export async function upsertGamePlanMeta(projectId, data) {
   const payload = { project_id: projectId, ...data };
-  const { data: row, error } = await supabase.from("game_plan_meta").upsert(payload, { onConflict: "project_id" }).select().single();
+  let { data: row, error } = await supabase.from("game_plan_meta").upsert(payload, { onConflict: "project_id" }).select().single();
+  if (error && /invariants/i.test(error.message || "")) {
+    const { invariants: _ignored, ...legacyPayload } = payload;
+    const fallback = await supabase.from("game_plan_meta").upsert(legacyPayload, { onConflict: "project_id" }).select().single();
+    row = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw error;
   return row;
 }
@@ -495,15 +509,32 @@ export async function upsertGamePlanMeta(projectId, data) {
 export async function listGamePlanScenes(projectId) {
   let q = supabase.from("game_plan_scenes").select(GPS_COLUMNS).order("scene_order", { ascending: true });
   if (projectId) q = q.eq("project_id", projectId);
-  const { data, error } = await q;
+  let { data, error } = await q;
+  if (error && /state_contract|chapter_index|is_checkpoint/i.test(error.message || "")) {
+    let fallback = supabase.from("game_plan_scenes").select(GPS_COLUMNS.replace(", state_contract, chapter_index, is_checkpoint", "")).order("scene_order", { ascending: true });
+    if (projectId) fallback = fallback.eq("project_id", projectId);
+    const result = await fallback;
+    data = (result.data || []).map((row) => ({ ...row, state_contract: {}, chapter_index: 1, is_checkpoint: false }));
+    error = result.error;
+  }
   if (error) throw error;
   return data || [];
 }
 export async function createGamePlanScene(data) {
-  return createRow("game_plan_scenes", data);
+  try { return await createRow("game_plan_scenes", data); }
+  catch (error) {
+    if (!/state_contract|chapter_index|is_checkpoint/i.test(error.message || "")) throw error;
+    const legacy = { ...data }; delete legacy.state_contract; delete legacy.chapter_index; delete legacy.is_checkpoint;
+    return createRow("game_plan_scenes", legacy);
+  }
 }
 export async function updateGamePlanScene(id, data) {
-  return updateRow("game_plan_scenes", id, data);
+  try { return await updateRow("game_plan_scenes", id, data); }
+  catch (error) {
+    if (!/state_contract|chapter_index|is_checkpoint/i.test(error.message || "")) throw error;
+    const legacy = { ...data }; delete legacy.state_contract; delete legacy.chapter_index; delete legacy.is_checkpoint;
+    return updateRow("game_plan_scenes", id, legacy);
+  }
 }
 export async function deleteGamePlanScene(id) {
   return deleteRow("game_plan_scenes", id);

@@ -45,6 +45,7 @@ ${notes?.trim() ? `# Ghi chú thêm\n${notes.trim()}` : ""}
 - settings: địa điểm / không gian quan trọng trong ý tưởng (có thể suy ra thêm nếu ý tưởng không liệt kê, nhưng phải khớp bối cảnh).
 - branches: đúng ${branchCount} nhánh — nếu ý tưởng có 4 tuyến nhân vật thì mỗi nhánh = 1 tuyến đó; mô tả ngắn storyline của nhánh.
 - endings: ≥${branchCount} kết thúc (TRUE_END/GOOD_END/NORMAL_END/BAD_END) khớp ý tưởng (VD ending từng tuyến + True Ending).
+- invariants: 3–10 luật cốt truyện không bao giờ được vi phạm. Dùng type "ending_requires" hoặc "fact_before_scene"; field/value là cờ, vật phẩm hoặc sự thật; ending/scene là đích áp dụng.
 - player_name, player_desc, main_quest: trích từ ý tưởng (bắt buộc điền, không để trống).
 - notes: tóm tắt cơ chế gameplay (chỉ số, nhiệm vụ hệ thống, twist...) đã có trong ý tưởng.
 
@@ -95,6 +96,10 @@ export const PLAN_CORE_SCHEMA = {
     player_desc: { type: "string" },
     main_quest: { type: "string" },
     notes: { type: "string" },
+    invariants: {
+      type: "array",
+      items: { type: "object", properties: { id: { type: "string" }, description: { type: "string" }, type: { type: "string" }, field: { type: "string" }, value: { type: "string" }, ending: { type: "string" }, scene: { type: "number" } }, required: ["description", "type"] },
+    },
   },
   required: ["characters", "settings", "endings", "branches", "player_name", "main_quest"],
 };
@@ -129,6 +134,8 @@ ${prevScenesSummary?.trim() ? `# CÁC CẢNH TRƯỚC ĐÃ CÓ (nối mạch, kh
 
 # YÊU CẦU MỖI CẢNH
 - title, description (nêu rõ player làm gì + đẩy mạch nhiệm vụ chính / hệ thống nếu có), location, characters (tên đúng), foreshadow, choices[].
+- state_contract nội bộ cho từng cảnh: requires (items/flags/knowledge/stats), reveals (các sự thật người chơi biết tại cảnh này), forbids (sự thật chưa được phép biết/nhắc tới), handoff (items/flags/knowledge bắt buộc phải có khi rời cảnh). Dùng mảng rỗng khi không có; không viết văn xuôi vào các field này.
+- chapter_index: chia game thành chương khoảng 8–15 cảnh. is_checkpoint=true ở cảnh mở đầu mỗi chương hoặc điểm hội tụ lớn; checkpoint phải có handoff rõ ràng.
 - description 1–3 câu súc tích, bám ý tưởng (nhiệm vụ hệ thống, chỉ số Tình cảm/Tin tưởng/Nghi ngờ, twist vòng lặp... nếu ý tưởng có).
 - choices.target: "cảnh N" hoặc "kết thúc <tên>" hợp lý.
 
@@ -148,6 +155,15 @@ export const PLAN_SCENES_CHUNK_SCHEMA = {
           location: { type: "string" },
           characters: { type: "string" },
           foreshadow: { type: "string" },
+          state_contract: {
+            type: "object",
+            properties: {
+              requires: { type: "object", properties: { items: { type: "array", items: { type: "string" } }, flags: { type: "array", items: { type: "string" } }, knowledge: { type: "array", items: { type: "string" } }, stats: { type: "object" } } },
+              reveals: { type: "array", items: { type: "string" } },
+              forbids: { type: "array", items: { type: "string" } },
+              handoff: { type: "object", properties: { items: { type: "array", items: { type: "string" } }, flags: { type: "array", items: { type: "string" } }, knowledge: { type: "array", items: { type: "string" } } } },
+            },
+          },
           choices: {
             type: "array",
             items: {
@@ -162,6 +178,8 @@ export const PLAN_SCENES_CHUNK_SCHEMA = {
           },
           is_branch_point: { type: "boolean" },
           branch_index: { type: "number" },
+          chapter_index: { type: "number" },
+          is_checkpoint: { type: "boolean" },
         },
         required: ["title", "description"],
       },
@@ -199,6 +217,10 @@ export function formatCoreBlock(core) {
   if (core.endings?.length) {
     lines.push("## Kết thúc");
     for (const e of core.endings) lines.push(`- ${e.name} [${e.type || "NORMAL_END"}]: ${e.description || ""}`);
+  }
+  if (core.invariants?.length) {
+    lines.push("## Luật bất biến");
+    for (const rule of core.invariants) lines.push(`- ${rule.description || `${rule.type}: ${rule.field || "knowledge"}=${rule.value || "?"}`}`);
   }
   if (core.notes) lines.push(`## Ghi chú gameplay\n${core.notes}`);
   return lines.join("\n");
@@ -256,6 +278,15 @@ export const PLAN_SCENE_REVISION_SCHEMA = {
     location: { type: "string" },
     characters: { type: "string" },
     foreshadow: { type: "string" },
+    state_contract: {
+      type: "object",
+      properties: {
+        requires: { type: "object", properties: { items: { type: "array", items: { type: "string" } }, flags: { type: "array", items: { type: "string" } }, knowledge: { type: "array", items: { type: "string" } }, stats: { type: "object" } } },
+        reveals: { type: "array", items: { type: "string" } },
+        forbids: { type: "array", items: { type: "string" } },
+        handoff: { type: "object", properties: { items: { type: "array", items: { type: "string" } }, flags: { type: "array", items: { type: "string" } }, knowledge: { type: "array", items: { type: "string" } } } },
+      },
+    },
     choices: {
       type: "array",
       items: {
@@ -278,16 +309,17 @@ ${stickToIdeaRules(idea)}
 ${coreBlock}
 
 # CẢNH ${scene.scene_order} HIỆN TẠI
-${JSON.stringify({ title: scene.title, description: scene.description, location: scene.location, characters: scene.characters, foreshadow: scene.foreshadow, choices: scene.choices }, null, 2)}
+${JSON.stringify({ title: scene.title, description: scene.description, location: scene.location, characters: scene.characters, foreshadow: scene.foreshadow, state_contract: scene.state_contract, choices: scene.choices }, null, 2)}
 
 # GÓP Ý CỦA TÁC GIẢ
 """${feedback}"""
 
-Trả JSON đúng schema (title, description, location, characters, foreshadow, choices[]).`;
+Đồng bộ state_contract (requires/reveals/forbids/handoff) với nội dung sau khi sửa.
+Trả JSON đúng schema (title, description, location, characters, foreshadow, state_contract, choices[]).`;
 }
 
 // ---------- Bản thảo 1 nhánh (chia lô nếu nhiều cảnh) ----------
-export function buildBranchDraftPrompt({ workshop, title, idea, planBlock, branch, scenes, playerName, playerDesc, mainQuest }) {
+export function buildBranchDraftPrompt({ workshop, title, idea, planBlock, branch, scenes, allScenes = [], playerName, playerDesc, mainQuest, gameBible = null, previousDraftSummary = "" }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
   const sceneBlock = scenes
     .map(
@@ -295,6 +327,10 @@ export function buildBranchDraftPrompt({ workshop, title, idea, planBlock, branc
         `- [cảnh ${s.scene_order}] ${s.title}\n  Mô tả: ${s.description}\n  Địa điểm: ${s.location || "-"}\n  NV: ${s.characters || "-"}\n  Lựa chọn: ${(s.choices || []).map((c) => `"${c.text}"`).join(" | ") || "-"}`
     )
     .join("\n");
+  const graphBlock = (allScenes || []).map((s) => {
+    const links = (s.choices || []).map((c) => `${c.text || "?"} → ${c.target || "?"}`).join(" | ");
+    return `C${s.scene_order} ${s.title || ""}${s.is_branch_point ? ` [nhánh ${Number(s.branch_index) + 1}]` : " [chung]"}: ${links || "chưa có đích"}`;
+  }).join("\n");
   return `Bạn là BIÊN KỊCH xưởng (${w.label}). Viết BẢN THẢO VĂN XUÔI cho NHÁNH "${branch.name}" của "${title}" — để tác giả đọc thử, KHÔNG phải cú pháp kịch bản game.
 
 ${stickToIdeaRules(idea)}
@@ -305,14 +341,27 @@ ${stickToIdeaRules(idea)}
 # BỘ KHUNG
 ${planBlock}
 
+# GAME BIBLE NỘI BỘ (NGUỒN SỰ THẬT — không được mâu thuẫn)
+${gameBible ? JSON.stringify(gameBible) : "(dùng Bộ khung ở trên)"}
+
+# STORY GRAPH TOÀN GAME (đọc để hiểu cảnh chung/điểm hội tụ; CHỈ viết các cảnh được giao bên dưới)
+${graphBlock || "(trống)"}
+
 # NHÁNH: ${branch.name} — ${branch.description || ""}
 
 # CÁC CẢNH CỦA NHÁNH
 ${sceneBlock}
 
+${previousDraftSummary ? `# HANDOFF TỪ CÁC CẢNH ĐÃ VIẾT TRƯỚC\n${previousDraftSummary}` : "# HANDOFF\nĐây là lô đầu của tuyến."}
+
 # YÊU CẦU
 - Đủ từng cảnh theo scene_order; mỗi draft 150–280 từ; player là trung tâm; bám tên/tuyến/hệ thống trong ý tưởng.
 - Mạch liền mạch giữa các cảnh.
+- Không viết nhánh này như một truyện độc lập: cảnh chung phải giữ cùng sự kiện/sự thật với các nhánh khác; chỉ khác sau lựa chọn rẽ nhánh.
+- Mỗi cảnh phải bắt đầu đúng trạng thái mà cảnh trước bàn giao. Nhân vật chỉ được biết thông tin đã được tiết lộ ở cảnh trước hoặc ngay trong cảnh này.
+- Quan hệ, chỉ số, vật phẩm, cờ và thương tích không được tự thay đổi ngoài lựa chọn/hiệu ứng ghi trong Story Graph.
+- Phục bút chỉ được payoff sau khi đã được gieo. Không tiết lộ twist sớm hơn scene contract.
+- Kết thúc lô phải để lại handoff rõ ràng cho cảnh kế tiếp; không tự kết thúc tuyến nếu graph chưa tới ending.
 
 Trả JSON: { scenes: [{ scene_order, title, draft }] }.`;
 }
@@ -384,6 +433,8 @@ export function buildSceneScriptPrompt({
   knownFlags,
   sceneMap,
   endingLabels,
+  approvedDraft,
+  gameBible,
 }) {
   const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
   const sceneNumber = scene.scene_order;
@@ -421,6 +472,9 @@ ${stickToIdeaRules(idea)}
 # BỘ KHUNG
 ${planBlock}
 
+# GAME BIBLE NỘI BỘ (NGUỒN SỰ THẬT)
+${gameBible ? JSON.stringify(gameBible) : "(dùng Bộ khung)"}
+
 ${registryBlock}
 
 # CẢNH ${sceneNumber}/${totalScenes}: ${scene.title}
@@ -430,6 +484,8 @@ ${registryBlock}
 - Phục bút: ${scene.foreshadow || "-"}
 - Lựa chọn:
 ${choicesBlock || "- (tiếp tục)"}
+
+${approvedDraft?.trim() ? `# BẢN THẢO ĐÃ ĐƯỢC TÁC GIẢ DUYỆT (chuyển thể sang cú pháp game, không thay cốt truyện)\n"""${approvedDraft.trim().slice(0, 7000)}"""` : "# BẢN THẢO ĐÃ DUYỆT\n(chưa có — bám tuyệt đối scene contract)"}
 
 ${isFirst ? `BẮT BUỘC mở bằng ## GIỚI THIỆU (player ${playerName || ""} + nhiệm vụ ${mainQuest || ""}) rồi ## CẢNH ${sceneNumber} — ${scene.title}.` : ""}
 ${!isFirst && prevScript ? `# Cảnh trước (nối mạch)\n"""${prevScript.slice(-1200)}"""` : ""}

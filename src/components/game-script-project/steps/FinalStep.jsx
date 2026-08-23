@@ -5,8 +5,31 @@ import { buildSceneScriptPrompt, buildSceneScriptRevisionPrompt, buildPlanScenes
 import { WORKSHOPS, buildSyntaxBlock } from "@/lib/gameScriptProject/syntaxGuide";
 import { realParseCheck, parserForWorkshop } from "@/lib/gameScriptProject/parserBridge";
 import { verifyAndFixScript } from "@/lib/gameStudio/fixScriptWithAI";
+import { analyzePhase3Narrative } from "@/lib/gameScriptProject/phase3Analyzer";
+import { compileFinalScriptLocally } from "@/lib/gameScriptProject/quotaPlanner";
 import AiReviseBox from "@/components/game-script-project/AiReviseBox";
 import { getGamePlanMeta, listGamePlanBranches, listGamePlanSceneContent, listGamePlanScenes, createGamePlanScene, upsertGamePlanSceneContent } from "@/lib/worldcrud";
+
+// Gemini đôi khi phớt lờ yêu cầu "chỉ viết một cảnh" và trả lại cả kịch bản.
+// Chặn việc mỗi hàng scene_content giữ một bản đầy đủ rồi bị nối lặp N lần.
+export function isolateGeneratedScene(raw, sceneOrder, { isFirst = false, isLast = false } = {}) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const marker = new RegExp(`^##\\s*CẢNH\\s+${sceneOrder}(?:\\s|—|-)`, "imu");
+  const match = marker.exec(text);
+  if (!match) return text;
+
+  const before = isFirst ? text.slice(0, match.index).trim() : "";
+  const afterStart = text.slice(match.index);
+  const nextScene = /\n##\s*CẢNH\s+\d+(?:\s|—|-)/imu.exec(afterStart.slice(match[0].length));
+  let sceneAndEndings = afterStart;
+  if (nextScene) sceneAndEndings = afterStart.slice(0, match[0].length + nextScene.index);
+  if (!isLast) {
+    const ending = /\n##\s*KẾT THÚC\b/imu.exec(sceneAndEndings);
+    if (ending) sceneAndEndings = sceneAndEndings.slice(0, ending.index);
+  }
+  return [before, sceneAndEndings.trim()].filter(Boolean).join("\n\n").trim();
+}
 
 // Ghép MỘT kịch bản duy nhất chứa toàn bộ cảnh và nhánh để copy sang Xưởng Game.
 export default function FinalStep({ project, patchProject, onBack }) {
@@ -43,7 +66,7 @@ export default function FinalStep({ project, patchProject, onBack }) {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [project.id]);
+  useEffect(() => { load(); }, [project.id]);
 
   const branchForScene = (scene) => branches.find((b) => Number(b.branch_index) === Number(scene.branch_index)) || branches[0];
   const scriptByScene = useMemo(() => {
@@ -70,6 +93,7 @@ export default function FinalStep({ project, patchProject, onBack }) {
   useEffect(() => { setFixedScript(""); setFixExplanations([]); }, [fullScript]);
 
   const displayScript = fixedScript || fullScript;
+  const phase3Report = useMemo(() => analyzePhase3Narrative({ project, meta, scenes }), [project, meta, scenes]);
   // Kiểm tra bằng ĐÚNG parser thật của Xưởng Game (không phải regex bề mặt
   // riêng của Xưởng Kịch Bản) — kết quả này chính là những gì sẽ xảy ra khi
   // dán sang Xưởng Game rồi bấm "Sản Xuất": cảnh mồ côi, vật phẩm/cờ mồ côi,
@@ -84,35 +108,27 @@ export default function FinalStep({ project, patchProject, onBack }) {
     if (!scenes.length || !branches.length) { setError("Hãy tạo và duyệt bộ khung trước."); return; }
     setWriting(true); setError(""); setFixedScript(""); setFixExplanations([]);
     try {
-      const sceneMap = scenes.map((s) => ({ scene_order: s.scene_order, title: s.title }));
-      const endingLabels = (meta?.endings || []).map((e) => e.name).filter(Boolean);
-      const knownItems = new Set();
-      const knownFlags = new Set();
-      let previous = "";
+      setProgress("Đang biên dịch cục bộ — không gọi Gemini...");
+      const draftByScene = new Map();
+      for (const row of contents) if (row.draft?.trim() && !draftByScene.has(row.scene_id)) draftByScene.set(row.scene_id, row);
+      const compiled = compileFinalScriptLocally({ project, meta, scenes, draftByScene });
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         const branch = branchForScene(scene);
-        setProgress(`Đang viết cảnh ${i + 1}/${scenes.length}: ${scene.title}`);
+        setProgress(`Đang lưu cảnh ${i + 1}/${scenes.length}: ${scene.title} · 0 lượt AI`);
         const old = contents.find((c) => c.scene_id === scene.id);
-        const script = String(await aiCall(buildSceneScriptPrompt({
-          workshop: project.workshop, title: project.title, idea: project.idea, planBlock: planBlock(),
-          branch, scene, prevScript: previous, nextScene: scenes[i + 1] || null,
-          isFirst: i === 0, isLast: i === scenes.length - 1, totalScenes: scenes.length,
-          playerName: project.player_name, playerDesc: project.player_desc, mainQuest: project.main_quest,
-          knownItems: [...knownItems], knownFlags: [...knownFlags], sceneMap, endingLabels,
-        })) || "").trim();
+        const script = isolateGeneratedScene(compiled, scene.scene_order, {
+          isFirst: i === 0,
+          isLast: i === scenes.length - 1,
+        });
         await upsertGamePlanSceneContent(project.id, branch.id, scene.id, {
           scene_order: scene.scene_order, title: scene.title, draft: old?.draft || "",
           script, status: "đã ghép kịch bản chung",
         });
-        const found = extractItemsAndFlags(script);
-        for (const it of found.items) knownItems.add(it);
-        for (const fl of found.flags) knownFlags.add(fl);
-        previous = script;
       }
       await patchProject({ status: "final" });
       await load();
-      setProgress("Đã ghép xong. Hãy xem báo cáo tự kiểm tra trước khi copy.");
+      setProgress("Đã ghép xong hoàn toàn trên máy (0 lượt Gemini). Hãy xem báo cáo trước khi copy.");
     } catch (e) { setError("Ghép kịch bản lỗi: " + (e?.message || "lỗi")); }
     finally { setWriting(false); }
   };
@@ -189,13 +205,18 @@ export default function FinalStep({ project, patchProject, onBack }) {
         const scene = newScenes[i];
         const branch = branchForScene(scene);
         setProgress(`Đang viết cảnh mới ${i + 1}/${newScenes.length}: ${scene.title}`);
-        const script = String(await aiCall(buildSceneScriptPrompt({
+        const generated = String(await aiCall(buildSceneScriptPrompt({
           workshop: project.workshop, title: project.title, idea: project.idea, planBlock: planBlock(),
           branch, scene, prevScript: previous, nextScene: newScenes[i + 1] || null,
           isFirst: false, isLast: i === newScenes.length - 1, totalScenes: target,
           playerName: project.player_name, playerDesc: project.player_desc, mainQuest: project.main_quest,
           knownItems: [...knownItems], knownFlags: [...knownFlags], sceneMap, endingLabels,
+          approvedDraft: "", gameBible: meta?.game_bible,
         })) || "").trim();
+        const script = isolateGeneratedScene(generated, scene.scene_order, {
+          isFirst: false,
+          isLast: i === newScenes.length - 1,
+        });
         await upsertGamePlanSceneContent(project.id, branch.id, scene.id, {
           scene_order: scene.scene_order, title: scene.title, draft: "", script, status: "đã ghép kịch bản chung",
         });
@@ -249,7 +270,7 @@ export default function FinalStep({ project, patchProject, onBack }) {
     <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3 flex-wrap">
       <div className="flex-1 min-w-[240px]">
         <h3 className="font-display font-semibold flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Một kịch bản hoàn chỉnh</h3>
-        <p className="text-xs text-muted-foreground mt-1">Toàn bộ {project.scene_count} cảnh và {project.branch_count} nhánh được nối trong một file đúng cú pháp {workshop.label}. Bạn chỉ cần copy một lần.</p>
+        <p className="text-xs text-muted-foreground mt-1">Toàn bộ {project.scene_count} cảnh và {project.branch_count} nhánh được biên dịch trên máy thành cú pháp {workshop.label}. Bước này không tốn lượt Gemini.</p>
       </div>
       <div className="flex items-center gap-2">
         {!!fullScript && (
@@ -266,7 +287,7 @@ export default function FinalStep({ project, patchProject, onBack }) {
           </>
         )}
         <button onClick={writeCompleteScript} disabled={writing || addingScenes} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
-          {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} {writing ? "Đang ghép..." : fullScript ? "Ghép lại kịch bản cuối" : "Ghép kịch bản cuối"}
+          {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />} {writing ? "Đang ghép..." : fullScript ? "Ghép lại miễn phí" : "Ghép kịch bản · 0 lượt AI"}
         </button>
       </div>
     </div>
@@ -296,11 +317,12 @@ export default function FinalStep({ project, patchProject, onBack }) {
         </div>
       )}
     </div>}
+    {!!displayScript && <div className={`rounded-xl border p-3 text-xs ${phase3Report.publishReady ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5"}`}><div className="font-semibold">Cổng xuất bản Phase 3: {phase3Report.publishReady ? "ĐẠT" : "CHƯA ĐẠT"} · {phase3Report.score}/100</div><p className="mt-1 text-muted-foreground">Coverage {phase3Report.coverage.scenePercent}% cảnh, {phase3Report.coverage.choicePercent}% lựa chọn · {phase3Report.regressionCases.length} tuyến hồi quy.</p>{!phase3Report.publishReady && <ul className="mt-2 list-disc pl-5 space-y-1">{phase3Report.findings.slice(0, 8).map((x, i) => <li key={i}>{x.message}</li>)}</ul>}</div>}
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <span className="text-sm font-semibold">Bản để copy sang Xưởng Game</span>
         {fixedScript && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">đã tự sửa</span>}
-        <button onClick={copyAll} disabled={!displayScript || !report.ok || report.blocking.length > 0} title={report.blocking.length ? "Sửa hết lỗi chặn đường chơi trước khi copy" : ""} className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs disabled:opacity-40">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? "Đã copy" : "Copy toàn bộ"}</button>
+        <button onClick={copyAll} disabled={!displayScript || !report.ok || report.blocking.length > 0 || !phase3Report.publishReady} title={report.blocking.length ? "Sửa hết lỗi chặn đường chơi trước khi copy" : !phase3Report.publishReady ? "Cổng xuất bản Phase 3 chưa đạt" : ""} className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs disabled:opacity-40">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? "Đã copy" : "Copy toàn bộ"}</button>
       </div>
       <pre className="p-4 text-xs leading-5 whitespace-pre-wrap overflow-auto max-h-[70vh] font-mono">{displayScript || "Chưa có kịch bản cuối. Bấm “Ghép kịch bản cuối”."}</pre>
     </div>

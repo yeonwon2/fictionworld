@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Eye, EyeOff, Loader2, KeyRound, Check, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, KeyRound, Check, Trash2, Plus, UserRound } from "lucide-react";
 import {
   getCustomKey,
   setCustomKey,
@@ -17,6 +18,12 @@ import {
   setCustomProviderConfig,
   testAIConnection,
   KNOWN_RELAY_PROVIDERS,
+  getAIProfiles,
+  getActiveAIProfileId,
+  saveAIProfile,
+  activateAIProfile,
+  deleteAIProfile,
+  getAIUsageToday,
 } from "@/lib/aiCall";
 import { GEMINI_MODELS } from "@/lib/geminiModels";
 
@@ -40,6 +47,10 @@ export default function AISettingsModal({ open, onOpenChange }) {
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState({ type: "", text: "" });
   const [saved, setSaved] = useState(false);
+  const [profiles, setProfiles] = useState(getAIProfiles());
+  const [activeProfileId, setActiveProfileId] = useState(getActiveAIProfileId());
+  const [profileName, setProfileName] = useState("");
+  const usage = getAIUsageToday();
 
   const isCustom = provider === "custom";
 
@@ -48,6 +59,13 @@ export default function AISettingsModal({ open, onOpenChange }) {
     setCustomKey(key.trim());
     setCustomModel(model);
     setCustomProviderConfig({ providerId: cProviderId, baseUrl: cBaseUrl, key: cKey, model: cModel });
+    const active = profiles.find((item) => item.id === activeProfileId);
+    if (active) {
+      saveAIProfile(isCustom
+        ? { ...active, provider: "custom", custom: { providerId: cProviderId, baseUrl: cBaseUrl.trim(), key: cKey.trim(), model: cModel.trim() } }
+        : { ...active, provider: "gemini", key: key.trim(), model });
+      setProfiles(getAIProfiles());
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -61,6 +79,30 @@ export default function AISettingsModal({ open, onOpenChange }) {
       setCustomKey("");
     }
     setTestMsg({ type: "", text: "" });
+  };
+
+  const saveAsProfile = () => {
+    if (!profileName.trim() || !canSave) return;
+    const row = saveAIProfile(isCustom
+      ? { name: profileName.trim(), provider: "custom", custom: { providerId: cProviderId, baseUrl: cBaseUrl.trim(), key: cKey.trim(), model: cModel.trim() } }
+      : { name: profileName.trim(), provider: "gemini", key: key.trim(), model });
+    activateAIProfile(row.id);
+    setProfiles(getAIProfiles()); setActiveProfileId(row.id); setProfileName("");
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
+  };
+
+  const selectProfile = (id) => {
+    const row = activateAIProfile(id);
+    setActiveProfileId(id); setProvider(row.provider);
+    if (row.provider === "custom") {
+      setCProviderId(row.custom?.providerId || "other"); setCBaseUrl(row.custom?.baseUrl || ""); setCKey(row.custom?.key || ""); setCModel(row.custom?.model || "");
+    } else { setKey(row.key || ""); setModel(row.model || DEFAULT_MODEL_ID); }
+    setTestMsg({ type: "", text: "" });
+  };
+
+  const removeProfile = (id) => {
+    deleteAIProfile(id); setProfiles(getAIProfiles());
+    if (activeProfileId === id) setActiveProfileId("");
   };
 
   const test = async () => {
@@ -91,9 +133,16 @@ export default function AISettingsModal({ open, onOpenChange }) {
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-primary" /> Quản lý AI API Key
           </DialogTitle>
+          <DialogDescription>Chọn thủ công hồ sơ Gemini hoặc cổng API dùng cho các tính năng sáng tác.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+            <div className="flex items-center gap-2"><UserRound className="w-4 h-4 text-primary" /><div><div className="text-sm font-medium">Hồ sơ AI</div><div className="text-[11px] text-muted-foreground">Chọn thủ công; hệ thống không tự xoay key khi hết quota.</div></div></div>
+            {!!profiles.length && <div className="space-y-1.5">{profiles.map((item) => <div key={item.id} className={`flex items-center gap-2 rounded-md border px-2.5 py-2 ${activeProfileId === item.id ? "border-primary bg-primary/10" : "border-border bg-background"}`}><button type="button" onClick={() => selectProfile(item.id)} className="flex-1 text-left"><div className="text-xs font-medium">{item.name}</div><div className="text-[10px] text-muted-foreground">{item.provider === "gemini" ? `Gemini · ${item.model}` : `${item.custom?.providerId || "API khác"} · ${item.custom?.model || "?"}`}</div></button>{activeProfileId === item.id && <span className="text-[10px] text-primary">Đang dùng</span>}<button type="button" onClick={() => removeProfile(item.id)} className="text-muted-foreground hover:text-destructive" title="Xóa hồ sơ"><Trash2 className="w-3.5 h-3.5" /></button></div>)}</div>}
+            <div className="flex gap-2"><input value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Tên hồ sơ, ví dụ Gemini chính" className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs" /><button type="button" onClick={saveAsProfile} disabled={!profileName.trim() || !canSave} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-primary/40 text-primary text-xs disabled:opacity-40"><Plus className="w-3.5 h-3.5" /> Lưu thành hồ sơ</button></div>
+            <div className="text-[10px] text-muted-foreground">Hôm nay: {usage.calls} lượt gọi · cache đã tránh {usage.cacheHits} lượt.</div>
+          </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Nhà cung cấp AI</label>
             <div className="flex gap-2 mt-1.5">

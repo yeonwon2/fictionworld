@@ -1,47 +1,23 @@
-import React, { useState, useCallback } from "react";
-import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { BookOpen, Users, Network, MapPin, Clock, Search, Sparkles, LayoutGrid, LogOut, Library, ChevronDown, Settings as SettingsIcon, BookMarked, Gamepad2, Factory, Clapperboard } from "lucide-react";
-import QuickReferenceDrawer from "@/components/QuickReferenceDrawer";
+import React, { useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { Sparkles, LogOut, Settings as SettingsIcon, Gamepad2, Factory, Clapperboard } from "lucide-react";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
 import StorySwitcher from "@/components/StorySwitcher";
 import AISettingsModal from "@/components/AISettingsModal";
 import { cn } from "@/lib/utils";
 
-// Điều hướng chính — 4 tab
+// FictionWorld hiện tập trung vào đúng ba dây chuyền sản xuất.
 const MAIN_NAV = [
-  { label: "Tổng quan", short: "Tổng quan", path: "/", icon: BookOpen },
-  {
-    label: "Sổ Tay Thế Giới",
-    short: "Sổ Tay",
-    path: "/so-tay-the-gioi",
-    icon: Library,
-    children: [
-      { label: "Hồ Sơ Truyện", tab: "bible", icon: BookMarked },
-      { label: "Nhân vật", tab: "characters", icon: Users },
-      { label: "Sơ đồ quan hệ", tab: "relationships", icon: Network },
-      { label: "Địa danh", tab: "locations", icon: MapPin },
-      { label: "Niên biểu", tab: "timeline", icon: Clock },
-      { label: "Cốt truyện", tab: "matrix", icon: LayoutGrid },
-    ],
-  },
-  { label: "Sáng Tác AI", short: "Sáng Tác", path: "/sang-tac-ai", icon: Sparkles },
   { label: "Xưởng Viết Truyện", short: "Xưởng Viết", path: "/xuong-viet-truyen", icon: Factory },
   { label: "Xưởng Kịch Bản Game", short: "Kịch Bản", path: "/xuong-kich-ban-game", icon: Clapperboard },
   { label: "Xưởng Game", short: "Game", path: "/xuong-game", icon: Gamepad2 },
 ];
 
 export default function Layout() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const { logout } = useAuth();
-  const [searchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab");
-  const [groupOpen, setGroupOpen] = useState(location.pathname === "/so-tay-the-gioi");
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const openDrawer = useCallback(() => setDrawerOpen(true), []);
-  const worldItem = MAIN_NAV[1];
 
   return (
     <StoryProvider>
@@ -49,83 +25,22 @@ export default function Layout() {
       {/* Thanh bên điều hướng (desktop) */}
       <aside className="hidden md:flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background sticky top-0 h-screen">
         <div className="px-6 py-7 border-b border-sidebar-border">
-          <Link to="/" className="flex items-center gap-2.5 group">
+          <Link to="/xuong-viet-truyen" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
             </div>
             <div className="leading-tight">
               <div className="font-display text-lg font-semibold text-sidebar-foreground">Fiction World</div>
-              <div className="text-[11px] text-muted-foreground tracking-wide">Sổ tay thế giới</div>
+              <div className="text-[11px] text-muted-foreground tracking-wide">Xưởng sáng tác & game</div>
             </div>
           </Link>
         </div>
 
         <nav className="flex-1 px-3 py-5 space-y-1">
-          {/* Tổng quan */}
-          <NavLink item={MAIN_NAV[0]} active={location.pathname === "/"} />
-
-          {/* Sổ Tay Thế Giới — nhóm mở rộng */}
-          <div>
-            <button
-              onClick={() => setGroupOpen((o) => !o)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                location.pathname === worldItem.path
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <worldItem.icon className="w-4 h-4 shrink-0" />
-              {worldItem.label}
-              <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", groupOpen && "rotate-180")} />
-            </button>
-            {groupOpen && (
-              <div className="ml-3 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
-                {worldItem.children.map((child) => {
-                  const Icon = child.icon;
-                  const to = `${worldItem.path}?tab=${child.tab}`;
-                  const active = location.pathname === worldItem.path && activeTab === child.tab;
-                  return (
-                    <Link
-                      key={child.tab}
-                      to={to}
-                      className={cn(
-                        "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition",
-                        active
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Icon className="w-3.5 h-3.5 shrink-0" />
-                      {child.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Sáng Tác AI */}
-          <NavLink item={MAIN_NAV[2]} active={location.pathname === "/sang-tac-ai"} />
-
-          {/* Xưởng Viết Truyện */}
-          <NavLink item={MAIN_NAV[3]} active={location.pathname === "/xuong-viet-truyen"} />
-
-          {/* Xưởng Kịch Bản Game */}
-          <NavLink item={MAIN_NAV[4]} active={location.pathname === "/xuong-kich-ban-game"} />
-
-          {/* Xưởng Game */}
-          <NavLink item={MAIN_NAV[5]} active={location.pathname === "/xuong-game"} />
+          {MAIN_NAV.map((item) => <NavLink key={item.path} item={item} active={location.pathname === item.path} />)}
         </nav>
 
         <div className="p-4 border-t border-sidebar-border space-y-2">
-          <button
-            onClick={openDrawer}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium bg-sidebar-accent text-sidebar-accent-foreground hover:opacity-80 transition"
-          >
-            <Search className="w-4 h-4" />
-            Tra cứu nhanh
-          </button>
           <button
             onClick={() => setSettingsOpen(true)}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition"
@@ -147,7 +62,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Thanh trên (mobile) */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/60 backdrop-blur sticky top-0 z-30">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/xuong-viet-truyen" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-primary-foreground" />
             </div>
@@ -159,9 +74,6 @@ export default function Layout() {
             </button>
             <button onClick={() => logout()} className="p-2 rounded-lg hover:bg-muted" title="Đăng xuất">
               <LogOut className="w-5 h-5" />
-            </button>
-            <button onClick={openDrawer} className="p-2 rounded-lg hover:bg-muted">
-              <Search className="w-5 h-5" />
             </button>
           </div>
         </header>
@@ -207,12 +119,9 @@ export default function Layout() {
               <LogOut className="w-4 h-4" />
             </button>
           </div>
-          <Outlet context={{ openDrawer }} />
+          <Outlet />
         </main>
       </div>
-
-      {/* Bảng tra cứu nhanh toàn cục */}
-      <QuickReferenceDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
 
       {/* Cài đặt AI API Key cá nhân */}
       <AISettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />

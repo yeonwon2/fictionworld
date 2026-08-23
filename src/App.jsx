@@ -8,16 +8,6 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import Layout from '@/components/Layout';
-import Home from '@/pages/Home';
-import Characters from '@/pages/Characters';
-import CharacterDetail from '@/pages/CharacterDetail';
-import Relationships from '@/pages/Relationships';
-import Locations from '@/pages/Locations';
-import Timeline from '@/pages/Timeline';
-import Workspace from '@/pages/Workspace';
-import StoryMatrix from '@/pages/StoryMatrix';
-import Worldbook from '@/pages/Worldbook';
-import AICreative from '@/pages/AICreative';
 import WritingFactory from '@/pages/WritingFactory';
 import GameStudio from '@/pages/GameStudio';
 import GameScriptProject from '@/pages/GameScriptProject';
@@ -50,16 +40,15 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/nhan-vat" element={<Characters />} />
-          <Route path="/nhan-vat/:id" element={<CharacterDetail />} />
-          <Route path="/so-do" element={<Relationships />} />
-          <Route path="/dia-danh" element={<Locations />} />
-          <Route path="/nien-bieu" element={<Timeline />} />
-          <Route path="/soan-thao" element={<Workspace />} />
-          <Route path="/cot-truyen" element={<StoryMatrix />} />
-          <Route path="/so-tay-the-gioi" element={<Worldbook />} />
-          <Route path="/sang-tac-ai" element={<AICreative />} />
+          <Route path="/" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/nhan-vat/*" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/so-do" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/dia-danh" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/nien-bieu" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/soan-thao" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/cot-truyen" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/so-tay-the-gioi" element={<Navigate to="/xuong-viet-truyen" replace />} />
+          <Route path="/sang-tac-ai" element={<Navigate to="/xuong-viet-truyen" replace />} />
           <Route path="/xuong-viet-truyen" element={<WritingFactory />} />
           <Route path="/xuong-game" element={<GameStudio />} />
           <Route path="/xuong-kich-ban-game" element={<GameScriptProject />} />

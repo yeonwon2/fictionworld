@@ -219,6 +219,9 @@
 .rpg-poster-bio{font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.92);margin-bottom:24px;max-height:96px;overflow:hidden;text-shadow:0 1px 8px rgba(0,0,0,.5);}
 .rpg-poster-btn{cursor:pointer;border:none;font-family:var(--rpg-font);font-weight:700;font-size:15px;color:#12090f;background:linear-gradient(135deg,var(--rpg-accent),var(--rpg-accent2));border-radius:var(--rpg-btn-radius,999px);padding:12px 36px;box-shadow:0 10px 30px rgba(0,0,0,.45);transition:transform .15s ease,filter .15s ease;}
 .rpg-poster-btn:hover{filter:brightness(1.12);transform:translateY(-1px);}
+.rpg-poster-actions{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.rpg-poster-secondary{cursor:pointer;border:1px solid rgba(255,255,255,.38);border-radius:var(--rpg-btn-radius,999px);padding:8px 20px;color:#fff;background:rgba(0,0,0,.28);backdrop-filter:blur(8px);font-size:12px;font-weight:650;transition:background .15s ease;}
+.rpg-poster-secondary:hover{background:rgba(255,255,255,.16);}
 .theme-preview-strip { min-height:132px;border-radius:16px;background-size:cover;background-position:72% 25%;position:relative;overflow:hidden;border:1px solid hsl(var(--primary)/.2); }
 .theme-preview-strip::after { content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(20,8,14,.86),rgba(20,8,14,.12)); }
 .theme-preview-strip > div { position:absolute;z-index:1;left:16px;bottom:14px;color:#fff;display:flex;flex-direction:column;max-width:58%; }
@@ -328,7 +331,12 @@
 .rpg-topbar-info{flex:1;min-width:0;}
 .rpg-topbar-title{font-size:14px;font-weight:700;color:var(--rpg-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rpg-topbar-subtitle{font-size:11px;color:var(--rpg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rpg-story-progress{height:3px;margin-top:4px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--rpg-muted) 22%,transparent);}
+.rpg-story-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--rpg-accent),var(--rpg-accent2));transition:width .35s ease;}
+.rpg-save-state{flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--rpg-muted);}
 .rpg-topbar-points{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent) 18%, var(--rpg-panel-2));color:var(--rpg-accent);}
+.rpg-root:fullscreen{width:100vw;height:100vh;min-height:100vh;border-radius:0!important;overflow-y:auto;}
+@media(max-width:640px){.rpg-save-state{display:none}.rpg-topbar{gap:7px}.rpg-topbar-btn{width:32px;height:32px}}
 
 /* --- Hàng chỉ số dạng thanh (icon + số + thanh tiến độ), thay cho chip cũ --- */
 .rpg-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:12px 14px;padding:11px 13px;border-radius:14px;background:color-mix(in srgb, var(--rpg-panel) 45%, transparent);backdrop-filter:blur(8px);}

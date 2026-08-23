@@ -275,7 +275,7 @@ function GameEditor({ gameId, onBack }) {
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4">
         {tab === "play" && (
           <div className="max-w-3xl mx-auto">
-            <GamePlayer key={playKey} gameData={gameData} onExit={onBack} />
+            <GamePlayer key={playKey} gameData={gameData} gameKey={gameId} onExit={onBack} />
           </div>
         )}
         {tab === "routes" && (

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Loader2, Wand2, CheckCircle2, ArrowLeft, Pencil, Save, AlertTriangle, Plus, ListChecks } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Loader2, Wand2, CheckCircle2, ArrowLeft, Pencil, Save, AlertTriangle, Plus, ListChecks, PlayCircle, Wrench } from "lucide-react";
 import { aiCall } from "@/lib/aiCall";
 import {
   buildPlanCorePrompt,
@@ -12,7 +12,12 @@ import {
   buildPlanSceneRevisionPrompt,
   PLAN_SCENE_REVISION_SCHEMA,
 } from "@/lib/gameScriptProject/prompts";
-import { analyzePlanLogic } from "@/lib/gameScriptProject/planLogic";
+import { compileNarrativePlan, repairNarrativePlan, simulateNarrativeRoutes } from "@/lib/gameScriptProject/narrativeCompiler";
+import { analyzeNarrativeContinuity } from "@/lib/gameScriptProject/continuityChecker";
+import { analyzeStatefulNarrative } from "@/lib/gameScriptProject/statefulCompiler";
+import { analyzePhase3Narrative } from "@/lib/gameScriptProject/phase3Analyzer";
+import { estimateGeminiCalls } from "@/lib/gameScriptProject/quotaPlanner";
+import { getAIUsageToday } from "@/lib/aiCall";
 import { WORKSHOPS } from "@/lib/gameScriptProject/syntaxGuide";
 import AiReviseBox from "@/components/game-script-project/AiReviseBox";
 import {
@@ -40,10 +45,20 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   const [error, setError] = useState("");
   const [editMetaSection, setEditMetaSection] = useState(null);
   const [planWarnings, setPlanWarnings] = useState([]);
+  const [compilerReport, setCompilerReport] = useState(null);
   const [addingScenes, setAddingScenes] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
+  const [repairSummary, setRepairSummary] = useState("");
   const [addCount, setAddCount] = useState(8);
 
   const ideaOk = !!String(project.idea || "").trim();
+  const playRoutes = useMemo(() => simulateNarrativeRoutes({ scenes, maxRoutes: 24 }), [scenes]);
+  const qualityReport = useMemo(() => analyzeNarrativeContinuity({ project, meta, scenes }), [project, meta, scenes]);
+  const statefulReport = useMemo(() => analyzeStatefulNarrative({ project, meta, scenes }), [project, meta, scenes]);
+  const phase3Report = useMemo(() => analyzePhase3Narrative({ project, meta, scenes }), [project, meta, scenes]);
+  const quotaEstimate = estimateGeminiCalls({ sceneCount: project.scene_count, branchCount: project.branch_count, existingScenes: scenes.length });
+  const usageToday = getAIUsageToday();
 
   // Rà lỗi logic NGAY khi dữ liệu thay đổi — trong lúc AI đang dựng dàn cảnh
   // (scenes/meta được cập nhật DẦN trong handleGenerate, không đợi xong hết)
@@ -51,14 +66,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   // sinh dở, tránh báo nhầm lúc dữ liệu chưa đầy đủ.
   useEffect(() => {
     if (!scenes.length && !meta?.characters?.length) { setPlanWarnings([]); return; }
-    setPlanWarnings(
-      analyzePlanLogic({
-        scenes, meta,
-        branchCount: Number(project.branch_count) || 4,
-        sceneCountTarget: Number(project.scene_count) || 0,
-        complete: !generating && !addingScenes,
-      })
-    );
+    const report = compileNarrativePlan({ project, meta, scenes, complete: !generating && !addingScenes });
+    setCompilerReport(report);
+    setPlanWarnings(report.issues.map((x) => x.message));
 
   }, [scenes, meta, project.branch_count, project.scene_count, generating, addingScenes]);
 
@@ -78,7 +88,6 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
   const handleGenerate = async () => {
@@ -120,6 +129,7 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
         endings: core.endings || [],
         branches: core.branches || [],
         notes: core.notes || "",
+        invariants: core.invariants || [],
       };
       await upsertGamePlanMeta(project.id, coreMeta);
       // Cập nhật state NGAY (không đợi load() ở cuối) — để bảng cảnh báo logic
@@ -182,6 +192,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             location: sc.location || "",
             characters: sc.characters || "",
             foreshadow: sc.foreshadow || "",
+            state_contract: sc.state_contract || {},
+            chapter_index: Number(sc.chapter_index) || Math.floor((order - 1) / 12) + 1,
+            is_checkpoint: !!sc.is_checkpoint || (order - 1) % 12 === 0,
             choices: sc.choices || [],
             is_branch_point: !!sc.is_branch_point,
             branch_index: sc.branch_index ?? null,
@@ -190,6 +203,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
           allScenes.push({
             scene_order: order, title: sc.title, description: sc.description,
             location: sc.location, characters: sc.characters, foreshadow: sc.foreshadow,
+            state_contract: sc.state_contract || {},
+            chapter_index: Number(sc.chapter_index) || Math.floor((order - 1) / 12) + 1,
+            is_checkpoint: !!sc.is_checkpoint || (order - 1) % 12 === 0,
             choices: sc.choices || [], is_branch_point: !!sc.is_branch_point, branch_index: sc.branch_index ?? null,
           });
           order++;
@@ -249,6 +265,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             project_id: project.id, scene_order: order, title: sc.title || `Cảnh ${order}`,
             description: sc.description || "", location: sc.location || "", characters: sc.characters || "",
             foreshadow: sc.foreshadow || "", choices: sc.choices || [], is_branch_point: !!sc.is_branch_point,
+            state_contract: sc.state_contract || {},
+            chapter_index: Number(sc.chapter_index) || Math.floor((order - 1) / 12) + 1,
+            is_checkpoint: !!sc.is_checkpoint || (order - 1) % 12 === 0,
             branch_index: sc.branch_index ?? null, status: "nháp",
           });
           added.push(row);
@@ -268,6 +287,35 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
     }
   };
 
+  const resumeMissingScenes = async () => {
+    const target = Math.max(5, Math.min(120, Number(project.scene_count) || 50));
+    const existingOrders = new Set(scenes.map((s) => Number(s.scene_order)));
+    let order = Math.max(0, ...existingOrders) + 1;
+    if (order > target) return;
+    setAddingScenes(true); setError("");
+    try {
+      const choicesPer = Math.max(1, Math.min(6, Number(project.choices_per_scene) || 3));
+      const branchCount = Math.max(2, Number(project.branch_count) || 4);
+      const added = [];
+      while (order <= target) {
+        const count = Math.min(CHUNK, target - order + 1);
+        setProgress(`Tiếp tục dàn cảnh ${order}–${order + count - 1}/${target} · giữ nguyên phần đã có...`);
+        const prevSummary = [...scenes, ...added].slice(-6).map((s) => `${s.scene_order}. ${s.title}: ${(s.description || "").slice(0, 120)}`).join("\n");
+        const chunk = await aiCall(buildPlanScenesChunkPrompt({ workshop: project.workshop, idea: project.idea, coreBlock: formatCoreBlock(meta), branchCount, choicesPerScene: choicesPer, startOrder: order, count, totalScenes: target, prevScenesSummary: prevSummary }), { jsonSchema: PLAN_SCENES_CHUNK_SCHEMA });
+        const rows = chunk?.scenes || [];
+        for (const sc of rows) {
+          if (order > target || existingOrders.has(order)) { order++; continue; }
+          const row = await createGamePlanScene({ project_id: project.id, scene_order: order, title: sc.title || `Cảnh ${order}`, description: sc.description || "", location: sc.location || "", characters: sc.characters || "", foreshadow: sc.foreshadow || "", state_contract: sc.state_contract || {}, chapter_index: Number(sc.chapter_index) || Math.floor((order - 1) / 12) + 1, is_checkpoint: !!sc.is_checkpoint || (order - 1) % 12 === 0, choices: sc.choices || [], is_branch_point: !!sc.is_branch_point, branch_index: sc.branch_index ?? null, status: "nháp" });
+          added.push(row); existingOrders.add(order); order++;
+        }
+        setScenes([...scenes, ...added]);
+        if (!rows.length) break;
+      }
+      setProgress(""); await load();
+    } catch (e) { setError("Tạm dừng khi hết quota/lỗi mạng: " + (e?.message || "lỗi")); }
+    finally { setAddingScenes(false); }
+  };
+
   const handleSaveMetaSection = async (section, value) => {
     const next = { ...meta, [section]: value };
     setMeta(next);
@@ -285,6 +333,44 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   };
 
   const hasContent = !!meta && (meta.characters?.length || scenes.length);
+
+  const saveCompilerSnapshot = async () => {
+    if (!compilerReport) return;
+    const snapshot = {
+      game_bible: compilerReport.bible,
+      scene_contracts: compilerReport.contracts,
+      compiler_report: { version: 3, ok: compilerReport.ok && statefulReport.ok, publish_ready: phase3Report.publishReady, issues: compilerReport.issues, summary: compilerReport.summary, quality: qualityReport, stateful: { version: statefulReport.version, ok: statefulReport.ok, issues: statefulReport.issues, summary: statefulReport.summary }, phase3: phase3Report, compiled_at: new Date().toISOString() },
+    };
+    setMeta((current) => ({ ...current, ...snapshot }));
+    await upsertGamePlanMeta(project.id, { ...meta, ...snapshot }).catch((e) => setError("Lưu kết quả compiler lỗi: " + e.message));
+  };
+
+  const approvePlan = async () => {
+    if (!compilerReport?.ok || !statefulReport.ok) {
+      setError(`Bộ khung còn ${compilerReport?.summary.errors || 0} lỗi logic. Hãy sửa các lỗi màu đỏ trước khi viết nhánh.`);
+      return;
+    }
+    await saveCompilerSnapshot();
+    await patchProject({ status: "plan" });
+    onNext();
+  };
+
+  const repairGraph = async () => {
+    setRepairing(true); setError(""); setRepairSummary("");
+    try {
+      const result = repairNarrativePlan({ scenes, meta });
+      if (!result.changes.length) { setRepairSummary("Không có liên kết cấu trúc nào có thể sửa tự động an toàn."); return; }
+      const originalByOrder = new Map(scenes.map((scene) => [Number(scene.scene_order), scene]));
+      await Promise.all(result.scenes.map((scene) => {
+        const original = originalByOrder.get(Number(scene.scene_order));
+        if (!original?.id || JSON.stringify(original.choices || []) === JSON.stringify(scene.choices || [])) return Promise.resolve();
+        return updateGamePlanScene(original.id, { choices: scene.choices || [] });
+      }));
+      setScenes(result.scenes);
+      setRepairSummary(`Đã sửa ${result.changes.length} liên kết: ${result.changes.slice(0, 5).map((change) => `cảnh ${change.sceneId} → ${change.to}`).join("; ")}${result.changes.length > 5 ? "…" : ""}`);
+    } catch (e) { setError("Tự sửa Story Graph lỗi: " + (e?.message || "lỗi")); }
+    finally { setRepairing(false); }
+  };
 
   if (loading) {
     return (
@@ -317,6 +403,81 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             {planWarnings.slice(0, 15).map((w, i) => <li key={i}>{w}</li>)}
           </ul>
         </div>
+      )}
+      {!!compilerReport && !!scenes.length && (
+        <div className={`rounded-xl border p-3 text-xs ${compilerReport.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
+          <div className="flex items-center gap-2 font-semibold">
+            <ListChecks className="w-4 h-4" />
+            Narrative compiler: {compilerReport.summary.reachableScenes}/{compilerReport.summary.scenes} cảnh tới được · {compilerReport.summary.reachableEndings}/{compilerReport.summary.endings} kết thúc được nối · {compilerReport.summary.errors} lỗi · {compilerReport.summary.warnings} cảnh báo
+            <div className="ml-auto flex items-center gap-1.5">
+              {!compilerReport.ok && <button type="button" onClick={repairGraph} disabled={repairing} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-50">{repairing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wrench className="w-3 h-3" />} Sửa liên kết an toàn</button>}
+              <button type="button" onClick={() => setShowRoutes((value) => !value)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border hover:bg-muted"><PlayCircle className="w-3 h-3" /> {showRoutes ? "Đóng mô phỏng" : "Chạy thử tuyến"}</button>
+              <button type="button" onClick={saveCompilerSnapshot} className="px-2.5 py-1.5 rounded-md border border-border hover:bg-muted">Lưu Game Bible & contract</button>
+            </div>
+          </div>
+          <p className="mt-1 text-muted-foreground">Game Bible và scene contract là dữ liệu nội bộ; file xuất sang Xưởng Game vẫn giữ nguyên cú pháp cũ.</p>
+          {repairSummary && <p className="mt-2 rounded-md bg-primary/10 text-primary px-2 py-1.5">{repairSummary}</p>}
+          {showRoutes && (
+            <div className="mt-3 border-t border-border pt-2">
+              <div className="font-semibold mb-1.5">Preview {playRoutes.length} tuyến đại diện</div>
+              <div className="grid md:grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+                {playRoutes.map((route, index) => (
+                  <div key={index} className="rounded-md border border-border bg-background/60 p-2">
+                    <div className={`font-medium ${route.status === "ending" ? "text-emerald-600" : "text-destructive"}`}>Tuyến {index + 1}: {route.ending}</div>
+                    <div className="mt-1 text-muted-foreground leading-relaxed">{route.steps.map((step) => `C${step.sceneId}${step.choice ? ` [${step.choice}]` : ""}`).join(" → ")}</div>
+                  </div>
+                ))}
+                {!playRoutes.length && <p className="text-muted-foreground">Chưa có cảnh để mô phỏng.</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {!!scenes.length && (
+        <details className={`rounded-xl border p-3 text-xs ${phase3Report.publishReady ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-400/40 bg-amber-500/5"}`}>
+          <summary className="cursor-pointer font-semibold flex items-center gap-2">
+            <ListChecks className="w-4 h-4" /> Phase 3 · {phase3Report.score}/100 · {phase3Report.summary.chapters} chương · phủ {phase3Report.coverage.scenePercent}% cảnh / {phase3Report.coverage.choicePercent}% lựa chọn
+            <span className="ml-auto text-muted-foreground font-normal">{phase3Report.publishReady ? "Đủ điều kiện xuất bản" : "Mở báo cáo"}</span>
+          </summary>
+          <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
+            <p className="text-muted-foreground">{phase3Report.summary.checkpoints} checkpoint · {phase3Report.regressionCases.length} regression case · {phase3Report.coverage.validEndings} ending hợp lệ.</p>
+            {phase3Report.findings.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span></div>)}
+            {!phase3Report.findings.length && <p className="text-emerald-600">Không phát hiện lựa chọn giả, ending thiếu tuyến hoặc lỗ hổng coverage.</p>}
+          </div>
+        </details>
+      )}
+      {!!scenes.length && (
+        <details className={`rounded-xl border p-3 text-xs ${statefulReport.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}>
+          <summary className="cursor-pointer font-semibold flex items-center gap-2">
+            <PlayCircle className="w-4 h-4" /> Phase 2 · Auto-play: {statefulReport.summary.validEndings}/{statefulReport.summary.endingsReached} ending · contract {statefulReport.summary.contractsDeclared}/{statefulReport.summary.totalContracts} · {statefulReport.summary.errors} lỗi · {statefulReport.summary.warnings} cảnh báo
+            <span className="ml-auto text-muted-foreground font-normal">Mở báo cáo</span>
+          </summary>
+          <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
+            {statefulReport.issues.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span>{item.route?.length ? <p className="mt-1 text-muted-foreground">Tuyến: {item.route.join(" → ")}</p> : null}</div>)}
+            {!statefulReport.issues.length && <p className="text-emerald-600">Không phát hiện mâu thuẫn state, kiến thức hoặc invariant trên các tuyến đã mô phỏng.</p>}
+          </div>
+        </details>
+      )}
+      {!!scenes.length && (
+        <details className={`rounded-xl border p-3 text-xs ${qualityReport.score >= 85 ? "border-emerald-500/40 bg-emerald-500/5" : qualityReport.score >= 65 ? "border-amber-400/40 bg-amber-500/5" : "border-destructive/40 bg-destructive/5"}`}>
+          <summary className="cursor-pointer font-semibold flex items-center gap-2">
+            <span className="inline-flex items-center justify-center rounded-full w-8 h-8 bg-background border border-border text-sm">{qualityReport.score}</span>
+            Continuity & chất lượng: {qualityReport.summary.label} · {qualityReport.summary.errors} lỗi · {qualityReport.summary.warnings} cảnh báo · {qualityReport.summary.notes} ghi chú
+            <span className="ml-auto text-muted-foreground font-normal">Mở báo cáo</span>
+          </summary>
+          <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
+            {qualityReport.findings.slice(0, 30).map((item, index) => (
+              <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2">
+                <div className="flex items-center gap-2">
+                  <span className={`uppercase text-[9px] font-bold ${item.severity === "error" ? "text-destructive" : item.severity === "warning" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>{item.severity}</span>
+                  <span>{item.message}</span>
+                </div>
+                {item.suggestion && <p className="mt-1 text-muted-foreground">Gợi ý: {item.suggestion}</p>}
+              </div>
+            ))}
+            {!qualityReport.findings.length && <p className="text-emerald-600">Không phát hiện vấn đề continuity ở cấp scene contract.</p>}
+          </div>
+        </details>
       )}
 
       {/* Luôn hiện ý tưởng đang dùng — để biết AI bám gì */}
@@ -388,7 +549,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             <span className="text-xs text-muted-foreground">
               {scenes.length} cảnh · {branchPoints.length} điểm rẽ · {branches.length} nhánh
             </span>
+            {scenes.length < Number(project.scene_count) && <button type="button" onClick={resumeMissingScenes} disabled={addingScenes || generating} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-emerald-600 text-white text-xs disabled:opacity-50"><PlayCircle className="w-3.5 h-3.5" /> Tiếp tục phần còn thiếu ({quotaEstimate.total} lượt dự kiến)</button>}
           </div>
+          <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">Chế độ tiết kiệm: hôm nay đã gọi Gemini {usageToday.calls} lượt, cache tránh được {usageToday.cacheHits} lượt. Ghép kịch bản cuối tốn 0 lượt.</div>
 
           <MetaCard
             title="Nhân vật"
@@ -488,8 +651,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             </button>
             <button
               type="button"
-              onClick={() => patchProject({ status: "plan" }).then(onNext)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+              onClick={approvePlan}
+              disabled={!compilerReport?.ok || !statefulReport.ok}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40"
             >
               <CheckCircle2 className="w-4 h-4" /> Đã duyệt — Viết nhánh
             </button>
@@ -586,6 +750,7 @@ function SceneEditor({ scene, onChange, branchCount, readOnly, workshop, idea, c
       title: res.title || scene.title, description: res.description || scene.description,
       location: res.location ?? scene.location, characters: res.characters ?? scene.characters,
       foreshadow: res.foreshadow ?? scene.foreshadow, choices: res.choices || scene.choices,
+      state_contract: res.state_contract || scene.state_contract || {},
     });
     setChoices(res.choices || scene.choices || []);
   };
@@ -614,6 +779,8 @@ function SceneEditor({ scene, onChange, branchCount, readOnly, workshop, idea, c
             <input disabled={readOnly} value={scene.foreshadow || ""} onChange={(e) => onChange({ foreshadow: e.target.value })} placeholder="Phục bút" className="rounded-md border border-input bg-transparent px-2 py-1 text-xs disabled:opacity-60" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">Chương <input type="number" min={1} disabled={readOnly} value={scene.chapter_index || 1} onChange={(e) => onChange({ chapter_index: Math.max(1, Number(e.target.value) || 1) })} className="w-12 rounded-md border border-input bg-background px-1.5 py-0.5" /></label>
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"><input type="checkbox" disabled={readOnly} checked={!!scene.is_checkpoint} onChange={(e) => onChange({ is_checkpoint: e.target.checked })} /> Checkpoint</label>
             <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <input type="checkbox" disabled={readOnly} checked={!!scene.is_branch_point} onChange={(e) => onChange({ is_branch_point: e.target.checked })} />
               Điểm rẽ nhánh

@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown } from 'lucide-react';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle, GAME_PRESENTATIONS } from '@/lib/gameStudio/rpgThemes';
 import { palaceRankIndex, palaceProgressToNext } from '@/lib/gameStudio/palaceScriptParser';
 import { rebirthEraIndex, rebirthEraProgress, rebirthUnclaimedBonus } from '@/lib/gameStudio/rebirthScriptParser';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
+import { clearPlayerState, loadPlayerState, savePlayerState } from '@/lib/gameStudio/playerState';
 
 const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles, crown: Crown };
 
-export default function GamePlayer({ gameData, onExit }) {
+export default function GamePlayer({ gameData, gameKey, onExit }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
   const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
@@ -34,6 +35,7 @@ export default function GamePlayer({ gameData, onExit }) {
   const hasItemMechanic = useMemo(() => (
     Object.values(gameData.nodes || {}).some((n) => n.grantItem || (n.choices || []).some((c) => c.grantItem || c.requiresItem))
   ), [gameData.nodes]);
+  const [resumeSave] = useState(() => loadPlayerState(gameKey, gameData.nodes));
 
   const [rt, setRt] = useState(() => ({
     nodeId: 'start_node',
@@ -63,6 +65,8 @@ export default function GamePlayer({ gameData, onExit }) {
   const [dicePending, setDicePending] = useState(null);
   const [combatActive, setCombatActive] = useState(false);
   const [posterOpen, setPosterOpen] = useState(meta.poster !== false);
+  const [savedAt, setSavedAt] = useState(resumeSave?.savedAt || null);
+  const [fullscreen, setFullscreen] = useState(false);
   // "Niên đại làm giàu" đã chạm tới (mốc cao nhất từng nhận thưởng) — riêng với
   // mốc đã vượt rồi tụt xuống: niên đại HIỆN TẠI vẫn giữ (max(derived, reached)),
   // nhưng thu nhập chỉ cộng MỘT LẦN mỗi mốc, không bao giờ cộng lại.
@@ -72,6 +76,7 @@ export default function GamePlayer({ gameData, onExit }) {
   const rtRef = useRef(rt);
   rtRef.current = rt;
   const eraReachedRef = useRef(eraReached);
+  const rootRef = useRef(null);
   eraReachedRef.current = eraReached;
 
   const palaceRankIdx = palaceRankIndex(rt.stats[palace.favorStat] || 0, palace);
@@ -388,6 +393,7 @@ export default function GamePlayer({ gameData, onExit }) {
   };
 
   const reset = () => {
+    clearPlayerState(gameKey);
     setRt({
       nodeId: 'start_node', stats: { ...meta.initialStats }, history: [],
       inventory: [], quests: {}, flags: [], skills: [], exp: 0, rankIndex: 0, systemPoints: 0, npcAffinity: {},
@@ -401,7 +407,55 @@ export default function GamePlayer({ gameData, onExit }) {
     setSheetOpen(false);
     setChoicesOpen(true);
     setBioOpen(false);
+    setSavedAt(null);
   };
+
+  const continueSavedGame = () => {
+    if (!resumeSave?.runtime) return;
+    setRt(resumeSave.runtime);
+    setEraReached(rebirthEraIndex((resumeSave.runtime.stats || {})[rebirth.moneyStat] || 0, rebirth));
+    setPosterOpen(false);
+    setForceKey((key) => key + 1);
+  };
+
+  const startNewGame = () => {
+    reset();
+    setPosterOpen(false);
+  };
+
+  useEffect(() => {
+    if (posterOpen || !gameKey) return;
+    const timer = setTimeout(() => {
+      if (savePlayerState(gameKey, rt)) setSavedAt(new Date().toISOString());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [gameKey, posterOpen, rt]);
+
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement === rootRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await rootRef.current?.requestFullscreen?.();
+    } catch (_) { /* Fullscreen can be blocked by an embedded browser. */ }
+  };
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (posterOpen || sheetOpen || systemPopup || dicePending || combatActive || screen !== 'scene') return;
+      if (!typingDone && (event.key === ' ' || event.key === 'Enter')) { event.preventDefault(); skipTyping(); return; }
+      const index = Number(event.key) - 1;
+      const choice = node?.choices?.[index];
+      if (typingDone && choicesOpen && choice && choiceStatus(choice).ok) { event.preventDefault(); choose(choice); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posterOpen, sheetOpen, systemPopup, dicePending, combatActive, screen, typingDone, choicesOpen, node]);
   const themeStyle = meta.theme === 'custom' && meta.customTheme
     ? customThemeStyle(meta.customTheme)
     : { ...theme.vars };
@@ -417,11 +471,14 @@ export default function GamePlayer({ gameData, onExit }) {
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
   const turn = rt.history.length + 1;
+  const playableNodeCount = Math.max(1, Object.values(gameData.nodes || {}).filter((entry) => !entry.isEnding && entry.id !== 'start_node').length);
+  const visitedCount = new Set([...rt.history, rt.nodeId].filter((id) => id !== 'start_node')).size;
+  const storyProgress = Math.min(100, Math.round((visitedCount / playableNodeCount) * 100));
   const isCustomTheme = meta.theme === 'custom';
   const ambientEffect = isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
 
   return (
-    <div style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+    <div ref={rootRef} style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
       <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
       {posterOpen && (
         <div className="rpg-poster" style={{ backgroundImage: `url(${posterArt})` }}>
@@ -432,7 +489,12 @@ export default function GamePlayer({ gameData, onExit }) {
             <h1 className="rpg-poster-title">{meta.title || 'Trò Chơi'}</h1>
             {meta.player_name && <div className="rpg-poster-sub">{meta.player_name}</div>}
             {meta.player_bio && <p className="rpg-poster-bio">{meta.player_bio}</p>}
-            <button className="rpg-poster-btn" onClick={() => setPosterOpen(false)}>Bắt đầu</button>
+            {resumeSave ? (
+              <div className="rpg-poster-actions">
+                <button className="rpg-poster-btn" onClick={continueSavedGame}>Tiếp tục · Lượt {(resumeSave.runtime.history?.length || 0) + 1}</button>
+                <button className="rpg-poster-secondary" onClick={startNewGame}>Chơi lại từ đầu</button>
+              </div>
+            ) : <button className="rpg-poster-btn" onClick={startNewGame}>Bắt đầu</button>}
           </div>
         </div>
       )}
@@ -446,10 +508,15 @@ export default function GamePlayer({ gameData, onExit }) {
           <div className="rpg-topbar-info">
             <div className="rpg-topbar-title">{meta.title || 'Trò Chơi'}</div>
             <div className="rpg-topbar-subtitle">{meta.player_name || 'Người Chơi'} · Lượt {turn}</div>
+            <div className="rpg-story-progress" title={`Đã khám phá ${visitedCount}/${playableNodeCount} cảnh`}><span style={{ width: `${storyProgress}%` }} /></div>
           </div>
           {archetype === 'litrpg' && (
             <span className="rpg-topbar-points"><Gem size={12} /> {rt.systemPoints}</span>
           )}
+          {savedAt && <span className="rpg-save-state" title={`Đã tự lưu ${new Date(savedAt).toLocaleTimeString('vi-VN')}`}><Save size={11} /> Đã lưu</span>}
+          <button className="rpg-topbar-btn" onClick={toggleFullscreen} title={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}>
+            {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
           <button className="rpg-topbar-btn" onClick={() => setSheetOpen(true)} title="Menu">
             <Menu size={16} />
           </button>

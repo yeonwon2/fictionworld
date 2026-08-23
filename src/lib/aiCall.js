@@ -19,6 +19,10 @@
 const KEY_STORAGE = "fiction_ai_gemini_key";
 const MODEL_STORAGE = "fiction_ai_gemini_model";
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+const CACHE_STORAGE = "fiction_ai_response_cache_v1";
+const USAGE_STORAGE = "fiction_ai_daily_usage_v1";
+const PROFILES_STORAGE = "fiction_ai_profiles_v1";
+const ACTIVE_PROFILE_STORAGE = "fiction_ai_active_profile_v1";
 
 const PROVIDER_STORAGE = "fiction_ai_provider";
 const CUSTOM_PROVIDER_ID_STORAGE = "fiction_ai_custom_provider_id";
@@ -44,6 +48,90 @@ function lsSet(key, value) {
     if (value) localStorage.setItem(key, value);
     else localStorage.removeItem(key);
   } catch {}
+}
+
+function hashText(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return (hash >>> 0).toString(36);
+}
+
+function readJsonStorage(name, fallback) {
+  try { return JSON.parse(lsGet(name, "")) || fallback; } catch { return fallback; }
+}
+
+function cacheKeyFor(prompt, schema) {
+  const provider = getAIProvider();
+  const model = provider === "custom" ? getCustomProviderConfig().model : getCustomModel();
+  return hashText(`${provider}|${model}|${prompt}|${JSON.stringify(schema || null)}`);
+}
+
+function readCache(key) {
+  const cache = readJsonStorage(CACHE_STORAGE, []);
+  const hit = cache.find((entry) => entry.key === key && Date.now() - entry.time < 7 * 86400000);
+  return hit?.value;
+}
+
+function writeCache(key, value) {
+  try {
+    const cache = readJsonStorage(CACHE_STORAGE, []).filter((entry) => entry.key !== key && Date.now() - entry.time < 7 * 86400000).slice(-39);
+    cache.push({ key, time: Date.now(), value });
+    lsSet(CACHE_STORAGE, JSON.stringify(cache));
+  } catch {}
+}
+
+function recordUsage(calls = 1) {
+  const today = new Date().toISOString().slice(0, 10);
+  const usage = readJsonStorage(USAGE_STORAGE, { date: today, calls: 0, cacheHits: 0 });
+  const next = usage.date === today ? usage : { date: today, calls: 0, cacheHits: 0 };
+  next.calls += calls;
+  lsSet(USAGE_STORAGE, JSON.stringify(next));
+}
+
+function recordCacheHit() {
+  const today = new Date().toISOString().slice(0, 10);
+  const usage = readJsonStorage(USAGE_STORAGE, { date: today, calls: 0, cacheHits: 0 });
+  const next = usage.date === today ? usage : { date: today, calls: 0, cacheHits: 0 };
+  next.cacheHits += 1;
+  lsSet(USAGE_STORAGE, JSON.stringify(next));
+}
+
+export function getAIUsageToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  const usage = readJsonStorage(USAGE_STORAGE, { date: today, calls: 0, cacheHits: 0 });
+  return usage.date === today ? usage : { date: today, calls: 0, cacheHits: 0 };
+}
+
+export function getAIProfiles() {
+  return readJsonStorage(PROFILES_STORAGE, []);
+}
+
+export function getActiveAIProfileId() {
+  return lsGet(ACTIVE_PROFILE_STORAGE, "");
+}
+
+export function saveAIProfile(profile) {
+  const profiles = getAIProfiles();
+  const id = profile.id || `profile_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const row = { ...profile, id, name: String(profile.name || "Hồ sơ AI").trim(), updatedAt: new Date().toISOString() };
+  const next = [...profiles.filter((item) => item.id !== id), row].slice(-10);
+  lsSet(PROFILES_STORAGE, JSON.stringify(next));
+  return row;
+}
+
+export function activateAIProfile(id) {
+  const profile = getAIProfiles().find((item) => item.id === id);
+  if (!profile) throw new Error("Không tìm thấy hồ sơ AI.");
+  setAIProvider(profile.provider);
+  if (profile.provider === "custom") setCustomProviderConfig(profile.custom || {});
+  else { setCustomKey(profile.key || ""); setCustomModel(profile.model || DEFAULT_MODEL); }
+  lsSet(ACTIVE_PROFILE_STORAGE, id);
+  return profile;
+}
+
+export function deleteAIProfile(id) {
+  lsSet(PROFILES_STORAGE, JSON.stringify(getAIProfiles().filter((item) => item.id !== id)));
+  if (getActiveAIProfileId() === id) lsSet(ACTIVE_PROFILE_STORAGE, "");
 }
 
 // ---------- Gemini (mặc định) ----------
@@ -260,7 +348,7 @@ export async function testGeminiConnection(key, model) {
 }
 
 // Gọi AI — bắt buộc phải có cấu hình (Gemini key, hoặc Cổng API tuỳ chỉnh đầy đủ).
-export async function aiCall(prompt, { jsonSchema } = {}) {
+export async function aiCall(prompt, { jsonSchema, useCache = true, forceRefresh = false } = {}) {
   if (!hasCustomKey()) {
     throw new Error(
       getAIProvider() === "custom"
@@ -268,18 +356,28 @@ export async function aiCall(prompt, { jsonSchema } = {}) {
         : "Chưa có Gemini API Key. Vào Cài đặt AI để nhập key riêng (miễn phí) trước khi dùng tính năng này."
     );
   }
-  const first = await callProvider(prompt, jsonSchema, {});
-  if (!jsonSchema) return first.text;
+  const cacheKey = cacheKeyFor(prompt, jsonSchema);
+  if (useCache && !forceRefresh) {
+    const cached = readCache(cacheKey);
+    if (cached !== undefined) { recordCacheHit(); return cached; }
+  }
+  let first;
+  try { first = await callProvider(prompt, jsonSchema, {}); recordUsage(1); }
+  catch (error) {
+    if (/429|quota|rate.?limit|resource_exhausted/i.test(error?.message || "")) throw new Error(`${error.message} · Tiến độ đã lưu; hãy dùng “Tiếp tục phần còn thiếu” sau khi quota được mở lại.`);
+    throw error;
+  }
+  if (!jsonSchema) { if (useCache) writeCache(cacheKey, first.text); return first.text; }
 
   try {
-    return safeJsonParse(first.text);
+    const parsed = safeJsonParse(first.text); if (useCache) writeCache(cacheKey, parsed); return parsed;
   } catch (firstError) {
     // JSON có thể bị cắt vì MAX_TOKENS hoặc đôi khi model tạo ký tự JSON lỗi.
     // Thử lại một lần với yêu cầu súc tích sẽ an toàn hơn việc cố "vá" một
     // chuỗi đang dở, vì vá có thể âm thầm tạo dữ liệu sai/thiếu.
-    const retry = await callProvider(prompt, jsonSchema, { compact: true });
+    const retry = await callProvider(prompt, jsonSchema, { compact: true }); recordUsage(1);
     try {
-      return safeJsonParse(retry.text);
+      const parsed = safeJsonParse(retry.text); if (useCache) writeCache(cacheKey, parsed); return parsed;
     } catch {
       const reason = retry.finishReason || first.finishReason;
       const suffix = reason ? ` (Kết thúc: ${reason})` : "";

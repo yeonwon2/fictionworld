@@ -91,7 +91,7 @@ export default function GameScriptProject() {
   }
 
   if (activeId) {
-    return <ProjectWizard projectId={activeId} storyName={currentStory?.name} directionBlock={buildDirectionBlock(currentStory?.direction)} onBack={() => setActiveId(null)} onChanged={load} />;
+    return <ProjectWizard projectId={activeId} directionBlock={buildDirectionBlock(currentStory?.direction)} onBack={() => setActiveId(null)} onChanged={load} />;
   }
 
   return (

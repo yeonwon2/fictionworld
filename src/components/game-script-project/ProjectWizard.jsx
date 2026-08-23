@@ -19,7 +19,7 @@ function stepIndex(id) {
 }
 
 // Điều hướng wizard giữa các bước, quản lý trạng thái project (status).
-export default function ProjectWizard({ projectId, storyName, directionBlock, onBack, onChanged }) {
+export default function ProjectWizard({ projectId, directionBlock, onBack, onChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState("idea");
