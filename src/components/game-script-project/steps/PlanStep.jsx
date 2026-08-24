@@ -11,6 +11,9 @@ import {
   coreSectionRevisionSchema,
   buildPlanSceneRevisionPrompt,
   PLAN_SCENE_REVISION_SCHEMA,
+  buildImportedCorePrompt,
+  buildImportedContractsPrompt,
+  IMPORTED_CONTRACTS_SCHEMA,
 } from "@/lib/gameScriptProject/prompts";
 import { compileNarrativePlan, repairNarrativePlan, simulateNarrativeRoutes } from "@/lib/gameScriptProject/narrativeCompiler";
 import { analyzeNarrativeContinuity } from "@/lib/gameScriptProject/continuityChecker";
@@ -51,6 +54,8 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   const [showRoutes, setShowRoutes] = useState(false);
   const [repairSummary, setRepairSummary] = useState("");
   const [addCount, setAddCount] = useState(8);
+  const [analyzingImported, setAnalyzingImported] = useState(false);
+  const [repairingFinding, setRepairingFinding] = useState("");
 
   const ideaOk = !!String(project.idea || "").trim();
   const isImported = String(project.notes || "").includes("[IMPORTED_SCRIPT]");
@@ -60,6 +65,9 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   const phase3Report = useMemo(() => analyzePhase3Narrative({ project, meta, scenes }), [project, meta, scenes]);
   const quotaEstimate = estimateGeminiCalls({ sceneCount: project.scene_count, branchCount: project.branch_count, existingScenes: scenes.length });
   const usageToday = getAIUsageToday();
+  const importedNeedsCore = isImported && (!meta?.characters?.length || !meta?.settings?.length);
+  const importedMissingContracts = isImported ? scenes.filter((scene) => !scene.state_contract || !Object.keys(scene.state_contract).length) : [];
+  const importedAnalysisCalls = (importedNeedsCore ? 1 : 0) + Math.ceil(importedMissingContracts.length / CHUNK);
 
   // Rà lỗi logic NGAY khi dữ liệu thay đổi — trong lúc AI đang dựng dàn cảnh
   // (scenes/meta được cập nhật DẦN trong handleGenerate, không đợi xong hết)
@@ -333,6 +341,91 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
     }
   };
 
+  const sceneIdFromFinding = (finding) => Number(finding?.sceneId)
+    || Number(String(finding?.message || "").match(/cảnh\s+(\d+)/i)?.[1])
+    || Number([...(finding?.route || [])].reverse().map((step) => String(step).match(/^C(\d+)$/)?.[1]).find(Boolean))
+    || null;
+
+  const repairFindingWithAI = async (finding) => {
+    const sceneOrder = sceneIdFromFinding(finding);
+    const scene = scenes.find((item) => Number(item.scene_order) === sceneOrder);
+    if (!scene) { setError("Phát hiện này liên quan toàn dự án, không thể quy về một cảnh duy nhất."); return; }
+    const key = `${finding.code || "issue"}-${sceneOrder}`;
+    setRepairingFinding(key); setError("");
+    try {
+      const res = await aiCall(buildPlanSceneRevisionPrompt({
+        workshop: project.workshop, idea: project.idea, coreBlock: formatCoreBlock(meta), scene,
+        feedback: `Sửa đúng lỗi kiểm thử sau: ${finding.message}. Giữ nguyên cốt truyện và văn phong; chỉ thay những dữ liệu/lựa chọn cần thiết để lỗi biến mất, đồng thời đồng bộ state_contract.`,
+      }), { jsonSchema: PLAN_SCENE_REVISION_SCHEMA, forceRefresh: true });
+      await updateScene(scene.id, {
+        title: res.title || scene.title, description: res.description || scene.description,
+        location: res.location ?? scene.location, characters: res.characters ?? scene.characters,
+        foreshadow: res.foreshadow ?? scene.foreshadow, choices: res.choices || scene.choices,
+        state_contract: res.state_contract || scene.state_contract || {},
+      });
+      setRepairSummary(`AI đã sửa bộ khung cảnh ${sceneOrder} theo lỗi “${finding.message}”. Báo cáo đã được chạy lại.`);
+    } finally { setRepairingFinding(""); }
+  };
+
+  const analyzeImportedScript = async () => {
+    if (!isImported || !scenes.length) return;
+    if (!importedAnalysisCalls) { setRepairSummary("Game Bible và scene contract đã đầy đủ; không cần gọi thêm AI."); return; }
+    setAnalyzingImported(true); setError("");
+    try {
+      let core = meta;
+      if (importedNeedsCore) {
+        setProgress("Đang đọc toàn bộ kịch bản để lập Game Bible (1 lượt AI)...");
+        core = await aiCall(buildImportedCorePrompt({
+          workshop: project.workshop, title: project.title, genre: project.genre, scenes,
+          endings: meta?.endings || [], playerName: project.player_name, mainQuest: project.main_quest,
+        }), { jsonSchema: PLAN_CORE_SCHEMA });
+      }
+      const coreMeta = {
+        ...meta,
+        characters: core.characters || meta?.characters || [], settings: core.settings || meta?.settings || [],
+        endings: meta?.endings?.length ? meta.endings : (core.endings || []),
+        branches: meta?.branches?.length ? meta.branches : [{ name: "Kịch bản gốc", description: "Toàn bộ nội dung từ bản nhập." }],
+        notes: core.notes || meta?.notes || "", invariants: core.invariants || [],
+      };
+      await patchProject({ player_name: core.player_name || project.player_name, player_desc: core.player_desc || project.player_desc, main_quest: core.main_quest || project.main_quest });
+      await upsertGamePlanMeta(project.id, coreMeta);
+      setMeta(coreMeta);
+
+      const updated = [...scenes];
+      const pendingScenes = importedMissingContracts;
+      for (let index = 0; index < pendingScenes.length; index += CHUNK) {
+        const chunk = pendingScenes.slice(index, index + CHUNK);
+        setProgress(`Đang tạo scene contract còn thiếu ${index + 1}–${Math.min(index + CHUNK, pendingScenes.length)}/${pendingScenes.length}...`);
+        const firstPosition = scenes.findIndex((scene) => scene.id === chunk[0]?.id);
+        const result = await aiCall(buildImportedContractsPrompt({
+          workshop: project.workshop, title: project.title, coreBlock: formatCoreBlock(coreMeta), scenes: chunk,
+          previousScenes: scenes.slice(Math.max(0, firstPosition - 2), firstPosition),
+        }), { jsonSchema: IMPORTED_CONTRACTS_SCHEMA });
+        for (const contract of result?.scenes || []) {
+          const position = updated.findIndex((scene) => Number(scene.scene_order) === Number(contract.scene_order));
+          if (position < 0) continue;
+          const original = updated[position];
+          const patch = {
+            location: contract.location ?? original.location, characters: contract.characters ?? original.characters,
+            foreshadow: contract.foreshadow ?? original.foreshadow,
+            state_contract: contract.state_contract || original.state_contract || {},
+            chapter_index: Number(contract.chapter_index) || original.chapter_index || Math.floor(position / 12) + 1,
+            is_checkpoint: !!contract.is_checkpoint || position === 0,
+          };
+          await updateGamePlanScene(original.id, patch);
+          updated[position] = { ...original, ...patch };
+        }
+        setScenes([...updated]);
+      }
+      setProgress("");
+      await load();
+      setRepairSummary(`Đã hoàn thiện Game Bible và scene contract cho ${scenes.length} cảnh mà không thay nội dung gốc.`);
+    } catch (e) {
+      setError("Phân tích kịch bản nhập bị dừng: " + (e?.message || "lỗi") + ". Phần đã hoàn thành vẫn được giữ để tiếp tục sau.");
+      setProgress("");
+    } finally { setAnalyzingImported(false); }
+  };
+
   const hasContent = !!meta && (meta.characters?.length || scenes.length);
 
   const saveCompilerSnapshot = async () => {
@@ -371,6 +464,17 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
       setRepairSummary(`Đã sửa ${result.changes.length} liên kết: ${result.changes.slice(0, 5).map((change) => `cảnh ${change.sceneId} → ${change.to}`).join("; ")}${result.changes.length > 5 ? "…" : ""}`);
     } catch (e) { setError("Tự sửa Story Graph lỗi: " + (e?.message || "lỗi")); }
     finally { setRepairing(false); }
+  };
+
+  const FindingFixButton = ({ finding }) => {
+    const sceneOrder = sceneIdFromFinding(finding);
+    if (!sceneOrder) return null;
+    const key = `${finding.code || "issue"}-${sceneOrder}`;
+    return (
+      <button type="button" onClick={() => repairFindingWithAI(finding)} disabled={!!repairingFinding || analyzingImported} className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-[10px] text-primary hover:bg-primary/10 disabled:opacity-50">
+        {repairingFinding === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} AI sửa cảnh {sceneOrder}
+      </button>
+    );
   };
 
   if (loading) {
@@ -442,7 +546,7 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
           </summary>
           <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
             <p className="text-muted-foreground">{phase3Report.summary.checkpoints} checkpoint · {phase3Report.regressionCases.length} regression case · {phase3Report.coverage.validEndings} ending hợp lệ.</p>
-            {phase3Report.findings.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span></div>)}
+            {phase3Report.findings.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span><FindingFixButton finding={item} /></div>)}
             {!phase3Report.findings.length && <p className="text-emerald-600">Không phát hiện lựa chọn giả, ending thiếu tuyến hoặc lỗ hổng coverage.</p>}
           </div>
         </details>
@@ -454,7 +558,12 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
             <span className="ml-auto text-muted-foreground font-normal">Mở báo cáo</span>
           </summary>
           <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
-            {statefulReport.issues.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span>{item.route?.length ? <p className="mt-1 text-muted-foreground">Tuyến: {item.route.join(" → ")}</p> : null}</div>)}
+            {isImported && statefulReport.summary.contractsDeclared < statefulReport.summary.totalContracts && (
+              <button type="button" onClick={analyzeImportedScript} disabled={analyzingImported} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50">
+                {analyzingImported ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} Tạo phần còn thiếu bằng AI
+              </button>
+            )}
+            {statefulReport.issues.slice(0, 40).map((item, index) => <div key={`${item.code}-${index}`} className="rounded-md border border-border bg-background/70 p-2"><span className={item.severity === "error" ? "text-destructive" : "text-amber-700 dark:text-amber-400"}>{item.message}</span>{item.route?.length ? <p className="mt-1 text-muted-foreground">Tuyến: {item.route.join(" → ")}</p> : null}<FindingFixButton finding={item} /></div>)}
             {!statefulReport.issues.length && <p className="text-emerald-600">Không phát hiện mâu thuẫn state, kiến thức hoặc invariant trên các tuyến đã mô phỏng.</p>}
           </div>
         </details>
@@ -474,6 +583,7 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
                   <span>{item.message}</span>
                 </div>
                 {item.suggestion && <p className="mt-1 text-muted-foreground">Gợi ý: {item.suggestion}</p>}
+                <FindingFixButton finding={item} />
               </div>
             ))}
             {!qualityReport.findings.length && <p className="text-emerald-600">Không phát hiện vấn đề continuity ở cấp scene contract.</p>}
@@ -484,9 +594,15 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
       {/* Luôn hiện ý tưởng đang dùng — để biết AI bám gì */}
       {isImported && (
         <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm">
-          <div className="font-semibold text-sky-700 dark:text-sky-300">Kịch bản nhập từ TXT / nội dung dán</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-semibold text-sky-700 dark:text-sky-300">Kịch bản nhập từ TXT / nội dung dán</div>
+            <button type="button" onClick={analyzeImportedScript} disabled={analyzingImported || generating} className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+              {analyzingImported ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              {analyzingImported ? "Đang phân tích…" : importedAnalysisCalls ? `Hoàn thiện Game Bible & contract · ${importedAnalysisCalls} lượt` : "Game Bible & contract đã đầy đủ"}
+            </button>
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Bản gốc đã được giữ nguyên và đang được kiểm tra tại máy. Hãy duyệt báo cáo logic bên dưới, rồi sang bước Viết Nhánh để nhờ AI sửa riêng từng cảnh yếu. “Dựng lại từ ý tưởng” sẽ thay toàn bộ dàn cảnh đã nhập.
+            Bản gốc được giữ nguyên. Nút hoàn thiện chỉ phân tích phần còn thiếu và có thể tiếp tục sau khi hết quota; không dựng lại cảnh. Sau đó mỗi lỗi Phase có thể sửa trực tiếp bằng AI. “Dựng lại toàn bộ bằng AI” mới thay dàn cảnh đã nhập.
           </p>
         </div>
       )}

@@ -188,6 +188,73 @@ export const PLAN_SCENES_CHUNK_SCHEMA = {
   required: ["scenes"],
 };
 
+// ---------- Phân tích kịch bản đã nhập (không viết lại nội dung/Story Graph) ----------
+export function buildImportedCorePrompt({ workshop, title, genre, scenes, endings, playerName, mainQuest }) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  const outline = (scenes || []).map((scene) =>
+    `C${scene.scene_order} — ${scene.title}: ${String(scene.description || "").replace(/\s+/g, " ").slice(0, 420)}\nLựa chọn: ${(scene.choices || []).map((choice) => `${choice.text} -> ${choice.target}`).join(" | ")}`
+  ).join("\n");
+  return `Bạn là narrative designer (${w.label}). Đây là KỊCH BẢN HOÀN CHỈNH ĐÃ NHẬP. Chỉ phân tích để tạo Game Bible; TUYỆT ĐỐI không đổi tên, cốt truyện, số cảnh, lựa chọn hay ending.
+
+# GAME: ${title}
+# Thể loại: ${genre || "?"}
+# Player hiện có: ${playerName || "?"}
+# Nhiệm vụ hiện có: ${mainQuest || "?"}
+# Ending bắt buộc giữ nguyên mã và loại
+${(endings || []).map((ending) => `- ${ending.name} [${ending.type || "NORMAL_END"}]: ${ending.description || ""}`).join("\n")}
+
+# TOÀN BỘ STORY OUTLINE
+${outline}
+
+Trả JSON đúng PLAN_CORE_SCHEMA. characters/settings/invariants phải được SUY RA từ nội dung có sẵn. branches chỉ dùng một nhánh tên "Kịch bản gốc". endings giữ nguyên mã đã cho. Không sáng tác một kịch bản mới.`;
+}
+
+export const IMPORTED_CONTRACTS_SCHEMA = {
+  type: "object",
+  properties: {
+    scenes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          scene_order: { type: "number" },
+          location: { type: "string" },
+          characters: { type: "string" },
+          foreshadow: { type: "string" },
+          state_contract: PLAN_SCENES_CHUNK_SCHEMA.properties.scenes.items.properties.state_contract,
+          chapter_index: { type: "number" },
+          is_checkpoint: { type: "boolean" },
+        },
+        required: ["scene_order", "state_contract"],
+      },
+    },
+  },
+  required: ["scenes"],
+};
+
+export function buildImportedContractsPrompt({ workshop, title, coreBlock, scenes, previousScenes = [] }) {
+  const w = WORKSHOPS[workshop] || WORKSHOPS.studio;
+  const render = (scene) => JSON.stringify({
+    scene_order: scene.scene_order, title: scene.title, description: scene.description,
+    choices: scene.choices,
+  });
+  return `Bạn là narrative logic analyst (${w.label}). Bổ sung metadata và state_contract cho các cảnh ĐÃ CÓ. Không viết lại title/description/choices/target/effect.
+
+# GAME BIBLE
+${coreBlock}
+
+${previousScenes.length ? `# CẢNH NGAY TRƯỚC (chỉ để nối state)\n${previousScenes.map(render).join("\n")}` : ""}
+# CÁC CẢNH CẦN PHÂN TÍCH
+${scenes.map(render).join("\n")}
+
+Mỗi cảnh trả đúng scene_order cùng location, characters, foreshadow, chapter_index, is_checkpoint và state_contract:
+- requires: trạng thái thực sự bắt buộc trước cảnh; không bịa điều kiện.
+- reveals: sự thật được người chơi biết trong cảnh.
+- forbids: sự thật chưa được phép lộ.
+- handoff: items/flags/knowledge chắc chắn có khi rời cảnh trên MỌI lựa chọn; trạng thái chỉ có ở một lựa chọn không được đưa vào handoff.
+Giữ nguyên tên vật phẩm/cờ như trong lựa chọn. Trả JSON đúng schema.`;
+}
+
 /** @deprecated dùng buildPlanCorePrompt + buildPlanScenesChunkPrompt */
 export function buildPlanPrompt(args) {
   return buildPlanCorePrompt(args);
