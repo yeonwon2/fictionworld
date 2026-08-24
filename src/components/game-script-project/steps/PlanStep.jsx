@@ -53,6 +53,7 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
   const [addCount, setAddCount] = useState(8);
 
   const ideaOk = !!String(project.idea || "").trim();
+  const isImported = String(project.notes || "").includes("[IMPORTED_SCRIPT]");
   const playRoutes = useMemo(() => simulateNarrativeRoutes({ scenes, maxRoutes: 24 }), [scenes]);
   const qualityReport = useMemo(() => analyzeNarrativeContinuity({ project, meta, scenes }), [project, meta, scenes]);
   const statefulReport = useMemo(() => analyzeStatefulNarrative({ project, meta, scenes }), [project, meta, scenes]);
@@ -481,6 +482,15 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
       )}
 
       {/* Luôn hiện ý tưởng đang dùng — để biết AI bám gì */}
+      {isImported && (
+        <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm">
+          <div className="font-semibold text-sky-700 dark:text-sky-300">Kịch bản nhập từ TXT / nội dung dán</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Bản gốc đã được giữ nguyên và đang được kiểm tra tại máy. Hãy duyệt báo cáo logic bên dưới, rồi sang bước Viết Nhánh để nhờ AI sửa riêng từng cảnh yếu. “Dựng lại từ ý tưởng” sẽ thay toàn bộ dàn cảnh đã nhập.
+          </p>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-sm">📌</span>
@@ -539,12 +549,14 @@ export default function PlanStep({ project, patchProject, directionBlock, onBack
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={handleGenerate}
+              onClick={() => {
+                if (!isImported || window.confirm("Dựng lại sẽ thay toàn bộ dàn cảnh đã nhập. Bản TXT gốc vẫn được lưu, nhưng các chỉnh sửa trong bộ khung sẽ bị thay. Tiếp tục?")) handleGenerate();
+              }}
               disabled={generating || !ideaOk}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-primary/40 text-primary text-xs hover:bg-primary/10 disabled:opacity-50"
             >
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-              {generating ? "Đang dựng lại..." : "Dựng lại từ ý tưởng"}
+              {generating ? "Đang dựng lại..." : isImported ? "Dựng lại toàn bộ bằng AI" : "Dựng lại từ ý tưởng"}
             </button>
             <span className="text-xs text-muted-foreground">
               {scenes.length} cảnh · {branchPoints.length} điểm rẽ · {branches.length} nhánh

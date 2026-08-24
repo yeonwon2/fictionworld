@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Clapperboard, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Clapperboard, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useStory } from "@/lib/StoryContext";
 import { buildDirectionBlock } from "@/lib/directionUtils";
 import {
   listGameScriptProjects,
   createGameScriptProject,
   deleteGameScriptProject,
+  upsertGamePlanMeta,
+  createGamePlanScene,
+  createGamePlanBranch,
+  updateGamePlanBranch,
+  upsertGamePlanSceneContent,
+  upsertGameScriptDoc,
 } from "@/lib/worldcrud";
 import { WORKSHOPS, WORKSHOP_LIST } from "@/lib/gameScriptProject/syntaxGuide";
 import ProjectWizard from "@/components/game-script-project/ProjectWizard";
+import ImportScriptDialog from "@/components/game-script-project/ImportScriptDialog";
 
 // Xưởng Kịch Bản Game — luồng wizard mới:
 //   Ý tưởng (loại game + thể loại + số cảnh + số lựa chọn)
@@ -22,6 +29,8 @@ export default function GameScriptProject() {
   const [activeId, setActiveId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newWorkshop, setNewWorkshop] = useState("studio");
   const [error, setError] = useState("");
@@ -82,6 +91,58 @@ export default function GameScriptProject() {
     }
   };
 
+  const handleImport = async ({ workshop, parsed, source, fileName }) => {
+    setImporting(true);
+    setError("");
+    let projectRow = null;
+    try {
+      projectRow = await createGameScriptProject({
+        story_id: currentStoryId,
+        workshop,
+        title: parsed.title,
+        idea: `Kịch bản có sẵn được nhập từ ${fileName || "nội dung dán trực tiếp"}. Giữ nguyên cốt truyện nguồn; dùng compiler để kiểm tra và chỉ viết lại những cảnh được tác giả yêu cầu.`,
+        genre: parsed.genre,
+        scene_count: parsed.scenes.length,
+        choices_per_scene: parsed.maxChoices,
+        branch_count: 1,
+        notes: "[IMPORTED_SCRIPT] Bản gốc được lưu trong tài liệu nguồn của dự án.",
+        player_name: parsed.player_name,
+        player_desc: parsed.player_desc,
+        main_quest: parsed.main_quest,
+        status: "plan",
+      });
+
+      await upsertGamePlanMeta(projectRow.id, {
+        characters: [], settings: [], endings: parsed.endings, branches: [{ name: "Kịch bản gốc", description: "Toàn bộ nội dung từ bản nhập." }],
+        notes: parsed.intro || "Kịch bản nhập từ bên ngoài.", invariants: [], game_bible: {}, scene_contracts: [], compiler_report: {},
+      });
+      const branch = await createGamePlanBranch({ project_id: projectRow.id, branch_index: 0, name: "Kịch bản gốc", description: "Bản văn xuôi nguyên gốc để kiểm tra và chỉnh sửa.", scene_order_ids: [], status: "đã viết" });
+      const importedSceneIds = [];
+      for (const scene of parsed.scenes) {
+        const row = await createGamePlanScene({
+          project_id: projectRow.id, scene_order: scene.scene_order, title: scene.title, description: scene.description,
+          location: scene.location, characters: scene.characters, foreshadow: scene.foreshadow, state_contract: scene.state_contract,
+          chapter_index: scene.chapter_index, is_checkpoint: scene.is_checkpoint, choices: scene.choices,
+          is_branch_point: scene.is_branch_point, branch_index: scene.branch_index, status: "đã nhập",
+        });
+        importedSceneIds.push(row.id);
+        await upsertGamePlanSceneContent(projectRow.id, branch.id, row.id, {
+          scene_order: scene.scene_order, title: scene.title, draft: scene.description, script: scene.rawScript, status: "bản gốc đã nhập",
+        });
+      }
+      await updateGamePlanBranch(branch.id, { scene_order_ids: importedSceneIds });
+      await upsertGameScriptDoc(currentStoryId, `imported-script:${projectRow.id}`, { title: `Bản gốc — ${parsed.title}`, content: source });
+      await load();
+      setShowImport(false);
+      setActiveId(projectRow.id);
+    } catch (e) {
+      if (projectRow?.id) await deleteGameScriptProject(projectRow.id).catch(() => {});
+      throw e;
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (!ready) {
     return (
       <div className="p-10 max-w-[1400px] mx-auto">
@@ -108,15 +169,19 @@ export default function GameScriptProject() {
 
       {error && <div className="mb-3 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-2 mb-4">
         <h2 className="font-display font-semibold text-base">Dự án kịch bản</h2>
-        <button
-          onClick={() => setShowCreate((s) => !s)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
-        >
-          <Plus className="w-4 h-4" /> Dự án mới
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setShowImport((s) => !s); setShowCreate(false); }} className="inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg border border-primary/40 text-primary text-sm font-medium hover:bg-primary/10">
+            <Upload className="w-4 h-4" /> <span className="hidden sm:inline">Nhập TXT / Dán kịch bản</span><span className="sm:hidden">Nhập</span>
+          </button>
+          <button onClick={() => { setShowCreate((s) => !s); setShowImport(false); }} className="inline-flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90">
+            <Plus className="w-4 h-4" /> Dự án mới
+          </button>
+        </div>
       </div>
+
+      {showImport && <ImportScriptDialog importing={importing} onCancel={() => setShowImport(false)} onImport={handleImport} />}
 
       {showCreate && (
         <div className="mb-5 rounded-2xl border border-border bg-card p-4 space-y-3">

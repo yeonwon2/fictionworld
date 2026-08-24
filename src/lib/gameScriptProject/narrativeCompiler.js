@@ -23,11 +23,11 @@ function parseEffect(raw) {
   const effects = { grantItems: [], removeItems: [], setFlags: [], requireItems: [], requireFlags: [], requireFlagsAbsent: [], stats: [], raw: text };
   const patterns = [
     ["grantItems", /(?:^|[;\n])\s*(?:→\s*)?(?:vật phẩm|nhận vật phẩm|item)\s*:\s*([^;\n,]+)/gi],
-    ["removeItems", /(?:^|[;\n])\s*(?:mất|xóa|xoá)\s+(?:vật phẩm|item)\s*:\s*([^;\n,]+)/gi],
+    ["removeItems", /(?:^|[;\n])\s*(?:→\s*)?(?:mất|xóa|xoá)\s+(?:vật phẩm|item)\s*:\s*([^;\n,]+)/gi],
     ["setFlags", /(?:^|[;\n])\s*(?:→\s*)?(?:cờ|đặt cờ|flag)\s*:\s*([^;\n,]+)/gi],
-    ["requireItems", /(?:^|[;\n])\s*(?:cần|yêu cầu)\s+(?:vật phẩm|item)\s*:\s*([^;\n,]+)/gi],
-    ["requireFlags", /(?:^|[;\n])\s*(?:cần|yêu cầu)\s+(?:cờ|flag)\s*:\s*([^;\n,]+)/gi],
-    ["requireFlagsAbsent", /(?:^|[;\n])\s*(?:cần|yêu cầu)\s+(?:không có|chưa có)\s+(?:cờ|flag)\s*:\s*([^;\n,]+)/gi],
+    ["requireItems", /(?:^|[;\n])\s*(?:→\s*)?(?:cần|yêu cầu)\s+(?:vật phẩm|item)\s*:\s*([^;\n,]+)/gi],
+    ["requireFlags", /(?:^|[;\n])\s*(?:→\s*)?(?:cần|yêu cầu)\s+(?:cờ|flag)\s*:\s*([^;\n,]+)/gi],
+    ["requireFlagsAbsent", /(?:^|[;\n])\s*(?:→\s*)?(?:cần|yêu cầu)\s+(?:không có|chưa có)\s+(?:cờ|flag)\s*:\s*([^;\n,]+)/gi],
   ];
   for (const [field, regex] of patterns) {
     let match;
