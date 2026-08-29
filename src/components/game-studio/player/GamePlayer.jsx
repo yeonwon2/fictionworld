@@ -616,7 +616,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
             node={node} typed={typed} typingDone={typingDone} skipTyping={skipTyping}
             choiceStatus={choiceStatus} choose={choose} statsConfig={statsConfig}
             defaultNpcAvatar={meta.defaultNpcAvatar}
-            turn={turn} lastChoiceText={rt.lastChoiceText} lastDeltas={rt.lastDeltas}
+            turn={turn} lastDeltas={rt.lastDeltas}
             choicesOpen={choicesOpen} setChoicesOpen={setChoicesOpen}
             storyLog={rt.storyLog || []} legacyHistory={rt.history} gameData={gameData}
             playbackLayout={playbackLayout}
@@ -697,7 +697,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
 // tách khỏi khối lựa chọn — không còn 1 card lớn ôm hết mọi thứ. Dẫn truyện
 // (node.speaker rỗng) hiện như văn xuôi tiểu thuyết; NPC nói (có speaker) hiện
 // nhãn tên + avatar nhỏ (nếu có) trong khung bán trong suốt nhẹ.
-export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar, turn, lastChoiceText, lastDeltas, choicesOpen, setChoicesOpen, storyLog = [], legacyHistory = [], gameData, playbackLayout = 'timeline' }) {
+export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar, turn, lastDeltas, choicesOpen, setChoicesOpen, storyLog = [], legacyHistory = [], gameData, playbackLayout = 'timeline' }) {
   const art = node.npcAvatar || defaultNpcAvatar || node.bgImage || '';
   const hasArt = !!art;
   const isNarration = !node.speaker || !node.speaker.trim();
@@ -776,7 +776,6 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
       {isNarration ? (
         <div className="rpg-vn-narration">
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
-          {playbackLayout === 'focus' && lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className={scrollClass}>
             <p className="rpg-vn-narration-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
@@ -789,7 +788,6 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             <span className="rpg-vn-name">{node.speaker}</span>
           </div>
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
-          {playbackLayout === 'focus' && lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className={scrollClass}>
             <p className="rpg-vn-dialogue-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
@@ -884,15 +882,6 @@ function TurnHeader({ turn, lastDeltas, statsConfig }) {
 }
 
 // Thẻ nhắc lại lựa chọn vừa chọn ở lượt trước, hiện ngay trên đoạn văn bản mới.
-function RecapCard({ text }) {
-  return (
-    <div className="rpg-recap-card">
-      <div className="rpg-recap-label">Bạn đã chọn</div>
-      <div className="rpg-recap-text">{text}</div>
-    </div>
-  );
-}
-
 function Summary({ statsConfig, rt }) {
   return (
     <div className="w-full text-left rounded-lg p-3" style={{ background: 'var(--rpg-panel-2)' }}>
