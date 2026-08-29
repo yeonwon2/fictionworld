@@ -228,7 +228,7 @@ const ENGINE_JS = [
   '    s+=renderTabs();',
   '    var art=node.npcAvatar||meta.defaultNpcAvatar||node.bgImage||"";',
   '    var isNarration=!node.speaker || !String(node.speaker).replace(/^\\s+|\\s+$/g,"");',
-  '    var turnHtml=renderTurnHeader(), recapHtml=renderRecapCard();',
+  '    var turnHtml=renderTurnHeader(), recapHtml=(meta.playbackLayout||"timeline")==="focus"?renderRecapCard():"";',
   '    s+=\'<div class="rpg-vn-frame rpg-playback-\'+esc(meta.playbackLayout||"timeline")+\'">\'+renderStoryHistory();',
   '    if(art){ s+=\'<div class="rpg-vn-scene"><img class="rpg-vn-scene-img" src="\'+esc(asset(art))+\'"/><div class="rpg-vn-scene-fade"></div></div>\'; }',
   '    if(isNarration){',
