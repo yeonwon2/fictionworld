@@ -54,3 +54,20 @@ test("imports loose TXT into editable plan scenes without changing source prose"
 test("rejects pasted text that has no scene headings", () => {
   assert.throws(() => importExistingScript("Một truyện tuyến tính chưa có cảnh."), /Không tìm thấy cảnh nào/);
 });
+
+test("imports spaced ending types, initial stats and the single source branch", () => {
+  const result = importExistingScript(`# Đế chế\n**Chỉ số khởi đầu:** Vốn = 50, Sức khỏe = 5\nCẢNH 1 — Mở\nA — Xong\n→ Kết thúc he\nKẾT THÚC he — Viên mãn [HAPPY END]\nHết.`);
+  assert.equal(result.endings[0].type, "GOOD_END");
+  assert.deepEqual(result.initialStats, { Vốn: 50, "Sức khỏe": 5 });
+  assert.equal(result.scenes[0].branch_index, 0);
+  assert.deepEqual(result.scenes[0].state_contract.handoff.stats, result.initialStats);
+});
+
+test("keeps NPC scene numbers scoped to each character", () => {
+  const source = `# Hai tuyến\n## NHÂN VẬT An — Lạnh lùng\nCẢNH 1 — Gặp An\nA — Đi tiếp\n→ Đến cảnh 2\nCẢNH 2 — Cuối tuyến An\nA — Xong\n→ Kết thúc an_he\nKẾT THÚC an_he — Bên An [GOOD_END]\n## NHÂN VẬT Bình — Ấm áp\nCẢNH 1 — Gặp Bình\nA — Đi tiếp\n→ Đến cảnh 2\nCẢNH 2 — Cuối tuyến Bình\nA — Xong\n→ Kết thúc binh_he\nKẾT THÚC binh_he — Bên Bình [TRUE_END]`;
+  const result = importExistingScript(source, { workshop: "npc" });
+  assert.deepEqual(result.scenes.map((scene) => scene.scene_order), [1, 2, 3, 4]);
+  assert.deepEqual(result.scenes.map((scene) => scene.characters), ["An", "An", "Bình", "Bình"]);
+  assert.equal(result.scenes[0].choices[0].target, "cảnh 2");
+  assert.equal(result.scenes[2].choices[0].target, "cảnh 4");
+});

@@ -53,7 +53,11 @@ export function analyzePhase3Narrative({ project = {}, meta = {}, scenes = [], m
   }
 
   const endingNames = new Set(endingRoutes.map((x) => norm(x.ending)));
-  for (const ending of meta?.endings || []) if (!endingNames.has(norm(ending.name))) findings.push(finding("error", "ENDING_NO_VALID_ROUTE", `Kết thúc “${ending.name}” chưa có tuyến trạng thái hợp lệ trong regression suite.`));
+  for (const ending of meta?.endings || []) if (!endingNames.has(norm(ending.name))) {
+    const nearMiss = stateful.blockedEndings?.find((entry) => norm(entry.ending) === norm(ending.name));
+    const detail = nearMiss?.missing?.length ? ` Tuyến gần nhất còn thiếu: ${nearMiss.missing.join(", ")}.` : "";
+    findings.push(finding("error", "ENDING_NO_VALID_ROUTE", `Kết thúc “${ending.name}” chưa có tuyến trạng thái hợp lệ trong regression suite.${detail}`));
+  }
   for (const route of endingRoutes) if ((route.route || []).filter((x) => !/^C\d+$/.test(x)).length < 2) findings.push(finding("warning", "ENDING_TOO_EASY", `Kết thúc “${route.ending}” đạt được sau quá ít quyết định có ý nghĩa.`));
 
   const sceneCoverage = contracts.length ? reachedScenes.size / contracts.length : 0;

@@ -87,6 +87,25 @@ test("continuity checker finds unknown cast, unpaid foreshadow and unused branch
   assert.ok(report.score < 100);
 });
 
+test("continuity checker summarizes imported metadata gaps and detects over-converging choices", () => {
+  const scenes = Array.from({ length: 4 }, (_, index) => ({
+    scene_order: index + 1,
+    title: `Cảnh ${index + 1}`,
+    description: "Một biến cố đủ dài để mô tả mục đích của cảnh.",
+    is_branch_point: true,
+    branch_index: null,
+    choices: [
+      { text: "Chọn A", target: index < 3 ? `cảnh ${index + 2}` : "kết thúc HE" },
+      { text: "Chọn B", target: index < 3 ? `cảnh ${index + 2}` : "kết thúc HE" },
+    ],
+  }));
+  const report = analyzeNarrativeContinuity({ project: { ...project, notes: "[IMPORTED_SCRIPT]" }, meta, scenes });
+  const codes = report.findings.map((item) => item.code);
+  assert.equal(codes.filter((code) => code === "IMPORTED_CAST_PENDING").length, 1);
+  assert.equal(codes.includes("BRANCH_INDEX_INVALID"), false);
+  assert.ok(codes.includes("CHOICE_CONVERGENCE_OVERUSE"));
+});
+
 test("stateful compiler follows item, flag, stat and knowledge across a route", () => {
   const scenes = [
     { scene_order: 1, title: "Manh mối", state_contract: { reveals: ["An lấy hạt giống"] }, choices: [{ text: "Nhặt", effect: "→ Vật phẩm: chìa khóa; → Cờ: đã điều tra; Suy luận +10", target: "cảnh 2" }] },

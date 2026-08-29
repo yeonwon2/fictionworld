@@ -13,9 +13,9 @@ export default function ImportScriptDialog({ importing, onCancel, onImport }) {
 
   const parsed = useMemo(() => {
     if (!script.trim()) return null;
-    try { return importExistingScript(script); }
+    try { return importExistingScript(script, { workshop }); }
     catch (e) { return { error: e?.message || "Không đọc được kịch bản." }; }
-  }, [script]);
+  }, [script, workshop]);
   const parserReport = useMemo(() => {
     if (!parsed || parsed.error) return null;
     try { return realParseCheck(workshop, script); }
@@ -97,4 +97,3 @@ export default function ImportScriptDialog({ importing, onCancel, onImport }) {
     </div>
   );
 }
-

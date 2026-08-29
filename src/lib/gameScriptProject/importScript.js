@@ -4,8 +4,9 @@ const stripMarkdown = (value) => clean(value)
   .replace(/^\*\*(.*?)\*\*$/, "$1")
   .trim();
 
-const SCENE_HEADING = /^\s*#{0,6}\s*CẢNH\s+([0-9]+)(?:\s*[—–-]\s*(.*))?\s*$/iu;
-const ENDING_HEADING = /^\s*#{0,6}\s*KẾT\s*THÚC\s+([^\s—–]+)(?:\s*[—–-]\s*(.*?))?(?:\s*\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\])?\s*$/iu;
+const SCENE_HEADING = /^\s*#{0,6}\s*CẢNH\s+(\S+?)(?:\s*[—–-]\s*(.*))?\s*$/iu;
+const ENDING_HEADING = /^\s*#{0,6}\s*KẾT\s*THÚC\s+([^\s—–]+)(?:\s*[—–-]\s*(.*?))?(?:\s*\[((?:TRUE|HAPPY|GOOD|NORMAL|BAD)[ _]END)\])?\s*$/iu;
+const CHARACTER_HEADING = /^\s*#{0,6}\s*NHÂN\s+VẬT\s+(.+?)(?:\s*[—–-]\s*(.*))?\s*$/iu;
 const CHAPTER_HEADING = /^\s*#{0,6}\s*(?:HỒI|CHƯƠNG)\s+([0-9IVXLCDM]+)\s*[:—–-]?\s*(.*)$/iu;
 const CHOICE_LINE = /^\s*(?:\*\*)?([A-Z])\s*[—–-]\s*(.*?)(?:\*\*)?\s*$/u;
 const EFFECT_LINE = /^\s*(?:→|->|=>)\s*(.+?)\s*$/u;
@@ -32,18 +33,25 @@ function endingFromLine(line) {
   const match = clean(line).match(ENDING_HEADING);
   if (!match) return null;
   const tail = clean(match[2]);
-  const typeInTail = tail.match(/\[(TRUE_END|GOOD_END|NORMAL_END|BAD_END)\]\s*$/iu)?.[1];
+  const typeInTail = tail.match(/\[((?:TRUE|HAPPY|GOOD|NORMAL|BAD)[ _]END)\]\s*$/iu)?.[1];
+  const normalizeType = (value) => {
+    const normalized = String(value || "NORMAL_END").toUpperCase().replace(/\s+/g, "_");
+    // Engine chỉ có bốn cấp ending; HAPPY END là cách viết phổ biến và gần
+    // nghĩa nhất với GOOD_END, không để lọt một enum mà Xưởng Game không hiểu.
+    return normalized === "HAPPY_END" ? "GOOD_END" : normalized;
+  };
   return {
     name: clean(match[1]),
-    title: clean(tail.replace(/\s*\[(?:TRUE_END|GOOD_END|NORMAL_END|BAD_END)\]\s*$/iu, "")),
-    type: match[3] || typeInTail || "NORMAL_END",
+    title: clean(tail.replace(/\s*\[(?:(?:TRUE|HAPPY|GOOD|NORMAL|BAD)[ _]END)\]\s*$/iu, "")),
+    type: normalizeType(match[3] || typeInTail),
     description: "",
   };
 }
 
-function parseSceneBlock(block, chapterIndex) {
+function parseSceneBlock(block, chapterIndex, sceneOrderOverride = null) {
   const heading = clean(block[0]).match(SCENE_HEADING);
-  const sceneOrder = Number(heading?.[1]);
+  const sourceLabel = clean(heading?.[1]);
+  const sceneOrder = sceneOrderOverride ?? Number(sourceLabel);
   const title = clean(heading?.[2]) || `Cảnh ${sceneOrder}`;
   const choices = [];
   const prose = [];
@@ -83,8 +91,11 @@ function parseSceneBlock(block, chapterIndex) {
     is_checkpoint: false,
     choices: choices.map((choice) => ({ text: choice.text, effect: choice.effectParts.join("; "), target: choice.target })),
     is_branch_point: choices.length > 1,
-    branch_index: null,
+    // Kịch bản nhập được đặt trên một nhánh gốc duy nhất. Để null khiến
+    // Continuity Checker báo sai mọi cảnh là “nhánh không hợp lệ”.
+    branch_index: 0,
     rawScript: block.join("\n").trim(),
+    source_label: sourceLabel,
   };
 }
 
@@ -92,30 +103,39 @@ function parseSceneBlock(block, chapterIndex) {
  * Chuyển một kịch bản Xưởng Game có sẵn thành dữ liệu Xưởng Kịch Bản.
  * Hoàn toàn chạy tại máy; không gọi AI và không sửa nội dung nguồn.
  */
-export function importExistingScript(scriptText) {
+export function importExistingScript(scriptText, { workshop = "studio" } = {}) {
   const source = String(scriptText || "").replace(/\r\n?/g, "\n").trim();
   if (!source) throw new Error("Kịch bản đang trống.");
   const lines = source.split("\n");
   const sceneStarts = [];
+  let characterScope = "global";
   let firstEnding = -1;
   for (let index = 0; index < lines.length; index++) {
-    if (SCENE_HEADING.test(lines[index])) sceneStarts.push(index);
+    const character = lines[index].match(CHARACTER_HEADING);
+    if (character) characterScope = clean(character[1]);
+    const scene = lines[index].match(SCENE_HEADING);
+    if (scene) sceneStarts.push({ index, label: clean(scene[1]), scope: characterScope });
     if (firstEnding < 0 && ENDING_HEADING.test(lines[index])) firstEnding = index;
   }
   if (!sceneStarts.length) throw new Error('Không tìm thấy cảnh nào. Mỗi cảnh cần dòng "CẢNH 1 — Tên cảnh".');
 
-  const headerEnd = sceneStarts[0];
+  const headerEnd = sceneStarts[0].index;
   const headerLines = lines.slice(0, headerEnd);
   const title = titleFromHeader(headerLines);
   const genre = valueAfterLabel(headerLines, "Thể loại");
   const author = valueAfterLabel(headerLines, "Tác giả");
+  const initialStats = {};
+  for (const part of valueAfterLabel(headerLines, "Chỉ số khởi đầu").split(/[,;|]+/u)) {
+    const match = clean(part).replace(/^\*+|\*+$/g, "").trim().match(/^(.+?)\s*=\s*(-?\d+)$/u);
+    if (match) initialStats[clean(match[1])] = Number(match[2]);
+  }
   const endings = [];
   if (firstEnding >= 0) {
     for (let index = firstEnding; index < lines.length; index++) {
       const ending = endingFromLine(lines[index]);
       if (!ending) continue;
       const body = [];
-      for (let cursor = index + 1; cursor < lines.length && !ENDING_HEADING.test(lines[cursor]); cursor++) body.push(lines[cursor]);
+      for (let cursor = index + 1; cursor < lines.length && !ENDING_HEADING.test(lines[cursor]) && !SCENE_HEADING.test(lines[cursor]) && !CHARACTER_HEADING.test(lines[cursor]); cursor++) body.push(lines[cursor]);
       ending.description = body.join("\n").trim();
       endings.push(ending);
     }
@@ -123,12 +143,26 @@ export function importExistingScript(scriptText) {
 
   const scenes = [];
   for (let position = 0; position < sceneStarts.length; position++) {
-    const start = sceneStarts[position];
-    const end = position + 1 < sceneStarts.length ? sceneStarts[position + 1] : (firstEnding >= 0 ? firstEnding : lines.length);
+    const start = sceneStarts[position].index;
+    const end = position + 1 < sceneStarts.length ? sceneStarts[position + 1].index : (workshop !== "npc" && firstEnding >= 0 ? firstEnding : lines.length);
     const chapterIndex = Math.max(1, lines.slice(0, start).filter((line) => CHAPTER_HEADING.test(line)).length);
-    scenes.push(parseSceneBlock(lines.slice(start, end), chapterIndex));
+    scenes.push(parseSceneBlock(lines.slice(start, end), chapterIndex, position + 1));
   }
-  if (scenes.length) scenes[0].is_checkpoint = true;
+  // NPC cho phép mỗi khối nhân vật đánh số cảnh lại từ 1. Trong dữ liệu bộ
+  // khung, đổi các đích cục bộ thành ID toàn cục nhưng vẫn giữ nguyên rawScript.
+  const lookup = new Map(sceneStarts.map((entry, index) => [`${workshop === "npc" ? entry.scope : "global"}\u0000${entry.label}`, index + 1]));
+  scenes.forEach((scene, index) => {
+    const scope = workshop === "npc" ? sceneStarts[index].scope : "global";
+    if (workshop === "npc" && scope !== "global") scene.characters = scope;
+    scene.choices = scene.choices.map((choice) => {
+      const local = choice.target.match(/^cảnh\s+(\S+)/iu)?.[1];
+      return local && lookup.has(`${scope}\u0000${local}`) ? { ...choice, target: `cảnh ${lookup.get(`${scope}\u0000${local}`)}` } : choice;
+    });
+  });
+  if (scenes.length) {
+    scenes[0].is_checkpoint = true;
+    if (Object.keys(initialStats).length) scenes[0].state_contract = { handoff: { stats: initialStats } };
+  }
   for (let index = 1; index < scenes.length; index++) if (scenes[index].chapter_index !== scenes[index - 1].chapter_index) scenes[index].is_checkpoint = true;
 
   const intro = headerLines.filter((line) => {
@@ -141,7 +175,7 @@ export function importExistingScript(scriptText) {
 
   const normalizedHeader = [`# ${title}`, ...headerLines.slice(1)].join("\n").trim();
   if (scenes[0]) scenes[0].rawScript = `${normalizedHeader}\n\n${scenes[0].rawScript}`.trim();
-  if (scenes.length && firstEnding >= 0) scenes[scenes.length - 1].rawScript += `\n\n${lines.slice(firstEnding).join("\n").trim()}`;
+  if (scenes.length && firstEnding >= 0 && workshop !== "npc") scenes[scenes.length - 1].rawScript += `\n\n${lines.slice(firstEnding).join("\n").trim()}`;
 
   return {
     source,
@@ -156,5 +190,6 @@ export function importExistingScript(scriptText) {
     endings: endings.map((ending) => ({ name: ending.name, type: ending.type, description: [ending.title, ending.description].filter(Boolean).join(": ") })),
     chapters: Math.max(...scenes.map((scene) => scene.chapter_index), 1),
     maxChoices: Math.max(...scenes.map((scene) => scene.choices.length), 1),
+    initialStats,
   };
 }

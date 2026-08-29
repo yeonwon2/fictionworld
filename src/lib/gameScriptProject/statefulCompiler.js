@@ -18,6 +18,7 @@ function openingState(contract = {}) {
   for (const item of list(handoff.items)) state.items.add(key(item));
   for (const flag of list(handoff.flags)) state.flags.add(key(flag));
   for (const fact of list(handoff.knowledge)) state.knowledge.add(key(fact));
+  for (const [name, value] of Object.entries(handoff.stats || {})) state.stats.set(key(name), Number(value) || 0);
   return state;
 }
 
@@ -44,6 +45,7 @@ function applyScene(contract = {}, state) {
   for (const item of list(handoff.items)) state.items.add(key(item));
   for (const flag of list(handoff.flags)) state.flags.add(key(flag));
   for (const fact of list(handoff.knowledge)) state.knowledge.add(key(fact));
+  for (const [name, value] of Object.entries(handoff.stats || {})) if (!state.stats.has(key(name))) state.stats.set(key(name), Number(value) || 0);
 }
 
 function choiceAllowed(effects, state) {
@@ -56,6 +58,19 @@ function choiceAllowed(effects, state) {
     if (x.op === "<=" || x.op === "<") return current <= x.value;
     return true;
   });
+}
+
+function choiceMissing(effects, state) {
+  const missing = [];
+  for (const item of effects.requireItems) if (!state.items.has(key(item))) missing.push(`vật phẩm “${item}”`);
+  for (const flag of effects.requireFlags) if (!state.flags.has(key(flag))) missing.push(`cờ “${flag}”`);
+  for (const flag of effects.requireFlagsAbsent) if (state.flags.has(key(flag))) missing.push(`phải chưa có cờ “${flag}”`);
+  for (const stat of effects.stats.filter((x) => !["+", "-"].includes(x.op))) {
+    const current = state.stats.get(key(stat.name)) || 0;
+    const ok = stat.op === ">=" ? current >= stat.value : stat.op === ">" ? current > stat.value : stat.op === "<=" ? current <= stat.value : stat.op === "<" ? current < stat.value : true;
+    if (!ok) missing.push(`${stat.name} ${stat.op} ${stat.value} (tuyến này: ${current})`);
+  }
+  return missing;
 }
 
 function applyChoice(effects, state) {
@@ -117,6 +132,7 @@ export function analyzeStatefulNarrative({ project = {}, meta = {}, scenes = [],
   const contractsDeclared = contracts.filter((scene) => scene.stateContract && Object.keys(scene.stateContract).length > 0).length;
   if (contracts.length && contractsDeclared < contracts.length) issues.push(issue("warning", "STATE_CONTRACT_COVERAGE", `Mới có ${contractsDeclared}/${contracts.length} cảnh khai báo state contract; các cảnh cũ vẫn chạy được nhưng tầng kiến thức/handoff chưa được kiểm tra đầy đủ.`));
   const endingStates = [];
+  const blockedEndingStates = new Map();
   const reachedScenes = new Set();
   const reachedChoices = new Set();
   const seen = new Set();
@@ -124,7 +140,10 @@ export function analyzeStatefulNarrative({ project = {}, meta = {}, scenes = [],
   const queue = contracts.length ? [{ sceneId: contracts[0].id, state: openingState(contracts[0].stateContract), route: [], steps: 0 }] : [];
 
   while (queue.length && seen.size < maxStates) {
-    const current = queue.shift();
+    // Đi sâu một tuyến tới ending trước rồi mới quay lại phủ biến thể. Với game
+    // tuyến tính có 4 lựa chọn/cảnh, BFS tạo 4^N trạng thái và hết quota ở đầu
+    // truyện dù một đường tới ending hoàn toàn rõ ràng.
+    const current = queue.pop();
     const scene = byId.get(current.sceneId);
     if (!scene) continue;
     const sig = signature(scene.id, current.state, statThresholds);
@@ -149,7 +168,14 @@ export function analyzeStatefulNarrative({ project = {}, meta = {}, scenes = [],
 
     let playable = 0;
     for (const choice of scene.choices) {
-      if (!choiceAllowed(choice.effects, state)) continue;
+      if (!choiceAllowed(choice.effects, state)) {
+        if (choice.target.kind === "ending") {
+          const missingChoice = choiceMissing(choice.effects, state);
+          const previous = blockedEndingStates.get(choice.target.id);
+          if (!previous || missingChoice.length < previous.missing.length) blockedEndingStates.set(choice.target.id, { ending: choice.target.id, sceneId: scene.id, choice: choice.text, missing: missingChoice, route });
+        }
+        continue;
+      }
       playable++;
       reachedChoices.add(choice.id);
       const next = cloneState(state);
@@ -167,5 +193,5 @@ export function analyzeStatefulNarrative({ project = {}, meta = {}, scenes = [],
   for (const entry of issues) unique.set(`${entry.code}|${entry.message}|${entry.route.join(">")}`, entry);
   const finalIssues = [...unique.values()];
   const errors = finalIssues.filter((x) => x.severity === "error");
-  return { version: 2, ok: errors.length === 0, issues: finalIssues, endings: endingStates, coverage: { sceneIds: [...reachedScenes], choiceIds: [...reachedChoices] }, summary: { statesExplored: seen.size, contractsDeclared, totalContracts: contracts.length, endingsReached: endingStates.length, validEndings: endingStates.filter((x) => x.valid).length, errors: errors.length, warnings: finalIssues.length - errors.length } };
+  return { version: 2, ok: errors.length === 0, issues: finalIssues, endings: endingStates, blockedEndings: [...blockedEndingStates.values()], coverage: { sceneIds: [...reachedScenes], choiceIds: [...reachedChoices] }, summary: { statesExplored: seen.size, contractsDeclared, totalContracts: contracts.length, endingsReached: endingStates.length, validEndings: endingStates.filter((x) => x.valid).length, errors: errors.length, warnings: finalIssues.length - errors.length } };
 }
