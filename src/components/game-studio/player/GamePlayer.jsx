@@ -709,7 +709,8 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   const isNpcSelect = choiceCount > 0 && (node.choices || []).every((c) => c.npcCard);
   // Khi danh sách lựa chọn không chiếm chỗ (đang gõ chữ, đã bấm "Ẩn", hoặc
   // không có lựa chọn nào) thì mở rộng khung chữ hết cỡ thay vì cuộn trong ô nhỏ.
-  const scrollClass = 'rpg-vn-text-scroll scrollbar-thin';
+  const choicesHidden = typingDone && choiceCount > 0 && !choicesOpen;
+  const scrollClass = `rpg-vn-text-scroll scrollbar-thin${choicesHidden ? ' expanded' : ''}`;
   const timelineRef = useRef(null);
   const endRef = useRef(null);
   const [awayFromCurrent, setAwayFromCurrent] = useState(false);

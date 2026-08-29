@@ -290,7 +290,7 @@
 .rpg-vn-dialogue-text{font-size:1.02rem;line-height:1.7;white-space:pre-wrap;color:var(--rpg-text);}
 
 .rpg-vn-text-scroll{max-height:32vh;overflow-y:auto;padding-right:2px;}
-.rpg-vn-text-scroll.expanded{max-height:none;overflow-y:visible;}
+.rpg-vn-text-scroll.expanded{max-height:calc(100dvh - 190px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;}
 .rpg-vn-skip{align-self:flex-start;margin-top:8px;font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--rpg-border);color:var(--rpg-muted);background:transparent;cursor:pointer;}
 
 /* --- Lượt hiện tại + hiệu ứng chỉ số vừa thay đổi (đầu khối văn bản) --- */

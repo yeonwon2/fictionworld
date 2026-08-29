@@ -42,7 +42,8 @@ test("standalone skip keeps long scene text inside its scroll area", () => {
   });
 
   assert.doesNotMatch(html, /rpg-vn-text-scroll expanded/);
-  assert.match(html, /syncTextScrollExpand\(\)\{[^}]*classList\.remove\("expanded"\)/);
+  assert.match(html, /syncTextScrollExpand\(node\)\{[^}]*classList\.toggle\("expanded", hidden\)/);
+  assert.match(html, /\.rpg-vn-text-scroll\.expanded\{max-height:calc\(100dvh - 190px/);
 });
 
 test("standalone stat chips stay above long scene content", () => {
