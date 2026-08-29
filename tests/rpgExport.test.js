@@ -34,3 +34,13 @@ test("standalone mobile layout does not pin controls over game content", () => {
   assert.match(html, /\.rpg-topbar\{position:relative;top:auto;z-index:2/);
   assert.match(html, /\.rpg-vn-choices\{position:relative;bottom:auto;z-index:2;max-height:none;overflow:visible/);
 });
+
+test("standalone skip keeps long scene text inside its scroll area", () => {
+  const html = generateStandaloneHTML({
+    meta: { title: "Long scene", statsConfig: [], playbackLayout: "timeline" },
+    nodes: { start_node: { id: "start_node", text: "Nội dung dài", choices: [] } },
+  });
+
+  assert.doesNotMatch(html, /rpg-vn-text-scroll expanded/);
+  assert.match(html, /syncTextScrollExpand\(\)\{[^}]*classList\.remove\("expanded"\)/);
+});
