@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save } from 'lucide-react';
+import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save, ArrowDown } from 'lucide-react';
 import { THEMES, PRESENTATION_ART, ENDING_TYPES, CHOICE_LABELS, statStyle, dicebearAvatar, customThemeStyle, GAME_PRESENTATIONS } from '@/lib/gameStudio/rpgThemes';
 import { palaceRankIndex, palaceProgressToNext } from '@/lib/gameStudio/palaceScriptParser';
 import { rebirthEraIndex, rebirthEraProgress, rebirthUnclaimedBonus } from '@/lib/gameStudio/rebirthScriptParser';
@@ -10,9 +10,18 @@ import { clearPlayerState, loadPlayerState, savePlayerState } from '@/lib/gameSt
 
 const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles, crown: Crown };
 
+function storyLogBase(runtime, nodes) {
+  if (runtime.storyLog?.length) return runtime.storyLog;
+  return (runtime.history || []).map((nodeId) => {
+    const oldNode = nodes[nodeId];
+    return oldNode ? { nodeId, speaker: oldNode.speaker || '', text: oldNode.text || '', legacy: true } : null;
+  }).filter(Boolean);
+}
+
 export default function GamePlayer({ gameData, gameKey, onExit }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
+  const playbackLayout = meta.playbackLayout || 'timeline';
   const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
   const posterArt = meta.posterImage || meta.playerAvatar || heroineArt;
   const posterTag = GAME_PRESENTATIONS[presentation]?.name || '';
@@ -41,6 +50,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     nodeId: 'start_node',
     stats: { ...meta.initialStats },
     history: [],
+    storyLog: [],
     inventory: [],
     quests: {},
     flags: [],
@@ -284,6 +294,18 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     return { ok: true };
   };
 
+  const makeStoryLogEntry = useCallback((choiceText = null, deltas = {}, extra = {}) => {
+    const current = gameData.nodes[rt.nodeId] || {};
+    return {
+      nodeId: rt.nodeId,
+      speaker: current.speaker || '',
+      text: current.text || '',
+      choiceText,
+      deltas: { ...deltas },
+      ...extra,
+    };
+  }, [gameData.nodes, rt.nodeId]);
+
   const choose = (c) => {
     const st = choiceStatus(c);
     if (!st.ok) return;
@@ -325,6 +347,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     const newRt = { ...rt, stats: ns, exp, rankIndex, systemPoints, inventory, flags, skills, quests, npcAffinity, lastChoiceText: c.text, lastDeltas: { ...(c.statModifiers || {}) } };
     if (!dead) {
       newRt.history = [...rt.history, rt.nodeId];
+      newRt.storyLog = [...storyLogBase(rt, gameData.nodes), makeStoryLogEntry(c.text, c.statModifiers || {})];
       if (c.targetNodeId && gameData.nodes[c.targetNodeId]) newRt.nodeId = c.targetNodeId;
     }
     setRt(newRt);
@@ -344,6 +367,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     const newRt = { ...rt, stats: newStats, lastChoiceText: c.text, lastDeltas: { ...mods } };
     if (!dead) {
       newRt.history = [...rt.history, rt.nodeId];
+      newRt.storyLog = [...storyLogBase(rt, gameData.nodes), makeStoryLogEntry(c.text, mods, { eventLabel: result.outcome === 'success' ? 'Thành công' : 'Thất bại' })];
       if (target && gameData.nodes[target]) newRt.nodeId = target;
     }
     setRt(newRt);
@@ -383,6 +407,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     const newRt = { ...rt, stats: ns, inventory: inv, lastChoiceText: null, lastDeltas: {} };
     if (!dead && target && gameData.nodes[target]) {
       newRt.history = [...rt.history, rt.nodeId];
+      newRt.storyLog = [...storyLogBase(rt, gameData.nodes), makeStoryLogEntry(null, {}, { eventLabel: result === 'win' ? 'Chiến thắng' : 'Rời giao tranh' })];
       newRt.nodeId = target;
     }
     setRt(newRt);
@@ -395,7 +420,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
   const reset = () => {
     clearPlayerState(gameKey);
     setRt({
-      nodeId: 'start_node', stats: { ...meta.initialStats }, history: [],
+      nodeId: 'start_node', stats: { ...meta.initialStats }, history: [], storyLog: [],
       inventory: [], quests: {}, flags: [], skills: [], exp: 0, rankIndex: 0, systemPoints: 0, npcAffinity: {},
       lastChoiceText: null, lastDeltas: {},
     });
@@ -412,7 +437,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
 
   const continueSavedGame = () => {
     if (!resumeSave?.runtime) return;
-    setRt(resumeSave.runtime);
+    setRt({ ...resumeSave.runtime, storyLog: resumeSave.runtime.storyLog || [] });
     setEraReached(rebirthEraIndex((resumeSave.runtime.stats || {})[rebirth.moneyStat] || 0, rebirth));
     setPosterOpen(false);
     setForceKey((key) => key + 1);
@@ -476,6 +501,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
   const storyProgress = Math.min(100, Math.round((visitedCount / playableNodeCount) * 100));
   const isCustomTheme = meta.theme === 'custom';
   const ambientEffect = isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
+  const compactStats = [...statsConfig].sort((a, b) => Number(Boolean(b.isVital)) - Number(Boolean(a.isVital)));
 
   return (
     <div ref={rootRef} style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
@@ -522,26 +548,19 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
           </button>
         </div>
 
-        {/* Hàng chỉ số dạng thanh — icon + số + thanh tiến độ cho từng chỉ số */}
+        {/* Chỉ số nhanh — ưu tiên chỉ số sinh tử, phần đầy đủ nằm trong menu. */}
         {statsConfig.length > 0 && (
-          <div className="rpg-stats-row">
-            {statsConfig.map((sc) => {
+          <div className="rpg-stats-compact" aria-label="Chỉ số nhân vật">
+            {compactStats.map((sc) => {
               const st = statStyle(sc.key);
               const Icon = STAT_ICONS[st.icon] || Circle;
               const val = rt.stats[sc.key] || 0;
-              const max = sc.max || (sc.default > 0 ? sc.default : 100);
-              const pct = Math.max(0, Math.min(100, (val / max) * 100));
               return (
-                <div key={sc.key} className="rpg-stat-bar">
-                  <div className="rpg-stat-bar-top">
-                    <Icon size={12} style={{ color: st.color }} />
-                    <span className="rpg-stat-bar-label">{sc.label}</span>
-                    <span className="rpg-stat-bar-value">{val}</span>
-                  </div>
-                  <div className="rpg-stat-bar-track">
-                    <div className="rpg-stat-bar-fill" style={{ width: pct + '%', background: st.color }} />
-                  </div>
-                </div>
+                <button key={sc.key} className={`rpg-stat-chip${sc.isVital ? ' vital' : ''}`} onClick={() => setSheetOpen(true)} title={`${sc.label}: ${val}`}>
+                  <Icon size={13} style={{ color: st.color }} />
+                  <span className="rpg-stat-chip-label">{sc.label}</span>
+                  <b>{val}</b>
+                </button>
               );
             })}
           </div>
@@ -597,6 +616,8 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
             defaultNpcAvatar={meta.defaultNpcAvatar}
             turn={turn} lastChoiceText={rt.lastChoiceText} lastDeltas={rt.lastDeltas}
             choicesOpen={choicesOpen} setChoicesOpen={setChoicesOpen}
+            storyLog={rt.storyLog || []} legacyHistory={rt.history} gameData={gameData}
+            playbackLayout={playbackLayout}
           />
         )}
 
@@ -674,7 +695,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
 // tách khỏi khối lựa chọn — không còn 1 card lớn ôm hết mọi thứ. Dẫn truyện
 // (node.speaker rỗng) hiện như văn xuôi tiểu thuyết; NPC nói (có speaker) hiện
 // nhãn tên + avatar nhỏ (nếu có) trong khung bán trong suốt nhẹ.
-export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar, turn, lastChoiceText, lastDeltas, choicesOpen, setChoicesOpen }) {
+export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus, choose, statsConfig, defaultNpcAvatar, turn, lastChoiceText, lastDeltas, choicesOpen, setChoicesOpen, storyLog = [], legacyHistory = [], gameData, playbackLayout = 'timeline' }) {
   const art = node.npcAvatar || defaultNpcAvatar || node.bgImage || '';
   const hasArt = !!art;
   const isNarration = !node.speaker || !node.speaker.trim();
@@ -688,8 +709,33 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   // không có lựa chọn nào) thì mở rộng khung chữ hết cỡ thay vì cuộn trong ô nhỏ.
   const choicesVisible = typingDone && choicesOpen && choiceCount > 0;
   const scrollClass = 'rpg-vn-text-scroll scrollbar-thin' + (choicesVisible ? '' : ' expanded');
+  const timelineRef = useRef(null);
+  const endRef = useRef(null);
+  const [awayFromCurrent, setAwayFromCurrent] = useState(false);
+  const legacyEntries = storyLog.length === 0 ? legacyHistory.map((id) => {
+    const oldNode = gameData?.nodes?.[id];
+    return oldNode ? { nodeId: id, speaker: oldNode.speaker || '', text: oldNode.text || '', legacy: true } : null;
+  }).filter(Boolean) : [];
+  const pastEntries = storyLog.length > 0 ? storyLog : legacyEntries;
+  const visiblePastEntries = playbackLayout === 'focus' ? [] : pastEntries;
+  const goToCurrent = useCallback((behavior = 'smooth') => {
+    const el = timelineRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  useEffect(() => {
+    goToCurrent('auto');
+    setAwayFromCurrent(false);
+  }, [node.id, pastEntries.length, goToCurrent]);
+
+  const handleTimelineScroll = () => {
+    const el = timelineRef.current;
+    if (!el) return;
+    setAwayFromCurrent(el.scrollHeight - el.scrollTop - el.clientHeight > 90);
+  };
   return (
-    <div className="rpg-vn-frame flex flex-col flex-1">
+    <div className={`rpg-vn-frame rpg-playback-${playbackLayout} flex flex-col flex-1`}>
       {hasArt && (
         <div className="rpg-vn-scene">
           <img src={art} alt={node.speaker || ''} className="rpg-vn-scene-img" />
@@ -697,10 +743,29 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
         </div>
       )}
 
+      <div ref={timelineRef} className="rpg-story-timeline scrollbar-thin" onScroll={handleTimelineScroll}>
+      {visiblePastEntries.map((entry, index) => (
+        <article key={`${entry.nodeId}-${index}`} className="rpg-story-entry">
+          <div className="rpg-story-entry-head">
+            <span>Lượt {index + 1}</span>
+            <span>{entry.speaker?.trim() || 'Dẫn truyện'}</span>
+          </div>
+          <p>{entry.text}</p>
+          {entry.choiceText && <div className="rpg-story-choice-made"><span>Bạn đã chọn</span>{entry.choiceText}</div>}
+          <div className="rpg-story-entry-meta">
+            {entry.eventLabel && <span>{entry.eventLabel}</span>}
+            {Object.entries(entry.deltas || {}).filter(([, value]) => value).map(([key, value]) => (
+              <span key={key} className={value > 0 ? 'pos' : 'neg'}>{statsConfig.find((stat) => stat.key === key)?.label || key} {value > 0 ? '+' : ''}{value}</span>
+            ))}
+          </div>
+        </article>
+      ))}
+
+      <div className="rpg-story-current" ref={endRef}>
       {isNarration ? (
         <div className="rpg-vn-narration">
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
-          {lastChoiceText && <RecapCard text={lastChoiceText} />}
+          {playbackLayout === 'focus' && lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className={scrollClass}>
             <p className="rpg-vn-narration-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
@@ -713,13 +778,17 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
             <span className="rpg-vn-name">{node.speaker}</span>
           </div>
           <TurnHeader turn={turn} lastDeltas={lastDeltas} statsConfig={statsConfig} />
-          {lastChoiceText && <RecapCard text={lastChoiceText} />}
+          {playbackLayout === 'focus' && lastChoiceText && <RecapCard text={lastChoiceText} />}
           <div className={scrollClass}>
             <p className="rpg-vn-dialogue-text">{typed}{!typingDone && <span className="animate-pulse">▋</span>}</p>
           </div>
           {!typingDone && <button onClick={skipTyping} className="rpg-vn-skip">Bỏ qua ⏭</button>}
         </div>
       )}
+      </div>
+      </div>
+
+      {playbackLayout !== 'focus' && awayFromCurrent && <button className="rpg-back-to-current" onClick={() => goToCurrent()}><ArrowDown size={14} /> Về cảnh hiện tại</button>}
 
       <div className="rpg-vn-choices">
         {typingDone && choiceCount > 0 && !isNpcSelect && (

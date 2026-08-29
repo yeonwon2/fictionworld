@@ -169,8 +169,18 @@ const ENGINE_JS = [
   '    s+=\'<img class="rpg-avatar" src="\'+esc(asset(meta.playerAvatar)||dicebear(meta.player_name))+\'"/>\';',
   '    s+=\'<div class="rpg-topbar-info"><div class="rpg-playername">\'+esc(meta.title||"Trò Chơi")+\'</div><div class="rpg-topbar-subtitle">\'+esc(meta.player_name||"Người Chơi")+\' · Lượt \'+turn+\'</div></div>\';',
   '    if(archetype==="litrpg"){ s+=\'<span class="rpg-topbar-points">💎 \'+state.systemPoints+\'</span>\'; }',
-  '    s+=\'<button class="rpg-topbar-btn" id="btnReset" title="Chơi lại">↺</button>\';',
+  '    s+=\'<button class="rpg-topbar-btn" id="btnMenu" title="Menu" aria-label="Menu">☰</button>\';',
   '    s+=\'</div>\'; return s; }',
+  '',
+  '  function renderMenu(){ var s=\'<div class="rpg-menu-overlay" id="menuOverlay"></div><aside class="rpg-menu-sheet" role="dialog" aria-label="Menu game"><div class="rpg-menu-handle"></div><div class="rpg-menu-head"><b>Thông tin game</b><button id="menuClose" aria-label="Đóng">×</button></div><div class="rpg-menu-body">\';',
+  '    if(meta.player_name||meta.player_bio){ s+=\'<section class="rpg-menu-section"><h3>👤 Nhân vật</h3><div class="rpg-menu-profile"><img src="\'+esc(asset(meta.playerAvatar)||dicebear(meta.player_name))+\'"/><div><b>\'+esc(meta.player_name||"Người Chơi")+\'</b>\'+(meta.player_bio?\'<p>\'+esc(meta.player_bio)+\'</p>\':"")+\'</div></div></section>\'; }',
+  '    if(statsConfig.length){ s+=\'<section class="rpg-menu-section"><h3>✦ Chỉ số</h3><div class="rpg-menu-statgrid">\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i], st=statStyle(sc.key); s+=\'<div class="rpg-menu-stat"><span style="color:\'+st.c+\'">\'+st.i+\'</span><span>\'+esc(sc.label||sc.key)+\'</span><b>\'+(state.stats[sc.key]||0)+\'</b></div>\'; } s+=\'</div></section>\'; }',
+  '    s+=\'<section class="rpg-menu-section"><h3>🎒 Túi đồ (\'+state.inventory.length+(archetype==="mystery"?"/"+mysterySlots:"")+\')</h3>\'; if(state.inventory.length){ s+=\'<div class="rpg-menu-chips">\'; for(var j=0;j<state.inventory.length;j++){ s+=\'<span>\'+esc(state.inventory[j])+\'</span>\'; } s+=\'</div>\'; } else { s+=\'<p class="rpg-menu-empty">Túi đồ trống.</p>\'; } s+=\'</section>\';',
+  '    var questKeys=Object.keys(state.quests||{}); if(questKeys.length){ s+=\'<section class="rpg-menu-section"><h3>📜 Nhiệm vụ</h3>\'; for(var qi=0;qi<questKeys.length;qi++){ var q=state.quests[questKeys[qi]]; s+=\'<div class="rpg-menu-row"><span>\'+(q.status==="completed"?"✓ ":"")+esc(q.title||questKeys[qi])+\'</span><b>\'+(q.status==="completed"?"Hoàn thành":"Đang làm")+\'</b></div>\'; } s+=\'</section>\'; }',
+  '    var affinityKeys=Object.keys(state.npcAffinity||{}); if(affinityKeys.length){ s+=\'<section class="rpg-menu-section"><h3>♥ Quan hệ</h3>\'; for(var ai=0;ai<affinityKeys.length;ai++){ var an=affinityKeys[ai], av=state.npcAffinity[an]||0; s+=\'<div class="rpg-menu-row"><span>\'+esc(an)+\'</span><b class="\'+(av>=0?"pos":"neg")+\'">\'+(av>0?"+":"")+av+\'</b></div>\'; } s+=\'</section>\'; }',
+  '    s+=\'<section class="rpg-menu-section"><h3>◷ Lịch sử (\'+state.history.length+\')</h3>\'; var hs=state.history.slice(-20).reverse(); if(hs.length){ for(var hi=0;hi<hs.length;hi++){ var hn=GAME.nodes[hs[hi]]; if(hn){ s+=\'<div class="rpg-menu-history"><b>\'+esc((hn.speaker&&String(hn.speaker).trim())||"Dẫn truyện")+\'</b><p>\'+esc(hn.text||"")+\'</p></div>\'; } } } else { s+=\'<p class="rpg-menu-empty">Chưa có cảnh nào đã qua.</p>\'; } s+=\'</section>\';',
+  '    s+=\'<button class="rpg-menu-reset" id="menuReset">↺ Chơi lại từ đầu</button></div></aside>\'; return s; }',
+  '  function openMenu(){ var host=document.getElementById("rpg-menu"); if(!host) return; host.innerHTML=renderMenu(); host.style.display="block"; var close=function(){ host.innerHTML=""; host.style.display="none"; }; var ov=document.getElementById("menuOverlay"), cl=document.getElementById("menuClose"), rr=document.getElementById("menuReset"); if(ov) ov.addEventListener("click",close); if(cl) cl.addEventListener("click",close); if(rr) rr.addEventListener("click",function(){ if(window.confirm("Chơi lại từ đầu? Tiến trình hiện tại sẽ bị xoá.")){ reset(); save(); close(); render(); } }); }',
   '',
   '  function renderStatsRow(){ if(!statsConfig.length) return ""; var s=\'<div class="rpg-stats-row">\'; for(var i=0;i<statsConfig.length;i++){ var sc=statsConfig[i]; var st=statStyle(sc.key); var val=state.stats[sc.key]||0; var max=sc.max||(sc.default>0?sc.default:100); var pct=Math.max(0,Math.min(100,(val/max)*100)); s+=\'<div class="rpg-stat-bar"><div class="rpg-stat-bar-top"><span style="color:\'+st.c+\'">\'+st.i+\'</span><span class="rpg-stat-bar-label">\'+esc(sc.label||sc.key)+\'</span><span class="rpg-stat-bar-value">\'+val+\'</span></div><div class="rpg-stat-bar-track"><div class="rpg-stat-bar-fill" style="width:\'+pct+\'%;background:\'+st.c+\'"></div></div></div>\'; } s+=\'</div>\'; return s; }',
   '',
@@ -290,7 +300,7 @@ const ENGINE_JS = [
   '',
   '  function renderEnding(node){ var et=node.endingType||"NORMAL_END"; var em=ENDINGS[et]||{l:"Kết Thúc",i:"🏁"}; return \'<div class="rpg-bg" style="background-image:url(\\\'\'+esc(asset(node.bgImage)||"")+\'\\\')"></div><div class="rpg-ending"><div class="rpg-ending-badge \'+et.toLowerCase()+\'">\'+em.i+" "+em.l+\'</div><div class="rpg-ending-text">\'+esc(node.text||"")+\'</div><div class="rpg-summary">\'+renderSummary()+\'</div><button class="rpg-restart" id="endRestart">Chơi lại từ đầu</button></div>\'; }',
   '',
-  '  function bindStatusBar(){ var br=document.getElementById("btnReset"); if(br) br.addEventListener("click", function(){ reset(); render(); }); }',
+  '  function bindStatusBar(){ var bm=document.getElementById("btnMenu"); if(bm) bm.addEventListener("click", openMenu); }',
   '  function bindTabs(){ var tb=document.querySelectorAll(".rpg-tab"); for(var i=0;i<tb.length;i++){ (function(b){ b.addEventListener("click", function(){ activeTab=b.getAttribute("data-tab"); panelOpen=true; var tw=document.querySelector(".rpg-tabs-wrap"); if(tw){ tw.outerHTML=renderTabs(); bindTabs(); } }); })(tb[i]); } var tt=document.getElementById("tabToggle"); if(tt){ tt.addEventListener("click", function(){ panelOpen=!panelOpen; var tw=document.querySelector(".rpg-tabs-wrap"); if(tw){ tw.outerHTML=renderTabs(); bindTabs(); } }); } }',
   '  function bindDetailToggle(){ var dt=document.getElementById("detailToggle"); if(dt){ dt.addEventListener("click", function(){ bioOpen=!bioOpen; var wrap=document.getElementById("detailWrap"); if(wrap){ wrap.innerHTML=renderDetailToggle(); bindDetailToggle(); } }); } }',
   '',
@@ -339,6 +349,23 @@ html[data-bg-pattern="glow"] body{background-image:radial-gradient(circle at 18%
 .rpg-playername{font-size:14px;font-weight:700;color:var(--rpg-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rpg-topbar-subtitle{font-size:11px;color:var(--rpg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rpg-topbar-points{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;background:color-mix(in srgb, var(--rpg-accent) 18%, var(--rpg-panel-2));color:var(--rpg-accent);}
+.rpg-menu-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.62);backdrop-filter:blur(2px);}
+.rpg-menu-sheet{position:fixed;z-index:301;left:0;right:0;bottom:0;max-height:min(82vh,720px);display:flex;flex-direction:column;border-radius:24px 24px 0 0;background:var(--rpg-panel);border-top:1px solid color-mix(in srgb,var(--rpg-accent2) 35%,transparent);box-shadow:0 -16px 48px rgba(0,0,0,.48);padding-bottom:env(safe-area-inset-bottom,0);animation:rpgMenuUp .22s ease-out;}
+@keyframes rpgMenuUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.rpg-menu-handle{width:38px;height:4px;border-radius:999px;background:var(--rpg-border);margin:10px auto 3px;}
+.rpg-menu-head{display:flex;align-items:center;justify-content:space-between;padding:8px 18px 10px;color:var(--rpg-text);}
+.rpg-menu-head b{font-size:14px}.rpg-menu-head button{width:30px;height:30px;border:0;border-radius:50%;background:var(--rpg-panel-2);color:var(--rpg-text);font-size:21px;cursor:pointer;}
+.rpg-menu-body{overflow-y:auto;padding:0 18px 18px;overscroll-behavior:contain;}
+.rpg-menu-section{padding:13px 0;border-top:1px solid color-mix(in srgb,var(--rpg-border) 65%,transparent);}
+.rpg-menu-section h3{margin:0 0 9px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--rpg-accent2);}
+.rpg-menu-profile{display:flex;gap:10px;align-items:flex-start}.rpg-menu-profile img{width:42px;height:42px;border-radius:50%;object-fit:cover}.rpg-menu-profile b{font-size:13px}.rpg-menu-profile p{margin:3px 0 0;font-size:11px;line-height:1.5;color:var(--rpg-muted);}
+.rpg-menu-statgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+.rpg-menu-stat{display:flex;align-items:center;gap:6px;min-width:0;padding:7px 9px;border-radius:10px;background:var(--rpg-panel-2);font-size:11px}.rpg-menu-stat span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--rpg-muted)}.rpg-menu-stat b{margin-left:auto;color:var(--rpg-text);}
+.rpg-menu-chips{display:flex;flex-wrap:wrap;gap:5px}.rpg-menu-chips span{padding:5px 9px;border-radius:8px;background:var(--rpg-panel-2);font-size:11px;}
+.rpg-menu-row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:11px;border-bottom:1px dashed var(--rpg-border)}.rpg-menu-row .pos{color:#4ade80}.rpg-menu-row .neg{color:#ff6b6b}
+.rpg-menu-history{padding:8px 0;border-bottom:1px dashed var(--rpg-border)}.rpg-menu-history b{font-size:10px;color:var(--rpg-accent2)}.rpg-menu-history p{margin:3px 0 0;font-size:11px;line-height:1.5;color:var(--rpg-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.rpg-menu-empty{margin:0;font-size:11px;font-style:italic;color:var(--rpg-muted)}
+.rpg-menu-reset{width:100%;margin-top:14px;padding:10px;border-radius:10px;border:1px solid color-mix(in srgb,#ff6b6b 38%,transparent);background:color-mix(in srgb,#ff6b6b 9%,transparent);color:#ff8585;font-family:var(--rpg-font);font-weight:700;cursor:pointer;}
 .rpg-archbar{position:relative;z-index:2;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:color-mix(in srgb,var(--rpg-panel) 55%,transparent);backdrop-filter:blur(8px);border-radius:12px;padding:8px 12px;}
 .rpg-rank{font-size:11px;font-weight:bold;background:var(--rpg-accent2);color:#fff;padding:3px 10px;border-radius:999px;}
 .rpg-expwrap{flex:1;min-width:120px;}
@@ -545,6 +572,7 @@ ${ENGINE_CSS}
 <body>
 <div id="rpg-events"></div>
 <div id="rpg-syspopup"></div>
+<div id="rpg-menu" style="display:none"></div>
 <div id="rpg-poster"></div>
 <div id="game"></div>
 <script>

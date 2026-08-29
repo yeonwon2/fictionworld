@@ -10,6 +10,11 @@ import FileUrlInput from '@/components/FileUrlInput';
 import { listThemes } from '@/lib/worldcrud';
 
 const BUILTIN_PREFIX = '__builtin__:';
+const PLAYBACK_LAYOUTS = [
+  { id: 'timeline', icon: '↕', name: 'Dòng thời gian', description: 'Kéo lên xem toàn bộ cảnh, lựa chọn và thay đổi chỉ số.' },
+  { id: 'focus', icon: '▣', name: 'Tập trung', description: 'Chỉ hiện cảnh hiện tại; lịch sử nằm gọn trong menu.' },
+  { id: 'chat', icon: '◌', name: 'Hội thoại', description: 'Cảnh cũ xếp thành các khối chat gọn, hợp game NPC và tâm lý.' },
+];
 
 export default function GameMetaConfig({ gameData, setGameData }) {
   // statsConfig có thể thiếu ở game cũ/dữ liệu bất thường — luôn ép về mảng
@@ -128,6 +133,26 @@ export default function GameMetaConfig({ gameData, setGameData }) {
       </div>
       <div className="theme-preview-strip" style={{ backgroundImage: `url(${PRESENTATION_ART[meta.presentation || 'dialogue']})` }}>
         <div><b>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.name}</b><span>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.description}</span></div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs">Kiểu đọc khi chơi</Label>
+        <div className="grid sm:grid-cols-3 gap-2">
+          {PLAYBACK_LAYOUTS.map((layout) => {
+            const active = (meta.playbackLayout || 'timeline') === layout.id;
+            return (
+              <button
+                key={layout.id}
+                type="button"
+                onClick={() => updateMeta({ playbackLayout: layout.id })}
+                className={`text-left rounded-xl border p-3 transition ${active ? 'border-cyan-500 bg-cyan-500/10 shadow-sm shadow-cyan-500/10' : 'border-border/70 hover:border-cyan-500/40 hover:bg-muted/30'}`}
+              >
+                <span className="flex items-center gap-2 text-xs font-semibold"><span className="text-base text-cyan-500">{layout.icon}</span>{layout.name}</span>
+                <span className="block mt-1 text-[10px] leading-relaxed text-muted-foreground">{layout.description}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-1.5">

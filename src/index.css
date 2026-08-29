@@ -245,6 +245,26 @@
    dọc trong suốt; từng vùng con tự quyết định nền/viền theo đúng vai trò của nó. */
 .rpg-vn-frame{display:flex;flex-direction:column;position:relative;}
 
+/* Nhật ký chơi liền mạch: cảnh cũ ở trên, cảnh hiện tại ở cuối. */
+.rpg-story-timeline{position:relative;max-height:52vh;overflow-y:auto;scroll-behavior:smooth;padding:2px 5px 4px 0;overscroll-behavior:contain;}
+.rpg-story-entry{padding:13px 14px;margin:0 6px 10px;border-left:2px solid color-mix(in srgb,var(--rpg-accent2) 28%,transparent);color:var(--rpg-muted);opacity:.78;}
+.rpg-story-entry-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:6px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--rpg-accent2);}
+.rpg-story-entry p{font-size:13px;line-height:1.65;white-space:pre-wrap;}
+.rpg-story-choice-made{margin-top:8px;padding:7px 10px;border-radius:9px;background:color-mix(in srgb,var(--rpg-accent2) 9%,transparent);font-size:12px;line-height:1.45;color:var(--rpg-text);}
+.rpg-story-choice-made span{display:block;margin-bottom:2px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--rpg-accent2);}
+.rpg-story-entry-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;}
+.rpg-story-entry-meta span{font-size:9px;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--rpg-panel-2);}
+.rpg-story-entry-meta .pos{color:#4ade80}.rpg-story-entry-meta .neg{color:#ff6b6b}
+.rpg-story-current{scroll-margin-bottom:8px;}
+.rpg-story-timeline .rpg-vn-text-scroll{max-height:none;overflow:visible;}
+.rpg-playback-focus .rpg-story-timeline{max-height:none;overflow:visible;padding-right:0;}
+.rpg-playback-chat .rpg-story-entry{width:min(88%,620px);margin-left:4px;border-left:0;border-radius:16px 16px 16px 4px;background:color-mix(in srgb,var(--rpg-panel-2) 62%,transparent);opacity:.86;}
+.rpg-playback-chat .rpg-story-entry:nth-child(even){margin-left:auto;margin-right:5px;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--rpg-accent2) 9%,var(--rpg-panel-2));}
+.rpg-playback-chat .rpg-story-entry-head{justify-content:flex-start;}
+.rpg-playback-chat .rpg-story-entry-head span:first-child{order:2;margin-left:auto;color:var(--rpg-muted);}
+.rpg-playback-chat .rpg-story-choice-made{border-left:2px solid var(--rpg-accent2);}
+.rpg-back-to-current{position:absolute;right:12px;bottom:82px;z-index:5;display:flex;align-items:center;gap:5px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--rpg-accent2) 35%,transparent);border-radius:999px;background:color-mix(in srgb,var(--rpg-panel) 92%,transparent);color:var(--rpg-accent2);box-shadow:0 6px 18px rgba(0,0,0,.2);font-size:11px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px);}
+
 /* --- Vùng cảnh (ảnh nhân vật/bối cảnh) — chỉ chiếm chỗ khi THỰC SỰ có ảnh --- */
 .rpg-vn-scene{position:relative;height:clamp(180px, 34vh, 360px);width:100%;border-radius:18px;overflow:hidden;margin-bottom:16px;background:var(--rpg-panel-2);}
 .rpg-vn-scene-img{width:100%;height:100%;object-fit:cover;object-position:center 18%;display:block;}
@@ -321,7 +341,7 @@
 .rpg-vn-choice:nth-child(5){animation-delay:.16s;}
 .rpg-vn-choice:nth-child(6){animation-delay:.2s;}
 
-@media(max-width:640px){.rpg-vn-scene{height:clamp(140px, 26vh, 260px);}.rpg-vn-text-scroll{max-height:26vh;}}
+@media(max-width:640px){.rpg-vn-scene{height:clamp(140px, 26vh, 260px);}.rpg-vn-text-scroll{max-height:26vh;}.rpg-story-timeline{max-height:48vh}.rpg-story-entry{margin-left:2px;margin-right:2px;padding:11px 10px}}
 
 /* --- Thanh trên cùng: nút thoát, avatar, tên game/nhân vật + lượt, điểm, menu --- */
 .rpg-topbar{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:color-mix(in srgb, var(--rpg-panel) 55%, transparent);backdrop-filter:blur(8px);}
@@ -338,14 +358,16 @@
 .rpg-root:fullscreen{width:100vw;height:100vh;min-height:100vh;border-radius:0!important;overflow-y:auto;}
 @media(max-width:640px){.rpg-save-state{display:none}.rpg-topbar{gap:7px}.rpg-topbar-btn{width:32px;height:32px}}
 
-/* --- Hàng chỉ số dạng thanh (icon + số + thanh tiến độ), thay cho chip cũ --- */
-.rpg-stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:12px 14px;padding:11px 13px;border-radius:14px;background:color-mix(in srgb, var(--rpg-panel) 45%, transparent);backdrop-filter:blur(8px);}
-.rpg-stat-bar{display:flex;flex-direction:column;gap:5px;min-width:0;}
-.rpg-stat-bar-top{display:flex;align-items:center;gap:5px;}
-.rpg-stat-bar-label{font-size:9px;color:var(--rpg-muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.rpg-stat-bar-value{font-size:14px;font-weight:800;color:var(--rpg-text);margin-left:auto;flex-shrink:0;}
-.rpg-stat-bar-track{height:5px;border-radius:999px;overflow:hidden;background:var(--rpg-panel-2);}
-.rpg-stat-bar-fill{height:100%;border-radius:999px;transition:width .35s ease;}
+/* --- Chỉ số nhanh dạng chip; bảng đầy đủ vẫn nằm trong menu. --- */
+.rpg-stats-compact{display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;padding:2px 1px 4px;scrollbar-width:none;scroll-snap-type:x proximity;overscroll-behavior-x:contain;}
+.rpg-stats-compact::-webkit-scrollbar{display:none}
+.rpg-stat-chip,.rpg-stat-more{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--rpg-border) 65%,transparent);background:color-mix(in srgb,var(--rpg-panel) 48%,transparent);color:var(--rpg-text);font-size:11px;cursor:pointer;backdrop-filter:blur(6px);scroll-snap-align:start;}
+.rpg-stat-chip:hover,.rpg-stat-more:hover{background:color-mix(in srgb,var(--rpg-accent2) 12%,var(--rpg-panel));}
+.rpg-stat-chip.vital{border-color:color-mix(in srgb,#ff6b6b 30%,var(--rpg-border));}
+.rpg-stat-chip-label{white-space:nowrap;color:var(--rpg-muted);}
+.rpg-stat-chip b{font-size:12px;color:var(--rpg-text);}
+.rpg-stat-more{font-weight:800;color:var(--rpg-accent2);}
+@media(max-width:640px){.rpg-stats-compact{margin-right:-12px;padding-right:18px}.rpg-stat-chip{height:32px;padding:0 10px;gap:6px}.rpg-stat-chip-label{font-size:11px}.rpg-stat-chip b{font-size:13px}}
 
 /* --- Nút "Chi tiết nhân vật" thu gọn/mở rộng --- */
 .rpg-detail-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 12px;border-radius:12px;background:color-mix(in srgb, var(--rpg-panel) 40%, transparent);color:var(--rpg-muted);font-size:12px;font-weight:600;border:none;cursor:pointer;}
