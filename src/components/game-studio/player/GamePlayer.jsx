@@ -714,12 +714,14 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
   const timelineRef = useRef(null);
   const endRef = useRef(null);
   const [awayFromCurrent, setAwayFromCurrent] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const legacyEntries = storyLog.length === 0 ? legacyHistory.map((id) => {
     const oldNode = gameData?.nodes?.[id];
     return oldNode ? { nodeId: id, speaker: oldNode.speaker || '', text: oldNode.text || '', legacy: true } : null;
   }).filter(Boolean) : [];
   const pastEntries = storyLog.length > 0 ? storyLog : legacyEntries;
-  const visiblePastEntries = playbackLayout === 'focus' ? [] : pastEntries;
+  const historyCollapsed = playbackLayout !== 'focus' && pastEntries.length > 0;
+  const visiblePastEntries = playbackLayout === 'focus' || historyCollapsed ? [] : pastEntries;
   const goToCurrent = useCallback((behavior = 'smooth') => {
     const el = timelineRef.current;
     if (!el) return;
@@ -746,6 +748,13 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
       )}
 
       <div ref={timelineRef} className="rpg-story-timeline scrollbar-thin" onScroll={handleTimelineScroll}>
+      {historyCollapsed && (
+        <button type="button" className="rpg-history-summary" onClick={() => setHistoryOpen(true)}>
+          <History size={15} />
+          <span><b>{pastEntries.length} cảnh trước</b><small>Xem lại nội dung đã chơi</small></span>
+          <ChevronDown size={14} />
+        </button>
+      )}
       {visiblePastEntries.map((entry, index) => (
         <article key={`${entry.nodeId}-${index}`} className="rpg-story-entry">
           <div className="rpg-story-entry-head">
@@ -834,6 +843,22 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
         })}
         {typingDone && choiceCount === 0 && <p className="rpg-vn-empty">Không có lựa chọn tiếp theo. Hãy thêm lựa chọn trong Studio.</p>}
       </div>
+      {historyOpen && (
+        <div className="rpg-history-overlay" onClick={() => setHistoryOpen(false)}>
+          <div className="rpg-history-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="rpg-history-sheet-head"><b>Lịch sử đã chơi · {pastEntries.length} cảnh</b><button type="button" onClick={() => setHistoryOpen(false)}><X size={17} /></button></div>
+            <div className="rpg-history-sheet-list scrollbar-thin">
+              {pastEntries.map((entry, index) => (
+                <article key={`history-${entry.nodeId}-${index}`} className="rpg-story-entry">
+                  <div className="rpg-story-entry-head"><span>Lượt {index + 1}</span><span>{entry.speaker?.trim() || 'Dẫn truyện'}</span></div>
+                  <p>{entry.text}</p>
+                  {entry.choiceText && <div className="rpg-story-choice-made"><span>Bạn đã chọn</span>{entry.choiceText}</div>}
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
