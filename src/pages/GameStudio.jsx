@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor, FlaskConical } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
@@ -9,6 +9,7 @@ import PalaceScriptImporter from "@/components/game-studio/PalaceScriptImporter"
 import RebirthScriptImporter from "@/components/game-studio/RebirthScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
 import RouteExplorerTab from "@/components/game-studio/RouteExplorerTab";
+import GameTestReportTab from "@/components/game-studio/GameTestReportTab";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import ThemeWorkshop from "@/components/game-studio/ThemeWorkshop";
@@ -28,6 +29,7 @@ import { useToast } from "@/components/ui/use-toast";
 const MAIN_TABS = [
   { id: "play", label: "Trải Nghiệm Game", short: "Chơi", icon: Gamepad2 },
   { id: "routes", label: "Tuyến Chơi & Vấn Đề", short: "Tuyến", icon: GitBranch },
+  { id: "gametest", label: "Kiểm Tra Toàn Diện", short: "Test", icon: FlaskConical },
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
 const WORKSHOP_TABS = [
@@ -296,6 +298,11 @@ function GameEditor({ gameId, onBack }) {
         {tab === "routes" && (
           <div className="max-w-4xl mx-auto space-y-4">
             <RouteExplorerTab gameData={gameData} setGameData={handleChange} />
+          </div>
+        )}
+        {tab === "gametest" && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <GameTestReportTab gameData={gameData} setGameData={handleChange} />
           </div>
         )}
         {tab === "studio" && (
