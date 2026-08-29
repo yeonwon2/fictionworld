@@ -44,3 +44,13 @@ test("standalone skip keeps long scene text inside its scroll area", () => {
   assert.doesNotMatch(html, /rpg-vn-text-scroll expanded/);
   assert.match(html, /syncTextScrollExpand\(\)\{[^}]*classList\.remove\("expanded"\)/);
 });
+
+test("standalone stat chips stay above long scene content", () => {
+  const html = generateStandaloneHTML({
+    meta: { title: "Stats", statsConfig: [{ key: "trust", label: "Tin tưởng" }] },
+    nodes: { start_node: { id: "start_node", text: "Nội dung dài", choices: [] } },
+  });
+
+  assert.match(html, /\.rpg-stats-compact\{position:relative;z-index:4;isolation:isolate;display:flex;flex:0 0 38px/);
+  assert.match(html, /\.rpg-vn-frame\{position:relative;z-index:1/);
+});

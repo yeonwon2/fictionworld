@@ -361,7 +361,7 @@
 @media(max-width:640px){.rpg-save-state{display:none}.rpg-topbar{gap:7px}.rpg-topbar-btn{width:32px;height:32px}}
 
 /* --- Chỉ số nhanh dạng chip; bảng đầy đủ vẫn nằm trong menu. --- */
-.rpg-stats-compact{display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;padding:2px 1px 4px;scrollbar-width:none;scroll-snap-type:x proximity;overscroll-behavior-x:contain;}
+.rpg-stats-compact{position:relative;z-index:4;isolation:isolate;display:flex;flex:0 0 38px;align-items:center;gap:6px;width:100%;min-width:0;min-height:38px;overflow-x:auto;overflow-y:hidden;padding:2px 1px 4px;scrollbar-width:none;scroll-snap-type:x proximity;overscroll-behavior-x:contain;}
 .rpg-stats-compact::-webkit-scrollbar{display:none}
 .rpg-stat-chip,.rpg-stat-more{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--rpg-border) 65%,transparent);background:color-mix(in srgb,var(--rpg-panel) 48%,transparent);color:var(--rpg-text);font-size:11px;cursor:pointer;backdrop-filter:blur(6px);scroll-snap-align:start;}
 .rpg-stat-chip:hover,.rpg-stat-more:hover{background:color-mix(in srgb,var(--rpg-accent2) 12%,var(--rpg-panel));}
