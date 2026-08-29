@@ -533,14 +533,14 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
           <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-topbar-avatar" />
           <div className="rpg-topbar-info">
             <div className="rpg-topbar-title">{meta.title || 'Trò Chơi'}</div>
-            <div className="rpg-topbar-subtitle">{meta.player_name || 'Người Chơi'} · Lượt {turn}</div>
+            <div className="rpg-topbar-subtitle"><span className="rpg-topbar-player">{meta.player_name || 'Người Chơi'} · </span><span className="rpg-topbar-turn">Lượt {turn}</span></div>
             <div className="rpg-story-progress" title={`Đã khám phá ${visitedCount}/${playableNodeCount} cảnh`}><span style={{ width: `${storyProgress}%` }} /></div>
           </div>
           {archetype === 'litrpg' && (
             <span className="rpg-topbar-points"><Gem size={12} /> {rt.systemPoints}</span>
           )}
           {savedAt && <span className="rpg-save-state" title={`Đã tự lưu ${new Date(savedAt).toLocaleTimeString('vi-VN')}`}><Save size={11} /> Đã lưu</span>}
-          <button className="rpg-topbar-btn" onClick={toggleFullscreen} title={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}>
+          <button className="rpg-topbar-btn rpg-fullscreen-btn" onClick={toggleFullscreen} title={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}>
             {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </button>
           <button className="rpg-topbar-btn" onClick={() => setSheetOpen(true)} title="Menu">
@@ -555,11 +555,13 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
               const st = statStyle(sc.key);
               const Icon = STAT_ICONS[st.icon] || Circle;
               const val = rt.stats[sc.key] || 0;
+              const delta = rt.lastDeltas?.[sc.key] || 0;
               return (
-                <button key={sc.key} className={`rpg-stat-chip${sc.isVital ? ' vital' : ''}`} onClick={() => setSheetOpen(true)} title={`${sc.label}: ${val}`}>
+                <button key={sc.key} className={`rpg-stat-chip${sc.isVital ? ' vital' : ''}${delta ? ` changed ${delta > 0 ? 'pos' : 'neg'}` : ''}`} onClick={() => setSheetOpen(true)} title={`${sc.label}: ${val}`}>
                   <Icon size={13} style={{ color: st.color }} />
                   <span className="rpg-stat-chip-label">{sc.label}</span>
                   <b>{val}</b>
+                  {delta !== 0 && <span className="rpg-stat-chip-delta">{delta > 0 ? '+' : ''}{delta}</span>}
                 </button>
               );
             })}

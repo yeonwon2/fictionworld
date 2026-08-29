@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch } from "lucide-react";
+import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
 import ScenarioGenerator from "@/components/game-studio/ScenarioGenerator";
 import ScriptImporter from "@/components/game-studio/ScriptImporter";
@@ -150,6 +150,7 @@ function GameEditor({ gameId, onBack }) {
   const [tab, setTab] = useState("play");
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [previewDevice, setPreviewDevice] = useState("desktop");
   const saveTimer = useRef(null);
   const { toast } = useToast();
   const activeWorkshopTab = WORKSHOP_TABS.find((t) => t.id === tab);
@@ -274,8 +275,22 @@ function GameEditor({ gameId, onBack }) {
 
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4">
         {tab === "play" && (
-          <div className="max-w-3xl mx-auto">
-            <GamePlayer key={playKey} gameData={gameData} gameKey={gameId} onExit={onBack} />
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-1.5">
+              {[
+                { id: "phone", label: "Điện thoại", icon: Smartphone },
+                { id: "tablet", label: "Tablet", icon: Tablet },
+                { id: "desktop", label: "Desktop", icon: Monitor },
+              ].map((device) => {
+                const Icon = device.icon;
+                return <button key={device.id} onClick={() => setPreviewDevice(device.id)} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${previewDevice === device.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}><Icon size={13} /> {device.label}</button>;
+              })}
+            </div>
+            <div className="mx-auto transition-[max-width] duration-300" style={{ maxWidth: previewDevice === "phone" ? 430 : previewDevice === "tablet" ? 760 : 900, containerType: "inline-size", containerName: "game-preview" }}>
+              <div className={previewDevice !== "desktop" ? "rounded-[28px] border-[6px] border-slate-900 bg-slate-900 overflow-hidden shadow-2xl" : ""}>
+                <GamePlayer key={playKey} gameData={gameData} gameKey={gameId} onExit={onBack} />
+              </div>
+            </div>
           </div>
         )}
         {tab === "routes" && (
