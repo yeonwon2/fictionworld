@@ -12,7 +12,10 @@ const WORKSHOP_DEFS_BLOCK = WORKSHOP_LIST
 function stickToIdeaRules(idea) {
   return `# ⚠️ QUY TẮC BẮT BUỘC — BÁM SÁT Ý TƯỞNG (KHÔNG ĐƯỢC THAY THẾ)
 - Ý tưởng dưới đây là NGUỒN DUY NHẤT. Bạn chỉ PHÁT TRIỂN THÊM chi tiết, KHÔNG được bịa thế giới / nhân vật / tên / cốt truyện khác.
-- Mọi tên nhân vật, hệ thống, chỉ số, tuyến, twist, địa danh đã nêu trong ý tưởng PHẢI giữ nguyên chữ (VD: "Hệ Thống 404", "Lâm Tịch", "Tạ Vãn Ninh"...).
+- Mọi tên nhân vật, tổ chức, cơ chế, chỉ số, tuyến, twist và địa danh đã nêu trong ý tưởng PHẢI giữ nguyên chữ.
+- Nếu ý tưởng chưa đặt tên, hãy tạo tên MỚI phù hợp riêng với bối cảnh hiện tại. CẤM tái sử dụng tên, cặp nhân vật, quan hệ hoặc mô-típ từ ví dụ hướng dẫn, dự án khác hay kịch bản đã viết trước đó.
+- CẤM tự mặc định kịch bản là hệ thống, xuyên sách, cứu nữ phụ, công lược tình cảm, cung đình hoặc bất kỳ công thức quen thuộc nào nếu ý tưởng không yêu cầu.
+- Giới tính, vai trò, quan hệ và số lượng nhân vật phải xuất phát từ ý tưởng; không tự mặc định player là nữ hoặc mọi nhánh đều là tuyến tình cảm.
 - CẤM viết sang thể loại/bối cảnh khác (cung đình, vương phi, v.v.) nếu ý tưởng không có.
 - Nếu ý tưởng đã liệt kê nhân vật/tuyến/kết thúc/chỉ số/gameplay — dùng ĐÚNG chúng, chỉ bổ sung cho đủ số lượng yêu cầu.
 
@@ -36,15 +39,15 @@ ${directionBlock ? `# Định hướng thêm\n${directionBlock}` : ""}
 ${notes?.trim() ? `# Ghi chú thêm\n${notes.trim()}` : ""}
 
 # NHÂN VẬT NHẬP VAI (nếu ý tưởng đã có tên thì dùng đúng tên đó)
-- Tên gợi ý từ form: ${playerName?.trim() || "(đọc trong ý tưởng — VD Lâm Tịch)"}
+- Tên từ form: ${playerName?.trim() || "(đọc trong ý tưởng; nếu chưa có thì tạo tên mới phù hợp bối cảnh)"}
 - Lai lịch form: ${playerDesc?.trim() || "(đọc trong ý tưởng)"}
 - Nhiệm vụ chính form: ${mainQuest?.trim() || "(đọc trong ý tưởng — nhiệm vụ hệ thống / mục tiêu chính)"}
 
 # YÊU CẦU JSON
-- characters: danh sách đầy đủ. Phần tử ĐẦU TIÊN = nhân vật người chơi nhập vai (role: "Nhân vật nhập vai / Player"), dùng đúng tên trong ý tưởng. Tiếp theo: từng tuyến nữ chính/NPC/phản diện/hệ thống (nếu có) — đúng tên + tính cách + động cơ + mối quan hệ với player.
+- characters: danh sách đầy đủ. Phần tử ĐẦU TIÊN = nhân vật người chơi nhập vai (role: "Nhân vật nhập vai / Player"), dùng đúng tên trong ý tưởng. Tiếp theo là các nhân vật thực sự cần cho ý tưởng (đồng minh, đối thủ, NPC, phản diện, nhân vật quan hệ hoặc thực thể khác nếu có) — đúng tên + tính cách + động cơ + mối quan hệ với player.
 - settings: địa điểm / không gian quan trọng trong ý tưởng (có thể suy ra thêm nếu ý tưởng không liệt kê, nhưng phải khớp bối cảnh).
 - branches: đúng ${branchCount} nhánh — nếu ý tưởng có 4 tuyến nhân vật thì mỗi nhánh = 1 tuyến đó; mô tả ngắn storyline của nhánh.
-- endings: ≥${branchCount} kết thúc (TRUE_END/GOOD_END/NORMAL_END/BAD_END) khớp ý tưởng (VD ending từng tuyến + True Ending).
+- endings: các kết thúc TRUE_END/GOOD_END/NORMAL_END/BAD_END phải khớp cấu trúc và xung đột của ý tưởng; không tự biến mỗi nhánh thành một tuyến tình cảm.
 - invariants: 3–10 luật cốt truyện không bao giờ được vi phạm. Dùng type "ending_requires" hoặc "fact_before_scene"; field/value là cờ, vật phẩm hoặc sự thật; ending/scene là đích áp dụng.
 - player_name, player_desc, main_quest: trích từ ý tưởng (bắt buộc điền, không để trống).
 - notes: tóm tắt cơ chế gameplay (chỉ số, nhiệm vụ hệ thống, twist...) đã có trong ý tưởng.

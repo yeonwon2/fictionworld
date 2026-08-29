@@ -75,7 +75,7 @@ export default function IdeaStep({ project, updateField, patchProject, onNext })
             value={project.title || ""}
             onChange={(e) => updateField("title", e.target.value)}
             className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-            placeholder="VD: Hệ Thống Bắt Tôi Cứu Nữ Phụ Khỏi Kết Cục BE"
+            placeholder="Nhập tên riêng của dự án"
           />
         </label>
 
@@ -97,7 +97,7 @@ export default function IdeaStep({ project, updateField, patchProject, onNext })
             <input
               value={project.player_name || ""}
               onChange={(e) => updateField("player_name", e.target.value)}
-              placeholder="VD: Lâm Tịch"
+              placeholder="Tên nhân vật trong ý tưởng"
               className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </label>
@@ -106,7 +106,7 @@ export default function IdeaStep({ project, updateField, patchProject, onNext })
             <input
               value={project.main_quest || ""}
               onChange={(e) => updateField("main_quest", e.target.value)}
-              placeholder="VD: Sửa BE các nữ phụ, đạt 100 Điểm Vận Mệnh"
+              placeholder="Mục tiêu trung tâm của nhân vật"
               className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </label>
