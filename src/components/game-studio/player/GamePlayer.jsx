@@ -1004,7 +1004,7 @@ function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, sh
 
           <div className="rpg-sheet-section">
             <button className="rpg-sheet-item" onClick={onReset}><RotateCcw size={15} /> Chơi lại từ đầu</button>
-            {onExit && <button className="rpg-sheet-item" onClick={onExit}><LogOut size={15} /> Thoát</button>}
+            {onExit && <button className="rpg-sheet-item" onClick={() => { onClose(); onExit(); }}><LogOut size={15} /> Thoát game</button>}
           </div>
         </div>
       </div>
