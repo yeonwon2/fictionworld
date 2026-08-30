@@ -91,7 +91,7 @@ export function createScoreEndingRules(game,statKey,rules) {
   const next=structuredClone(game);
   let number=Math.max(next.meta.nextSceneNumber||1,next.meta.aiWorkshop?.nextSceneNumber||1,...Object.keys(next.nodes).map(id=>/^scene_\d+$/.test(id)?Number(id.slice(6))+1:1));
   const ids=Array.from({length:ranges.length+1},()=>`scene_${number++}`),checkpoint=ids[0];
-  next.nodes[checkpoint]={id:checkpoint,workshopTitle:'Xét kết thúc theo điểm',workshopRole:'main',text:`Hành trình đã đến hồi kết. Kết quả được mở theo chỉ số ${stat.label||statKey} bạn đã tích lũy.`,choices:ranges.map((r,i)=>({text:`Đón nhận: ${r.title.trim()}`,targetNodeId:ids[i+1],statModifiers:{},...(r.min!==null?{statRequirements:{[statKey]:r.min}}:{}),...(r.max!==null?{statRequirementsMax:{[statKey]:r.max}}:{})}))};
+  next.nodes[checkpoint]={id:checkpoint,workshopTitle:'Xét kết thúc tự động',automaticEnding:true,workshopRole:'main',text:`Hành trình đã đến hồi kết. Kết quả được mở theo chỉ số ${stat.label||statKey} bạn đã tích lũy.`,choices:ranges.map((r,i)=>({text:`Đón nhận: ${r.title.trim()}`,targetNodeId:ids[i+1],statModifiers:{},...(r.min!==null?{statRequirements:{[statKey]:r.min}}:{}),...(r.max!==null?{statRequirementsMax:{[statKey]:r.max}}:{})}))};
   ranges.forEach((r,i)=>{const id=ids[i+1];next.nodes[id]={id,isEnding:true,endingType:r.type,workshopTitle:r.title.trim(),text:r.text?.trim()||`Hành trình khép lại: ${r.title.trim()}.`,choices:[],workshopHint:'Đây là lời kết mẫu. Viết lại theo nhân vật, bối cảnh và những lựa chọn trước đó.'};});
   next.meta.nextSceneNumber=number;
   if(next.meta.aiWorkshop) next.meta.aiWorkshop.nextSceneNumber=number;

@@ -1,3 +1,4 @@
+import { resolveAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save, ArrowDown } from 'lucide-react';
@@ -65,6 +66,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
     lastDeltas: {},
   }));
   const [screen, setScreen] = useState('scene');
+  const [endingError,setEndingError] = useState('');
   const [typed, setTyped] = useState('');
   const [typingDone, setTypingDone] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -192,6 +194,12 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
     const n = gameData.nodes[cur.nodeId];
     if (!n) return;
     if (checkGameOver(cur.stats)) { setScreen('gameover'); triggerShake(); return; }
+    setEndingError('');
+    if (n.automaticEnding) {
+      try { const target=resolveAutomaticEnding(gameData.nodes,n,cur); setRt(prev=>({...prev,nodeId:target,history:[...prev.history,cur.nodeId]})); }
+      catch(error) { setEndingError(error.message); setScreen('scene'); }
+      return;
+    }
     if (n.systemPopup && n.systemPopup.title) { showSystemPopup(n.systemPopup); playTing(); }
     if (n.isEnding) {
       setScreen('ending');
@@ -481,7 +489,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
 
   useEffect(() => {
     const onKey = (event) => {
-      if (posterOpen || sheetOpen || systemPopup || dicePending || combatActive || screen !== 'scene') return;
+      if (node?.automaticEnding || posterOpen || sheetOpen || systemPopup || dicePending || combatActive || screen !== 'scene') return;
       if (!typingDone && (event.key === ' ' || event.key === 'Enter')) { event.preventDefault(); skipTyping(); return; }
       const index = Number(event.key) - 1;
       const choice = node?.choices?.[index];
@@ -505,9 +513,10 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
   const showQuestTab = archetype === 'litrpg';
   const rankLabel = litrpg.ranks?.[rt.rankIndex] || '—';
   const expPct = Math.min(100, ((rt.exp / (litrpg.expPerRank || 100)) * 100));
-  const turn = rt.history.length + 1;
-  const playableNodeCount = Math.max(1, Object.values(gameData.nodes || {}).filter((entry) => !entry.isEnding && entry.id !== 'start_node').length);
-  const visitedCount = new Set([...rt.history, rt.nodeId].filter((id) => id !== 'start_node')).size;
+  const visibleHistory = rt.history.filter(id=>!gameData.nodes[id]?.automaticEnding);
+  const turn = visibleHistory.length + 1;
+  const playableNodeCount = Math.max(1, Object.values(gameData.nodes || {}).filter((entry) => !entry.isEnding && !entry.automaticEnding && entry.id !== 'start_node').length);
+  const visitedCount = new Set([...rt.history, rt.nodeId].filter((id) => id !== 'start_node' && !gameData.nodes[id]?.automaticEnding && !gameData.nodes[id]?.isEnding)).size;
   const storyProgress = Math.min(100, Math.round((visitedCount / playableNodeCount) * 100));
   const isCustomTheme = meta.theme === 'custom';
   const ambientEffect = isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
@@ -621,8 +630,9 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
         {screen === 'scene' && combatActive && node?.combat && (
           <CombatScreen combat={node.combat} rt={rt} statsConfig={statsConfig} rankIndex={rt.rankIndex} onEnd={onCombatEnd} themeStyle={themeStyle} pushEvent={pushEvent} />
         )}
+        {node?.automaticEnding && endingError && <div role="alert" className="p-5 rounded-lg border border-red-400"><strong>Chưa thể xác định kết thúc</strong><p>{endingError}</p></div>}
         {/* Scene */}
-        {screen === 'scene' && node && !combatActive && (
+        {screen === 'scene' && node && !node.automaticEnding && !combatActive && (
           <VNScenePanel
             node={node} typed={typed} typingDone={typingDone} skipTyping={skipTyping}
             choiceStatus={choiceStatus} choose={choose} statsConfig={statsConfig}
@@ -646,7 +656,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
               {rt.lastChoiceText && <p className="mt-2">Lựa chọn vừa chọn: {rt.lastChoiceText}</p>}
               <p className="mt-2 text-xs">Game kết thúc do luật chơi, không phải do giới hạn số cảnh.</p>
             </div>
-            <Summary statsConfig={statsConfig} rt={rt} />
+            <Summary statsConfig={statsConfig} rt={{...rt,history:visibleHistory}} />
             <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Bắt đầu lại</Button>
           </div>
         )}
@@ -656,7 +666,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
           <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
             <div className="text-xl font-bold px-5 py-2 rounded-full" style={{ background: endingMeta?.color || '#888', color: '#fff' }}>{endingMeta?.icon} {endingMeta?.label || 'Kết Thúc'}</div>
             <p className="text-base leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{node.text}</p>
-            <Summary statsConfig={statsConfig} rt={rt} />
+            <Summary statsConfig={statsConfig} rt={{...rt,history:visibleHistory}} />
             <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Chơi lại từ đầu</Button>
           </div>
         )}
