@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import MapConnectDialog from './MapConnectDialog';
+import OutcomeControls, { OutcomeGateDialog } from './OutcomeControls';
 import ConnectIncomingDialog from './ConnectIncomingDialog';
 import { connectionPorts, appendChoices } from '@/lib/gameStudio/mapConnections';
 import GameTestReportTab from './GameTestReportTab';
@@ -75,6 +76,7 @@ function AiAdvice({ card, gameData, onApply, onClose }) {
 export default function MindMapTab({ gameData, setGameData, onGenerated, authoring = null }) {
   const fullGraph = useMemo(() => buildMindMap(gameData.nodes), [gameData.nodes]);
   const [localConnect, setLocalConnect] = useState(null);
+  const [gateCard, setGateCard] = useState(null);
   const [incomingTarget, setIncomingTarget] = useState(null);
   const [mergeSources, setMergeSources] = useState(null);
   const [addChoiceId, setAddChoiceId] = useState(null);
@@ -221,6 +223,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       })}</div> : <p className="text-sm text-muted-foreground">{fullByKey.get(lastWalkKey)?.kind === 'ending' ? 'Đã đến kết thúc. Quay lại để xem nhánh khác.' : 'Ô này không có đường đi tiếp. Kiểm tra liên kết hoặc quay lại chọn nhánh khác.'}</p>}
       <button className="text-sm text-primary underline disabled:opacity-50" disabled={walk.length < 2} onClick={() => rewindWalk(Math.max(0, walk.length - (fullByKey.get(walk.at(-2))?.kind === 'choice' ? 3 : 2)))}>Quay về bước trước</button>
     </div>}
+    <OutcomeControls game={gameData} onChange={setGameData} onFocus={setInsertedFocus} />
     {authoring?.toolbar && <div className="sticky top-2 z-20 rounded-xl border bg-background p-3 shadow-sm">{authoring.toolbar}</div>}
     <div ref={viewport} className="relative overflow-auto rounded-2xl border bg-muted/30" style={{ height: '70vh', minHeight: 420, backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
       <div style={{ width: graph.width * zoom, height: graph.height * zoom }}><div style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'relative' }}>
@@ -250,6 +253,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
             {card.kind !== 'choice' && <DropdownMenuItem onSelect={() => setIncomingTarget(card.sceneId)}>Nối nhiều đáp án vào ô này</DropdownMenuItem>}
             {authoring?.copy && card.sceneId !== 'start_node' && <DropdownMenuItem onSelect={() => authoring.copy(card.sceneId)}>{card.kind === 'choice' ? 'Sao chép cả cảnh này' : 'Sao chép cảnh này'}</DropdownMenuItem>}
             {authoring?.paste && <DropdownMenuItem onSelect={() => authoring.paste()}>Dán nhóm đã sao chép</DropdownMenuItem>}
+            {card.kind === 'choice' && <DropdownMenuItem onSelect={() => setGateCard(card)}>Điều kiện mở đáp án…</DropdownMenuItem>}
             {card.kind === 'choice' && <DropdownMenuItem onSelect={() => setConsequenceCard(card)}>Chèn hệ quả của đáp án này…</DropdownMenuItem>}
           </DropdownMenuContent></DropdownMenu>}
           {!walk && card.sceneId && <button className="text-xs text-primary text-left underline mb-1" onClick={() => showWalk(card.key)}>Xem tuyến từ đây</button>}
@@ -264,6 +268,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
     {incomingTarget && gameData.nodes[incomingTarget] && <ConnectIncomingDialog targetId={incomingTarget} gameData={gameData} onSave={(game) => { setGameData(game); setInsertedFocus(incomingTarget); }} onClose={() => setIncomingTarget(null)} />}
     {mergeSources && <ConnectIncomingDialog gameData={gameData} create initialIds={mergeSources} onSave={(game, id) => { setGameData(game); setInsertedFocus(id); }} onClose={() => setMergeSources(null)} />}
     {addChoiceId && <Dialog open onOpenChange={(open) => !open && setAddChoiceId(null)}><DialogContent><DialogHeader><DialogTitle>Thêm đáp án vào cảnh này</DialogTitle></DialogHeader><label className="text-sm">Số đáp án thêm<input className="block border rounded bg-background p-2 mt-1 w-24" type="number" min={1} max={12} value={addChoiceCount} onChange={(e) => setAddChoiceCount(Number(e.target.value))} /></label><p className="text-sm text-muted-foreground">Giữ nguyên các đáp án cũ. Đáp án mới để trống và chưa nối, không tạo thêm cảnh.</p><Button disabled={!Number.isInteger(addChoiceCount) || addChoiceCount < 1 || addChoiceCount > 12} onClick={() => { try { setGameData(appendChoices(gameData,addChoiceId,addChoiceCount)); setAddChoiceId(null); } catch (e) { setError(e.message); } }}>Thêm {addChoiceCount} đáp án</Button></DialogContent></Dialog>}
+    {gateCard && gameData.nodes[gateCard.sceneId]?.choices?.[gateCard.choiceIndex] && <OutcomeGateDialog game={gameData} sourceId={gateCard.sceneId} index={gateCard.choiceIndex} onSave={setGameData} onClose={() => setGateCard(null)} />}
     {consequenceCard && gameData.nodes[consequenceCard.sceneId] && <InsertConsequenceDialog card={consequenceCard} gameData={gameData} onClose={() => setConsequenceCard(null)} onApply={({ game, targetId }) => { setGameData(game); setInsertedFocus(targetId); }} />}
     {editingId && gameData.nodes[editingId] && <MindMapEditor key={`${editingId}:${editingChoice}`} node={gameData.nodes[editingId]} choiceIndex={editingChoice} allNodes={gameData.nodes} statsConfig={gameData.meta.statsConfig || []} onClose={() => setEditingId(null)} onChange={(patch) => updateNode(editingId, patch)} />}
     {aiCard && <AiAdvice key={aiCard.key} card={aiCard} gameData={gameData} onClose={() => setAiCard(null)} onApply={(text) => updateNode(aiCard.sceneId, aiCard.kind === 'choice' ? { choices: gameData.nodes[aiCard.sceneId].choices.map((c, i) => i === aiCard.choiceIndex ? { ...c, text } : c) } : { text })} />}
