@@ -110,3 +110,26 @@ Bản nháp lưu trong `games.meta.aiWorkshop` và `games.nodes`, dùng cơ ch�
 ### Dựng cảnh ngay trên sơ đồ AI
 
 Trong xưởng sơ đồ AI, mỗi ô cảnh và đáp án có **+ Thêm cảnh** và **Nối cảnh có sẵn**. Tạo cảnh mới cho phép chọn số đáp án trống (mặc định 4), hoặc tạo kết thúc; chọn những đáp án nguồn sẽ dẫn tới cảnh mới. Các đáp án chưa nối được chọn sẵn, đường đã nối chỉ đổi khi tác giả chọn rõ. Từ một đáp án, thao tác chỉ ảnh hưởng đáp án đó. Có thể nối nhiều đáp án vào cùng cảnh, quay về cảnh trước hoặc tạo vòng lặp; kết quả xúc xắc/chiến đấu được nối theo đích thực tế. Sơ đồ chuyển đến cảnh đích sau thao tác. Công cụ thêm hàng loạt được thu gọn trong mục nâng cao; thanh chọn và viết AI nằm ngay sát sơ đồ.
+
+### Chèn cảnh hệ quả sau đáp án
+
+Bấm **Thêm → Chèn hệ quả của đáp án này…** trên một ô đáp án (có ở sơ đồ thường và sơ đồ AI). Xưởng chèn một cảnh chơi thật vào đúng đường đó: **1A → Hệ quả → Tiếp tục → đích cũ**. Nhánh khác và điểm/điều kiện/vật phẩm/cờ của đáp án nguồn giữ nguyên; nút Tiếp tục mặc định không cộng/trừ điểm. Có thể nhập nội dung ngay hoặc để AI viết sau, sửa tên cảnh phụ, và chèn nhiều cảnh phụ liên tiếp. Với xúc xắc, chọn riêng kết quả cần chèn. Nếu đích cũ chưa tồn tại, để chưa nối hoặc chọn một cảnh có sẵn. Chèn hệ quả luôn chỉ tạo đúng một cảnh phụ, không tự sinh thêm cảnh phía sau. Nội dung hệ quả còn trống phải được viết trước khi tạo lại game. Thao tác lưu bằng cơ chế tự lưu hiện có, không đọc lại văn bản kịch bản.
+
+### Menu Thêm và nối nhiều đáp án vào một cảnh
+
+Các thao tác tạo cảnh, nối tới cảnh có sẵn và chèn hệ quả được gom vào **Thêm** trên từng ô. Tại một ô cảnh đích, chọn **Thêm → Nối nhiều đáp án vào ô này** để chọn cả nhóm đáp án của nhiều cảnh (hoặc chọn lẻ), rồi nối một lần. Cho phép nguồn trước/sau hoặc chính cảnh đích; có tìm kiếm, cảnh báo đổi đích cũ, và kiểm tra dữ liệu có thay đổi trong lúc chọn hay không. Không sửa điểm, nội dung hoặc điều kiện của đáp án.
+
+Đích để trống không còn sinh ô “Chưa chọn đích”; thay vào đó hiện nhãn “Chưa nối” trên đáp án. QA vẫn báo lỗi và chặn tạo game chưa nối xong. Tham chiếu tới một ID cảnh đã bị xóa/không tồn tại vẫn được hiển thị là lỗi “Thiếu cảnh” để sửa liên kết thật.
+
+
+### Sao chép và dán nhóm cảnh
+
+Đánh dấu **Chọn ô** ở các cảnh chính và cảnh hệ quả cần lấy (đáp án được sao chép cùng cảnh), chọn **Sao chép / Dán → Sao chép nhóm đã chọn**, rồi **Dán nhóm đã sao chép**. Có thể dán 1–30 nhóm/lần, tối đa 600 cảnh, giữ văn bản hoặc để trống cho AI viết mới. Đường nối nội bộ dùng mã mới; đường ngoài nhóm mặc định ngắt để tránh quay về bản gốc. Chọn **Nối các nhóm thành một chuỗi liên tiếp**, cảnh đầu nhóm, đáp án ra và đích sau nhóm cuối nếu muốn nhân một mẫu đến kết thúc. Sau khi dán, nối truyện gốc vào ô đầu nhóm bằng menu Thêm. Các cảnh mới được chọn sẵn cho AI; Hoàn tác khôi phục thao tác dán. Bản sao chép nằm trong bộ nhớ của xưởng hiện tại, không dùng clipboard hệ điều hành và không giữ sau khi tải lại trang. Luật điểm, điều kiện, cờ và vật phẩm được giữ nguyên khi sao chép, cần rà soát cho đoạn truyện mới.
+
+AI được gửi riêng vai trò cảnh hệ quả, các quyết định/kết quả dẫn vào và đích đi tiếp. Thứ tự viết ưu tiên cảnh nguồn trước hệ quả, chia tối đa 4 phạm vi/lượt. Nút Tiếp tục mặc định được đánh dấu để AI không tự thêm phần thưởng hay chi phí lặp lại. Đây là ràng buộc dữ liệu và hướng dẫn ngữ cảnh, không phải bảo đảm tuyệt đối chất lượng cốt truyện: vẫn cần duyệt và QA.
+
+### Thêm cảnh độc lập và nhập nhánh nhanh
+
+Menu **Thêm** ngay trên ô phân biệt **Cảnh chính mới…**, **Cảnh phụ mới…** và **Chèn hệ quả của đáp án này…**. Tạo cảnh chính/phụ chỉ tạo một cảnh với 0–12 đáp án theo số đã nhập; không kế thừa vai trò hệ quả của cảnh nguồn. Cảnh chưa có đáp án được thêm nút chuyển cảnh (Bắt đầu ở dẫn truyện, Tiếp tục ở cảnh khác). **Thêm đáp án vào cảnh này…** chỉ bổ sung đáp án trống, giữ nguyên đáp án cũ và không tạo cảnh.
+
+Để nhập bốn cảnh hệ quả về một cảnh chính mới: tích **Chọn ô** ở bốn cảnh, mở **Thêm → Tạo cảnh chung để nhập các nhánh…** trên một ô đã chọn, đặt số đáp án của cảnh chung rồi bấm tạo. Có thể chọn thêm/bớt các đường vào ngay trong cửa sổ này; không bắt buộc chọn trước trên sơ đồ. Thao tác tạo đúng một cảnh và nối toàn bộ các đường đã chọn vào đó, không đổi điểm/điều kiện của đáp án nguồn. Những đường đang có đích khác sẽ có cảnh báo trước khi lưu.

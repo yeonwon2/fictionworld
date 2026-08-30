@@ -3,10 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import PastePatternDialog from './PastePatternDialog';
+import { copyMapPattern } from '@/lib/gameStudio/mapPatterns';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import MapConnectDialog from './MapConnectDialog';
 import MindMapTab from './MindMapTab';
 import { aiCall } from '@/lib/aiCall';
-import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, SETUP_SCHEMA, WRITE_SCHEMA, applySetup, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
+import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, orderedWritingKeys, SETUP_SCHEMA, WRITE_SCHEMA, applySetup, setupReviewError, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
 
 const selectClass = 'rounded-md border bg-background px-3 py-2 text-sm max-w-full';
 const caption = (id, node) => `${id === 'start_node' ? 'Lời dẫn' : id}${node?.workshopHint ? ` · ${node.workshopHint.slice(0, 65)}` : ''}`;
@@ -50,6 +53,8 @@ function StructureEditor({ id, gameData, onChange, onClose }) {
 
 function Proposal({ proposal, setProposal, gameData, onApply, onClose, error }) {
   const setup = proposal.kind === 'setup';
+  let validationError = error;
+  if (setup) { try { validationError = setupReviewError(gameData, proposal.result); } catch (e) { validationError = e.message; } }
   const patch = (values) => setProposal({ ...proposal, result: { ...proposal.result, ...values } });
   const patchEntry = (index, values) => patch({ entries: proposal.result.entries.map((entry, i) => i === index ? { ...entry, ...values } : entry) });
   return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{setup ? 'Duyệt bối cảnh và bộ điểm AI đề xuất' : 'Duyệt nội dung AI viết'}</DialogTitle></DialogHeader>
@@ -58,7 +63,7 @@ function Proposal({ proposal, setProposal, gameData, onApply, onClose, error }) 
       <label className="text-sm">Tên game<Input value={proposal.result.title} onChange={(e) => patch({ title: e.target.value })} /></label>
       <label className="text-sm">Nhân vật nhập vai<Input value={proposal.result.playerName} onChange={(e) => patch({ playerName: e.target.value })} /></label>
       <label className="text-sm">Bối cảnh thống nhất<Textarea rows={8} value={proposal.result.bible} onChange={(e) => patch({ bible: e.target.value })} /></label>
-      <div className="space-y-2">{proposal.result.stats.map((stat, index) => <div key={stat.key} className="border rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm"><strong>{stat.label}</strong><span className="text-xs text-muted-foreground">{stat.key}</span><label>Ban đầu <Input className="w-24 inline-block" type="number" value={stat.initial} onChange={(e) => patch({ stats: proposal.result.stats.map((s, i) => i === index ? { ...s, initial: Number(e.target.value) } : s) })} /></label>{stat.isVital && <label>Thua khi ≤ <Input className="w-24 inline-block" type="number" value={stat.deathThreshold} onChange={(e) => patch({ stats: proposal.result.stats.map((s, i) => i === index ? { ...s, deathThreshold: Number(e.target.value) } : s) })} /></label>}</div>)}</div>
+      <div className="space-y-2">{proposal.result.stats.map((stat, index) => <div key={stat.key} className="border rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm"><strong>{stat.label}</strong><span className="text-xs text-muted-foreground">{stat.key}</span><label>Ban đầu <Input className="w-24 inline-block" type="number" value={stat.initial ?? ''} onChange={(e) => patch({ stats: proposal.result.stats.map((s, i) => i === index ? { ...s, initial: Number(e.target.value) } : s) })} /></label><label className="flex items-center gap-2"><input type="checkbox" checked={stat.isVital} onChange={(e) => patch({ stats: proposal.result.stats.map((s, i) => i === index ? { ...s, isVital: e.target.checked } : s) })} />Chỉ số sinh tồn (chạm ngưỡng là thua)</label>{stat.isVital && <label>Thua khi ≤ <Input className="w-24 inline-block" type="number" value={stat.deathThreshold ?? ''} onChange={(e) => patch({ stats: proposal.result.stats.map((s, i) => i === index ? { ...s, deathThreshold: Number(e.target.value) } : s) })} /></label>}</div>)}</div>
       {gameData.meta.aiWorkshop.type === 'palace' && <p className="text-sm">Phẩm cấp: {proposal.result.ranks.join(' → ')} · Ân sủng: {proposal.result.primaryStat}</p>}
       {gameData.meta.aiWorkshop.type === 'rebirth' && <div className="text-sm">Vốn: {proposal.result.primaryStat}{proposal.result.eras.map((era, i) => <p key={i}>Từ cảnh {era.at}: {era.label} · Thưởng {era.bonus}</p>)}</div>}
     </> : proposal.result.entries.map((entry, index) => {
@@ -71,8 +76,8 @@ function Proposal({ proposal, setProposal, gameData, onApply, onClose, error }) 
       </div>;
     })}
     {proposal.result.suggestions && <div className="rounded-lg bg-amber-500/10 p-3 text-sm whitespace-pre-wrap"><strong>AI đề xuất thêm — không tự áp dụng</strong><p>{proposal.result.suggestions}</p></div>}
-    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-    <div className="flex gap-2"><Button onClick={onApply}>Áp dụng bản đã duyệt</Button><Button variant="outline" onClick={onClose}>Bỏ đề xuất</Button></div>
+    {validationError && <p role="alert" className="text-sm text-red-600">{validationError}</p>}
+    <div className="flex gap-2"><Button disabled={setup && !!validationError} onClick={onApply}>Áp dụng bản đã duyệt</Button><Button variant="outline" onClick={onClose}>Bỏ đề xuất</Button></div>
   </DialogContent></Dialog>;
 }
 
@@ -80,6 +85,9 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
   const workspace = gameData.meta.aiWorkshop;
   const [type, setType] = useState(workspace?.type || 'studio');
   const [keys, setKeys] = useState([]);
+  const [copiedPattern, setCopiedPattern] = useState(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [copyNotice, setCopyNotice] = useState('');
   const [connectRequest, setConnectRequest] = useState(null);
   const [mapFocus, setMapFocus] = useState(null);
   const [structureId, setStructureId] = useState(null);
@@ -93,6 +101,8 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
   const [undo, setUndo] = useState(null);
   const [resetKind, setResetKind] = useState(null);
   const latest = useRef(gameData), mounted = useRef(true);
+  const contextPanel = useRef(null);
+  const [aiFailure, setAiFailure] = useState('');
   latest.current = gameData;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const scopes = selectedScopes(gameData, keys);
@@ -115,24 +125,27 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
     // Choice indexes shift after deletion, so old AI selections must not target siblings.
     setKeys([]); setStructureId(null); setConnectRequest(null); setError('');
   }
+  function copyScenes(ids = scopes.map((scope) => scope.id)) {
+    try { const pattern = copyMapPattern(gameData, ids); setCopiedPattern(pattern); setCopyNotice(`Đã sao chép ${pattern.ids.length} cảnh và các đáp án. Chọn Sao chép / Dán → Dán nhóm để nhân bản.`); setError(''); } catch (e) { setError(e.message); }
+  }
   function initialize(blank) {
     change(makeWorkshopTemplate(gameData, type, blank)); setKeys([]); setResetKind(null); setError('');
   }
   async function ask(kind, requestedKeys = keys) {
     if (busy) return;
-    setError('');
+    setError(''); setAiFailure('');
     const snapshot = latest.current;
     try {
       if (!snapshot.meta.aiWorkshop?.idea?.trim()) throw new Error('Hãy nhập ý tưởng và bối cảnh trước.');
       if (kind === 'write' && !snapshot.meta.aiWorkshop?.setupApproved) throw new Error('Hãy để AI đề xuất bối cảnh và bộ điểm, rồi duyệt trước khi viết cảnh.');
-      const chosen = selectedScopes(snapshot, requestedKeys).map((s) => s.key);
+      const chosen = orderedWritingKeys(snapshot, requestedKeys);
       if (kind === 'write' && !chosen.length) throw new Error('Chọn ít nhất một ô để AI viết.');
       setBusy(kind === 'setup' ? 'AI đang dựng bối cảnh và bộ điểm…' : 'AI đang viết các ô đã chọn…');
       const fingerprint = JSON.stringify(snapshot);
-      let result;
+      let result, reviewError = '';
       if (kind === 'setup') {
         result = await requestAI(workshopPrompt(snapshot, null, instruction), { jsonSchema: SETUP_SCHEMA, useCache: false });
-        applySetup(snapshot, result);
+        reviewError = setupReviewError(snapshot, result);
       } else {
         result = { entries: [], suggestions: '' };
         let working = snapshot;
@@ -151,7 +164,8 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
       if (!mounted.current) return;
       if (JSON.stringify(latest.current) !== fingerprint) throw new Error('Sơ đồ đã thay đổi trong lúc AI viết. Không áp dụng kết quả cũ; hãy thử lại từ bản hiện tại.');
       setProposal({ kind, keys: chosen, fingerprint, result });
-    } catch (e) { if (mounted.current) setError(e.message); } finally { if (mounted.current) setBusy(''); }
+      setError(reviewError);
+    } catch (e) { if (mounted.current) { setError(e.message); setAiFailure(e.message); } } finally { if (mounted.current) setBusy(''); }
   }
   function approve() {
     try {
@@ -169,15 +183,16 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
       {workspace && <p className="text-xs">Đang viết theo: <strong>{WORKSHOP_TYPES[workspace.type]?.label}</strong></p>}
     </div>
     {workspace && <>
-      <div className="rounded-2xl border-2 border-cyan-400/50 bg-cyan-500/5 p-4 space-y-3">
+      <div ref={contextPanel} tabIndex={-1} className="rounded-2xl border-2 border-cyan-400/50 bg-cyan-500/5 p-4 space-y-3">
         <h3 className="font-semibold">Ô ý tưởng · Bối cảnh chung</h3>
+        {!workspace.setupApproved && <p className="rounded-lg border border-amber-400 bg-amber-500/10 p-3 text-sm"><strong>Chưa sẵn sàng viết cảnh.</strong> Sau khi nhập ý tưởng, bấm “AI đề xuất bối cảnh và bộ điểm”, xem kết quả rồi bấm “Áp dụng bản đã duyệt”. Nhập API key chưa hoàn tất bước này.</p>}
         <Textarea aria-label="Ý tưởng và bối cảnh game" rows={4} value={workspace.idea || ''} onChange={(e) => updateContext({ idea: e.target.value })} placeholder="Ví dụ: Nữ chính trọng sinh về năm 1995, dùng kiến thức tương lai để gây dựng sự nghiệp. Giọng văn… Nhân vật… Mục tiêu…" />
         <div className="flex gap-2 flex-wrap"><Button onClick={() => ask('setup')}>{workspace.setupApproved ? 'AI cập nhật bối cảnh và bộ điểm' : 'AI đề xuất bối cảnh và bộ điểm'}</Button><Button variant="outline" onClick={() => ask('write', ['scene:start_node'])}>AI viết lời dẫn</Button></div>
         <p className="text-xs text-muted-foreground">Dùng Cài đặt AI hiện có. Mỗi lần viết gửi toàn bộ sơ đồ, bối cảnh và nội dung đã duyệt; nhiều ô được chia nhóm 4. AI không tự đổi đường nối.</p>
         {workspace.setupApproved && <details><summary className="cursor-pointer text-sm">Bối cảnh đã duyệt và bộ điểm ({gameData.meta.statsConfig?.length || 0})</summary><Textarea className="mt-2" rows={8} aria-label="Bối cảnh đã duyệt" value={workspace.bible || ''} onChange={(e) => updateContext({ bible: e.target.value })} /><p className="text-sm mt-2">{gameData.meta.statsConfig?.map((s) => `${s.label}: ${gameData.meta.initialStats?.[s.key] ?? s.default}${s.isVital ? ` (thua khi ≤ ${s.deathThreshold})` : ''}`).join(' · ')}</p></details>}
       </div>
       <div className="rounded-2xl border bg-card p-4 space-y-3">
-        <h3 className="font-semibold">Thiết kế ngay trên từng ô</h3><p className="text-sm text-muted-foreground">Bấm + Thêm cảnh ở ô dẫn truyện, cảnh hoặc đáp án. Chọn cả nhóm đáp án hoặc từng đáp án để nối. Nút Nối cảnh giúp nhập nhánh vào cảnh có sẵn.</p><details><summary className="text-xs cursor-pointer">Công cụ thêm hàng loạt (nâng cao)</summary>
+        <h3 className="font-semibold">Thiết kế ngay trên từng ô</h3><p className="text-sm text-muted-foreground">Bấm Thêm trên ô để tạo cảnh, chèn hệ quả hoặc nối nhánh. Muốn gom nhiều đáp án vào một cảnh, tại cảnh đích chọn Thêm → Nối nhiều đáp án vào ô này.</p><details><summary className="text-xs cursor-pointer">Công cụ thêm hàng loạt (nâng cao)</summary>
         <div className="flex flex-wrap items-end gap-3"><label className="text-xs">Số ô<Input aria-label="Số ô thêm" className="w-20" type="number" min={1} max={30} value={count} onChange={(e) => setCount(Number(e.target.value))} /></label><label className="text-xs">Lựa chọn / cảnh<Input aria-label="Số lựa chọn mỗi cảnh" className="w-24" type="number" min={0} max={12} disabled={ending} value={choiceCount} onChange={(e) => setChoiceCount(Number(e.target.value))} /></label><label className="text-xs">Nối thêm từ<select aria-label="Nối thêm từ cảnh" className={`${selectClass} block max-w-64`} value={afterId} onChange={(e) => setAfterId(e.target.value)}><option value="">Đặt riêng, tự nối sau</option>{Object.entries(gameData.nodes).filter(([, n]) => !n.isEnding).map(([id, n]) => <option key={id} value={id}>{caption(id, n)}</option>)}</select></label><label className="text-sm flex gap-2 items-center pb-2"><input type="checkbox" checked={ending} onChange={(e) => setEnding(e.target.checked)} />Ô kết thúc</label><Button onClick={() => {
           try { const result = addSceneChain(gameData, afterId, ending ? 1 : count, choiceCount, ending); change(result.game); setKeys([]); setStructureId(result.firstId); setError(''); } catch (e) { setError(e.message); }
         }}>+ Thêm {ending ? 'kết thúc' : 'chuỗi cảnh'}</Button></div>
@@ -188,10 +203,13 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
         {!!scopes.length && <details><summary className="text-xs cursor-pointer">Xem phạm vi đã chọn</summary><p className="text-xs mt-1">{scopes.map((s) => `${s.id}${s.choiceIndex !== null ? ` / lựa chọn ${s.choiceIndex + 1}` : ' (cả cảnh)'}`).join(' · ')}</p></details>}
       </div>
       {!!unfinished.length && <details className="rounded-lg border border-amber-400 p-3 text-sm"><summary className="cursor-pointer">Còn {unfinished.length} ô chưa có nội dung — cần viết trước khi tạo game</summary><ul className="max-h-40 overflow-auto list-disc pl-5">{unfinished.map((v) => <li key={v}>{v}</li>)}</ul></details>}
-      <MindMapTab gameData={gameData} setGameData={change} onGenerated={onGenerated} authoring={{ remove: removeCard, focus: mapFocus, connect: setConnectRequest, toolbar: <div className="flex flex-wrap items-center gap-2"><strong className="text-sm">{scopes.length} ô đã chọn</strong><Button size="sm" disabled={!scopes.length} onClick={() => ask('write')}>AI viết các ô đã chọn</Button><Button size="sm" variant="outline" onClick={() => setKeys(Object.keys(gameData.nodes).map((id) => `scene:${id}`))}>Chọn tất cả cảnh</Button><Button size="sm" variant="outline" onClick={() => setKeys([])}>Bỏ chọn</Button><Button size="sm" variant="outline" disabled={!undo} onClick={() => { setGameData(undo); setUndo(null); setKeys([]); }}>Hoàn tác</Button><span className="text-xs text-muted-foreground">AI đọc bối cảnh và toàn bộ sơ đồ; không đổi đường nối.</span></div>, keys, toggle: (key) => setKeys((prev) => prev.includes(key) ? prev.filter((v) => v !== key) : [...prev, key]), write: (key) => ask('write', [key]), structure: setStructureId }} />
+      <MindMapTab gameData={gameData} setGameData={change} onGenerated={onGenerated} authoring={{ copy: (id) => copyScenes([id]), paste: copiedPattern ? () => setPasteOpen(true) : null, remove: removeCard, focus: mapFocus, connect: setConnectRequest, toolbar: <div className="flex flex-wrap items-center gap-2"><strong className="text-sm">{scopes.length} ô đã chọn</strong><Button size="sm" disabled={!scopes.length} onClick={() => ask('write')}>AI viết các ô đã chọn</Button><Button size="sm" variant="outline" onClick={() => setKeys(Object.keys(gameData.nodes).map((id) => `scene:${id}`))}>Chọn tất cả cảnh</Button><Button size="sm" variant="outline" onClick={() => setKeys([])}>Bỏ chọn</Button><Button size="sm" variant="outline" disabled={!undo} onClick={() => { setGameData(undo); setUndo(null); setKeys([]); }}>Hoàn tác</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline">Sao chép / Dán</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem disabled={!scopes.length} onSelect={() => copyScenes()}>Sao chép nhóm đã chọn</DropdownMenuItem><DropdownMenuItem disabled={!copiedPattern} onSelect={() => setPasteOpen(true)}>Dán nhóm đã sao chép</DropdownMenuItem></DropdownMenuContent></DropdownMenu><span className="text-xs text-muted-foreground">AI đọc bối cảnh và toàn bộ sơ đồ; không đổi đường nối.</span></div>, keys, toggle: (key) => setKeys((prev) => prev.includes(key) ? prev.filter((v) => v !== key) : [...prev, key]), write: (key) => ask('write', [key]), structure: setStructureId }} />
     </>}
+    {aiFailure && <Dialog open onOpenChange={(open) => !open && setAiFailure('')}><DialogContent onCloseAutoFocus={(event) => event.preventDefault()}><DialogHeader><DialogTitle>Chưa thể viết bằng AI</DialogTitle></DialogHeader><p role="alert" className="text-sm whitespace-pre-wrap">{aiFailure}</p>{(!workspace?.idea?.trim() || !workspace?.setupApproved) && <Button onClick={() => { setAiFailure(''); contextPanel.current?.scrollIntoView({ block: 'center' }); contextPanel.current?.focus({ preventScroll: true }); }}>Đến bước bối cảnh và bộ điểm</Button>}<Button variant="outline" onClick={() => setAiFailure('')}>Đóng</Button></DialogContent></Dialog>}
     {busy && <p role="status" className="sticky bottom-4 rounded-xl bg-primary p-4 text-primary-foreground shadow-lg">{busy} Chưa thay đổi game; vui lòng giữ tab này mở.</p>}
     {error && !proposal && <p role="alert" className="text-sm text-red-600 whitespace-pre-wrap">{error}</p>}
+    {copyNotice && <p role="status" className="sticky bottom-2 rounded-lg border bg-background p-3 text-sm shadow">{copyNotice}<button className="ml-3 underline text-primary" onClick={() => setCopyNotice('')}>Đóng</button></p>}
+    {pasteOpen && copiedPattern && <PastePatternDialog pattern={copiedPattern} gameData={gameData} onClose={() => setPasteOpen(false)} onApply={({ game, addedIds, firstId }) => { change(game); setKeys(addedIds.map((id) => `scene:${id}`)); setMapFocus({ id: firstId, token: Date.now() }); setCopyNotice(`Đã dán ${addedIds.length} cảnh. Các cảnh mới đang được chọn để bạn yêu cầu AI viết.`); }} />}
     {connectRequest && gameData.nodes[connectRequest.sourceId] && <MapConnectDialog gameData={gameData} request={connectRequest} onClose={() => setConnectRequest(null)} onApply={({ game, targetId }) => { change(game); setMapFocus({ id: targetId, token: Date.now() }); }} />}
     {structureId && gameData.nodes[structureId] && <StructureEditor key={structureId} id={structureId} gameData={gameData} onChange={(data) => { change(data); setKeys([]); }} onClose={() => setStructureId(null)} />}
     {proposal && <Proposal proposal={proposal} setProposal={setProposal} gameData={gameData} onApply={approve} onClose={() => { setProposal(null); setError(''); }} error={error} />}

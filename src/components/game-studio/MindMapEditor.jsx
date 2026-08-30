@@ -6,6 +6,7 @@ import { choiceLabel, sceneLabel } from '@/lib/gameStudio/mindMap';
 import { ENDING_TYPES } from '@/lib/gameStudio/rpgThemes';
 
 const labels = {
+  workshopTitle: 'Tên cảnh phụ', workshopHint: 'Ý chính cho AI',
   text: 'Nội dung', speaker: 'Người nói', npcAvatar: 'Ảnh nhân vật', bgImage: 'Ảnh nền',
   targetNodeId: 'Sau lựa chọn này, đi đến', endingType: 'Loại kết thúc', endingLabel: 'Tên kết thúc',
   statRequirements: 'Chỉ được chọn khi chỉ số đạt ít nhất', statRequirementsMax: 'Chỉ được chọn khi chỉ số không vượt quá',
@@ -21,7 +22,7 @@ const labels = {
   randomEvents: 'Sự kiện ngẫu nhiên', chance: 'Khả năng xảy ra (0–1)', exp: 'Kinh nghiệm', systemPoints: 'Điểm hệ thống',
   unlockSkill: 'Kỹ năng nhận được', completeQuestId: 'Nhiệm vụ hoàn thành', label: 'Nhãn lựa chọn',
 };
-const destinations = new Set(['targetNodeId', 'successTarget', 'failTarget', 'winTarget', 'loseTarget', 'fleeTarget']);
+const destinations = new Set(['workshopRole', 'workshopContinuation','targetNodeId', 'successTarget', 'failTarget', 'winTarget', 'loseTarget', 'fleeTarget']);
 const hidden = new Set(['id', 'choices', 'isEnding']);
 const controlClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 const hasContent = (value) => value !== null && value !== undefined && value !== '' && value !== false &&

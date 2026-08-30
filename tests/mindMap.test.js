@@ -38,10 +38,10 @@ test('draws dice outcomes instead of the ignored nominal target and combat defea
   assert.ok(!map.edges.some((e) => e.to === 'scene:ignored'));
 });
 
-test('missing destinations are shown, never silently repaired, and block rebuild', () => {
+test('named missing destinations are shown; empty targets stay on choices and still block rebuild', () => {
   const game = { meta: {}, nodes: { start_node: scene('start_node', [choice('missing'), choice('')]) } };
   const map = buildMindMap(game.nodes);
-  assert.equal(map.cards.filter((c) => c.kind === 'missing').length, 2);
+  assert.equal(map.cards.filter((c) => c.kind === 'missing').length, 1);
   assert.equal(map.errors.length, 2);
   assert.throws(() => gameFromMindMap(game), /không tìm thấy missing/);
   assert.throws(() => gameFromMindMap({ meta: {}, nodes: {} }), /Thiếu cảnh mở đầu/);
@@ -75,4 +75,13 @@ test('large branching scripts are not limited to a route sample', () => {
   assert.equal(map.cards.length, 1001);
   assert.equal(map.edges.length, 1000);
   assert.equal(choiceLabel(26), 'AA');
+});
+test('blank destinations do not generate ghost boxes but keep validation errors and source choices', () => {
+ const nodes={start_node:scene('start_node',[choice(''),choice(''),choice(''),choice('')])};
+ const map=buildMindMap(nodes);
+ assert.equal(map.cards.length,5);
+ assert.equal(map.cards.filter(c=>c.kind==='missing').length,0);
+ assert.equal(map.errors.length,4);
+ assert.equal(map.edges.length,4);
+ assert.throws(()=>gameFromMindMap({meta:{},nodes}),/chưa có đích/);
 });

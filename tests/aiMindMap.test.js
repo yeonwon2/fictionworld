@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WORKSHOP_TYPES, makeWorkshopTemplate, applySetup, applyWriting, addSceneChain, removeWorkshopScene, selectedScopes, workshopPrompt } from '../src/lib/gameStudio/aiMindMap.js';
+import { WORKSHOP_TYPES, makeWorkshopTemplate, applySetup, applyWriting, addSceneChain, removeWorkshopScene, selectedScopes, workshopPrompt, orderedWritingKeys } from '../src/lib/gameStudio/aiMindMap.js';
 import { buildMindMap, gameFromMindMap } from '../src/lib/gameStudio/mindMap.js';
 const base = { meta: { title: 'Original', statsConfig: [], initialStats: {} }, nodes: {} };
 const setup = { title: 'Game', playerName: 'An', bible: 'Bối cảnh và mục tiêu', stats: [{ key: 'capital', label: 'Vốn', initial: 100, isVital: true, deathThreshold: 0 }], primaryStat: 'capital', ranks: ['Tú nữ', 'Phi'], eras: [{ at: 1, label: 'Khởi nghiệp', bonus: 0 }, { at: 6, label: 'Mở rộng', bonus: 20 }], suggestions: '' };
@@ -102,4 +102,45 @@ test('system messages are restricted to system workshop and do not alter other m
   Object.assign(result.entries[0], { systemTitle: 'Nhiệm vụ', systemText: 'Hãy khám phá thế giới' });
   assert.equal(applyWriting(game, keys, result).nodes.scene_1.systemPopup.text, 'Hãy khám phá thế giới');
   assert.equal(applyWriting(ready(), keys, result).nodes.scene_1.systemPopup, undefined);
+});
+test('consequence prompts describe incoming decision and application rejects extra continuation rewards', () => {
+ const game=ready(); game.nodes.scene_2.workshopRole='consequence'; game.nodes.scene_2.choices=[{text:'Tiếp tục',targetNodeId:'scene_3',statModifiers:{},workshopContinuation:true}];
+ game.nodes.scene_1.choices[0].text='Giúp cô ấy';
+ const prompt=workshopPrompt(game,['scene:scene_2']);
+ assert.match(prompt,/Vai trò cảnh hệ quả/);assert.match(prompt,/choiceText":"Giúp cô ấy/);assert.match(prompt,/effectsAlreadyApplied/);
+ const result=response(game,['scene:scene_2']);
+ assert.throws(()=>applyWriting(game,['scene:scene_2'],result),/không được tự thêm điểm/);
+ result.entries[0].choices[0].modifiers=[];
+ assert.equal(applyWriting(game,['scene:scene_2'],result).nodes.scene_2.choices[0].targetNodeId,'scene_3');
+});
+
+test('batch writing orders source scenes before their consequences even when selected backwards', () => {
+ const game=ready();
+ assert.deepEqual(orderedWritingKeys(game,['scene:scene_3','scene:scene_2','scene:scene_1']),['scene:scene_1','scene:scene_2','scene:scene_3']);
+ game.nodes.scene_3.choices[0].targetNodeId='scene_1';
+ assert.equal(new Set(orderedWritingKeys(game,['scene:scene_3','scene:scene_2','scene:scene_1'])).size,3);
+});
+
+test('ordinary stats can start at zero without a death threshold; vital stats remain guarded', () => {
+ const game=makeWorkshopTemplate(base,'studio',true);
+ for (const deathThreshold of [null,undefined]) {
+  const next=applySetup(game,{...setup,stats:[{key:'trust',label:'Tin tưởng',initial:0,isVital:false,deathThreshold}]});
+  assert.equal(next.meta.statsConfig[0].deathThreshold,0);
+  assert.equal(next.meta.initialStats.trust,0);
+ }
+ assert.throws(()=>applySetup(game,{...setup,stats:[{key:'trust',label:'Tin tưởng',initial:0,isVital:true,deathThreshold:0}]}),/Tin tưởng.*thua ngay/);
+});
+
+test('invalid AI starting score can be reviewed but cannot be applied until corrected', async () => {
+ const {setupReviewError}=await import('../src/lib/gameStudio/aiMindMap.js');
+ const game=makeWorkshopTemplate(base,'studio',true);
+ const result={...setup,stats:[{key:'trust',label:'Tin tưởng',initial:0,isVital:true,deathThreshold:0}]};
+ const before=structuredClone(result);
+ assert.match(setupReviewError(game,result),/thua ngay/);
+ assert.deepEqual(result,before);
+ assert.throws(()=>applySetup(game,result),/thua ngay/);
+ result.stats[0].isVital=false;
+ assert.equal(setupReviewError(game,result),'');
+ assert.equal(applySetup(game,result).meta.aiWorkshop.setupApproved,true);
+ assert.throws(()=>setupReviewError(game,{...before,bible:''}),/bối cảnh thống nhất/);
 });

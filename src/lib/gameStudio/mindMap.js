@@ -9,6 +9,7 @@ export function choiceLabel(index) {
 export function sceneLabel(id, node) {
   if (id === 'start_node') return 'Dẫn truyện';
   if (node?.isEnding) return `Kết thúc · ${node.endingLabel || id}`;
+  if (node?.workshopRole === 'consequence' && node.workshopTitle) return node.workshopTitle;
   return /^scene_\d+$/.test(id) ? `Cảnh ${id.slice(6)}` : id;
 }
 
@@ -20,6 +21,7 @@ export function buildMindMap(nodes = {}) {
   const errors = [];
   const sceneKey = (id) => `scene:${id}`;
   const addEdge = (from, target, label = '') => {
+    if (!target) { errors.push(`${label || from}: chưa có đích`); return; }
     const missing = !target || !Object.hasOwn(nodes, target);
     const to = missing ? `missing:${edges.length}` : sceneKey(target);
     if (missing) {
