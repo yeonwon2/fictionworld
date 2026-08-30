@@ -137,7 +137,7 @@ export function setupReviewError(game, result) {
 }
 export function applyWriting(game, keys, result) {
   const scopes = selectedScopes(game, keys);
-  if (!Array.isArray(result?.entries) || result.entries.length !== scopes.length || !scopes.length) throw new Error('AI trả về thiếu hoặc thừa ô đã chọn.');
+  if (!Array.isArray(result?.entries) || result.entries.length !== scopes.length || !scopes.length) throw new Error(`Yêu cầu ${scopes.length} ô nhưng AI trả ${Array.isArray(result?.entries) ? result.entries.length : 0} ô. Mỗi ô cần một entry đúng mã: ${scopes.map(s=>s.key).join(', ')}.`);
   const next = clone(game), seen = new Set(), statKeys = new Set((game.meta.statsConfig || []).map((s) => s.key));
   for (const entry of result.entries) {
     const scope = scopes.find((s) => s.key === entry.key);

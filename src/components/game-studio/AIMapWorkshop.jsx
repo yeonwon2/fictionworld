@@ -1,3 +1,4 @@
+import { writeMapScopes } from '@/lib/gameStudio/aiMapWriting';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +10,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import MapConnectDialog from './MapConnectDialog';
 import MindMapTab from './MindMapTab';
 import { aiCall } from '@/lib/aiCall';
-import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, orderedWritingKeys, SETUP_SCHEMA, WRITE_SCHEMA, applySetup, setupReviewError, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
+import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, orderedWritingKeys, SETUP_SCHEMA, applySetup, setupReviewError, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
 
 const selectClass = 'rounded-md border bg-background px-3 py-2 text-sm max-w-full';
 const caption = (id, node) => `${id === 'start_node' ? 'Lời dẫn' : id}${node?.workshopHint ? ` · ${node.workshopHint.slice(0, 65)}` : ''}`;
@@ -59,6 +60,7 @@ function Proposal({ proposal, setProposal, gameData, onApply, onClose, error }) 
   const patchEntry = (index, values) => patch({ entries: proposal.result.entries.map((entry, i) => i === index ? { ...entry, ...values } : entry) });
   return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{setup ? 'Duyệt bối cảnh và bộ điểm AI đề xuất' : 'Duyệt nội dung AI viết'}</DialogTitle></DialogHeader>
     <p className="text-xs text-muted-foreground">Chưa thay đổi game. Bạn có thể sửa bản đề xuất rồi áp dụng. Số ô, lựa chọn và đường nối được giữ nguyên.</p>
+    {proposal.notice && <p role="status" className="rounded-lg border border-amber-400 p-3 text-sm">{proposal.notice}</p>}
     {setup ? <>
       <label className="text-sm">Tên game<Input value={proposal.result.title} onChange={(e) => patch({ title: e.target.value })} /></label>
       <label className="text-sm">Nhân vật nhập vai<Input value={proposal.result.playerName} onChange={(e) => patch({ playerName: e.target.value })} /></label>
@@ -142,35 +144,26 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
       if (kind === 'write' && !chosen.length) throw new Error('Chọn ít nhất một ô để AI viết.');
       setBusy(kind === 'setup' ? 'AI đang dựng bối cảnh và bộ điểm…' : 'AI đang viết các ô đã chọn…');
       const fingerprint = JSON.stringify(snapshot);
-      let result, reviewError = '';
+      let result, reviewError = '', writtenKeys = chosen, remainingKeys = [], notice = '';
       if (kind === 'setup') {
         result = await requestAI(workshopPrompt(snapshot, null, instruction), { jsonSchema: SETUP_SCHEMA, useCache: false });
         reviewError = setupReviewError(snapshot, result);
       } else {
-        result = { entries: [], suggestions: '' };
-        let working = snapshot;
-        // Small batches retain full context and include the previous staged batch.
-        for (let i = 0; i < chosen.length; i += 4) {
-          if (!mounted.current) return;
-          setBusy(`AI đang viết nhóm ${Math.floor(i / 4) + 1}/${Math.ceil(chosen.length / 4)}…`);
-          const batch = chosen.slice(i, i + 4);
-          const part = await requestAI(workshopPrompt(working, batch, instruction), { jsonSchema: WRITE_SCHEMA, useCache: false });
-          working = applyWriting(working, batch, part);
-          result.entries.push(...part.entries);
-          if (part.suggestions) result.suggestions += `${part.suggestions}\n`;
-        }
-        applyWriting(snapshot, chosen, result);
+        const written = await writeMapScopes(snapshot,chosen,instruction,requestAI,setBusy,()=>mounted.current);
+        result=written.result; writtenKeys=written.keys; remainingKeys=written.remainingKeys; notice=written.notice;
       }
       if (!mounted.current) return;
       if (JSON.stringify(latest.current) !== fingerprint) throw new Error('Sơ đồ đã thay đổi trong lúc AI viết. Không áp dụng kết quả cũ; hãy thử lại từ bản hiện tại.');
-      setProposal({ kind, keys: chosen, fingerprint, result });
+      setProposal({ kind, keys: writtenKeys, remainingKeys, notice, fingerprint, result });
       setError(reviewError);
     } catch (e) { if (mounted.current) { setError(e.message); setAiFailure(e.message); } } finally { if (mounted.current) setBusy(''); }
   }
   function approve() {
     try {
       if (JSON.stringify(latest.current) !== proposal.fingerprint) throw new Error('Sơ đồ hoặc bối cảnh đã thay đổi trong lúc AI viết. Bỏ đề xuất và viết lại để không ghi đè bản mới.');
-      change(proposal.kind === 'setup' ? applySetup(gameData, proposal.result) : applyWriting(gameData, proposal.keys, proposal.result)); setProposal(null); setError('');
+      change(proposal.kind === 'setup' ? applySetup(gameData, proposal.result) : applyWriting(gameData, proposal.keys, proposal.result));
+      if (proposal.kind === 'write') setKeys(proposal.remainingKeys || []);
+      setProposal(null); setError('');
     } catch (e) { setError(e.message); }
   }
   const unfinished = unfinishedWorkshop(gameData);
