@@ -120,6 +120,13 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       setWalkNotice('Sơ đồ vừa được sửa. Tuyến xem thử đã trở về dẫn truyện để không đi theo liên kết cũ.');
     }
   }, [gameData.nodes, fullGraph, walk]);
+  useEffect(() => {
+    if (!authoring?.focus) return;
+    const card = fullByKey.get(`scene:${authoring.focus.id}`);
+    if (card) { setWalk(null); focus(card); }
+    // Only explicit requests move the viewport, not edits to existing prose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authoring?.focus]);
   function showWalk(key = 'scene:start_node') {
     const trail = beginWalk(fullGraph, key);
     if (!trail.length) { setError('Không tìm thấy ô bắt đầu tuyến.'); return; }
@@ -196,6 +203,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       })}</div> : <p className="text-sm text-muted-foreground">{fullByKey.get(lastWalkKey)?.kind === 'ending' ? 'Đã đến kết thúc. Quay lại để xem nhánh khác.' : 'Ô này không có đường đi tiếp. Kiểm tra liên kết hoặc quay lại chọn nhánh khác.'}</p>}
       <button className="text-sm text-primary underline disabled:opacity-50" disabled={walk.length < 2} onClick={() => rewindWalk(Math.max(0, walk.length - (fullByKey.get(walk.at(-2))?.kind === 'choice' ? 3 : 2)))}>Quay về bước trước</button>
     </div>}
+    {authoring?.toolbar && <div className="sticky top-2 z-20 rounded-xl border bg-background p-3 shadow-sm">{authoring.toolbar}</div>}
     <div ref={viewport} className="relative overflow-auto rounded-2xl border bg-muted/30" style={{ height: '70vh', minHeight: 420, backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
       <div style={{ width: graph.width * zoom, height: graph.height * zoom }}><div style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'relative' }}>
         <svg width={graph.width} height={graph.height} className="absolute inset-0 pointer-events-none" aria-hidden="true"><defs><marker id="mindmap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker></defs>
@@ -209,8 +217,8 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
             return <g key={index} style={{ color: edge.missing ? '#dc2626' : active ? '#7c3aed' : '#64748b', opacity: selected && !active ? 0.22 : 1 }}><path d={path} fill="none" stroke="currentColor" strokeWidth={active ? 3 : 1.5} strokeDasharray={back ? '6 4' : undefined} markerEnd="url(#mindmap-arrow)" /><text x={x1 + 8} y={y1 - 12} fontSize="11" fill="currentColor" paintOrder="stroke" stroke="hsl(var(--background))" strokeWidth="3">{edge.label}</text></g>;
           })}
         </svg>
-        {graph.cards.map((card) => <article key={card.key} ref={(element) => { if (element) cardElements.current.set(card.key, element); else cardElements.current.delete(card.key); }} data-selected={selected === card.key} tabIndex={0} aria-label={card.title} onFocus={() => setSelected(card.key)} onClick={() => setSelected(card.key)} style={{ position: 'absolute', left: card.x, top: card.y, width: 310, height: 238 }} className={`rounded-xl border-2 p-3 shadow-sm flex flex-col ${colors[card.kind]} ${selected === card.key ? 'ring-4 ring-primary/25' : ''} ${card.previewEdge ? 'border-dashed' : ''}`}>
-          {authoring && card.sceneId && card.kind !== 'combat' && <div className="flex justify-between gap-1 items-center text-xs"><label className="flex items-center gap-1"><input type="checkbox" aria-label={`Chọn AI ${card.title}`} checked={authoring.keys.includes(card.canonicalKey || card.key)} onChange={() => authoring.toggle(card.canonicalKey || card.key)} />Chọn AI</label><button className="text-primary underline" onClick={() => authoring.write(card.canonicalKey || card.key)}>AI viết ô</button>{card.kind !== 'choice' && <button className="text-primary underline" onClick={() => authoring.structure(card.sceneId)}>Thiết kế</button>}</div>}
+        {graph.cards.map((card) => <article key={card.key} ref={(element) => { if (element) cardElements.current.set(card.key, element); else cardElements.current.delete(card.key); }} data-selected={selected === card.key} tabIndex={0} aria-label={card.title} onFocus={() => setSelected(card.key)} onClick={() => setSelected(card.key)} style={{ position: 'absolute', left: card.x, top: card.y, width: 310, height: authoring ? 286 : 238 }} className={`rounded-xl border-2 p-3 shadow-sm flex flex-col ${colors[card.kind]} ${selected === card.key ? 'ring-4 ring-primary/25' : ''} ${card.previewEdge ? 'border-dashed' : ''}`}>
+          {authoring && card.sceneId && card.kind !== 'combat' && <div className="flex justify-between gap-1 items-center text-xs"><label className="flex items-center gap-1"><input type="checkbox" aria-label={`Chọn AI ${card.title}`} checked={authoring.keys.includes(card.canonicalKey || card.key)} onChange={() => authoring.toggle(card.canonicalKey || card.key)} />Chọn AI</label><button className="text-primary underline" onClick={() => authoring.write(card.canonicalKey || card.key)}>AI viết ô</button>{card.kind !== 'choice' && <button className="text-primary underline" onClick={() => authoring.structure(card.sceneId)}>Thiết kế</button>}{authoring.remove && <button className="text-red-600 underline disabled:opacity-40 disabled:no-underline" disabled={card.sceneId === 'start_node' && card.kind !== 'choice'} title={card.sceneId === 'start_node' && card.kind !== 'choice' ? 'Giữ ô dẫn truyện làm điểm bắt đầu game; có thể sửa nội dung của ô này.' : `Xóa ${card.title}`} onClick={(e) => { e.stopPropagation(); authoring.remove(card); }}>Xóa ô</button>}</div>}
           {card.previewEdge && <span className="text-[10px] text-primary font-semibold">NHÁNH CÓ THỂ ĐI TIẾP</span>}
           <div className="font-semibold text-sm truncate" title={card.title}>{card.title}</div>
           <div className="text-[10px] text-muted-foreground">{card.sceneId}{card.unreachable ? ' · Chưa nối từ dẫn truyện' : ''}{card.kind === 'ending' ? ` · ${gameData.nodes[card.sceneId].endingType || 'NORMAL_END'}` : ''}</div>
@@ -218,6 +226,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
 
             <div className="flex flex-wrap gap-1 mt-2">{!walk && graph.edges.filter((edge) => edge.from === card.key).map((edge) => <button key={edge.to + edge.label} className="text-primary underline text-[11px] text-left" onClick={(event) => { event.stopPropagation(); focus(byKey.get(edge.to)); }}>→ {byKey.get(edge.to).title}{edge.label === 'Thành công' || edge.label === 'Thất bại' ? ` (${edge.label})` : ''}</button>)}</div>
           </div>
+          {authoring?.connect && card.sceneId && card.kind !== 'combat' && card.kind !== 'ending' && <div className="flex gap-1 mb-1"><button className="rounded border border-primary/40 bg-primary/10 px-2 py-1 text-xs text-primary" onClick={(e) => { e.stopPropagation(); authoring.connect({ sourceId: card.sceneId, choiceIndex: card.choiceIndex ?? null, create: true }); }}>+ Thêm cảnh</button><button className="rounded border px-2 py-1 text-xs" onClick={(e) => { e.stopPropagation(); authoring.connect({ sourceId: card.sceneId, choiceIndex: card.choiceIndex ?? null, create: false }); }}>Nối cảnh có sẵn</button></div>}
           {!walk && card.sceneId && <button className="text-xs text-primary text-left underline mb-1" onClick={() => showWalk(card.key)}>Xem tuyến từ đây</button>}
           {walk && !card.previewEdge && <button className="text-xs text-primary text-left underline mb-1" onClick={() => rewindWalk(Number(card.key.split(':')[1]))}>Chọn lại từ bước này</button>}
           {card.previewEdge && <button className="mb-2 rounded bg-primary text-primary-foreground px-3 py-2 text-xs font-semibold" onClick={(event) => { event.stopPropagation(); followWalk(card.previewEdge); }}>Chọn nhánh này →</button>}

@@ -106,3 +106,7 @@ Bản nháp lưu trong `games.meta.aiWorkshop` và `games.nodes`, dùng cơ ch�
 - Tuyến bắt đầu giữa truyện không được chạy với trạng thái giả định: cần chọn từ lời dẫn. Tuyến thử có thể kết thúc ở bất kỳ cảnh đã chọn nào, không nhất thiết tới kết thúc truyện.
 - Lượt thử dùng bản chụp dữ liệu trong bộ nhớ, không đọc/ghi tiến trình chơi đã lưu và không sửa game. Có nút quay lại sơ đồ (giữ tuyến) hoặc chạy lại từ đầu. Báo riêng trường hợp đến cuối tuyến, bị điều kiện chặn, game over hoặc kết quả thực tế rẽ sang nhánh khác; không ép kết quả xúc xắc.
 - Thông báo ở lựa chọn và cảnh đích được xếp hàng để không che mất nhau; thông báo ở cảnh kết thúc cũng được hiển thị. Đi lại vòng lặp vào cùng cảnh vẫn xử lý hiệu ứng vào cảnh.
+
+### Dựng cảnh ngay trên sơ đồ AI
+
+Trong xưởng sơ đồ AI, mỗi ô cảnh và đáp án có **+ Thêm cảnh** và **Nối cảnh có sẵn**. Tạo cảnh mới cho phép chọn số đáp án trống (mặc định 4), hoặc tạo kết thúc; chọn những đáp án nguồn sẽ dẫn tới cảnh mới. Các đáp án chưa nối được chọn sẵn, đường đã nối chỉ đổi khi tác giả chọn rõ. Từ một đáp án, thao tác chỉ ảnh hưởng đáp án đó. Có thể nối nhiều đáp án vào cùng cảnh, quay về cảnh trước hoặc tạo vòng lặp; kết quả xúc xắc/chiến đấu được nối theo đích thực tế. Sơ đồ chuyển đến cảnh đích sau thao tác. Công cụ thêm hàng loạt được thu gọn trong mục nâng cao; thanh chọn và viết AI nằm ngay sát sơ đồ.
