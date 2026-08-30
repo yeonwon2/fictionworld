@@ -71,3 +71,34 @@ export function outcomeWarnings(game) {
   }
   return warnings;
 }
+
+export function scoreEndingRanges(rules) {
+  if (!Array.isArray(rules) || !rules.length) throw new Error('Cần ít nhất một kết thúc.');
+  if (rules.filter(r=>r.min===null).length !== 1) throw new Error('Cần đúng một nhánh nhận phần điểm thấp nhất (không có mốc dưới).');
+  for (const r of rules) {
+    if (!r.title?.trim()) throw new Error('Hãy đặt tên cho mọi kết thúc.');
+    if (!ENDING_LABELS[r.type]) throw new Error('Chọn loại hiển thị hợp lệ cho kết thúc.');
+    if (r.min !== null && (!Number.isSafeInteger(r.min) || r.min <= Number.MIN_SAFE_INTEGER)) throw new Error('Mốc điểm phải là số nguyên hợp lệ.');
+  }
+  const sorted=[...rules].sort((a,b)=>a.min===null?-1:b.min===null?1:a.min-b.min);
+  if (new Set(sorted.map(r=>r.min)).size !== sorted.length) throw new Error('Hai kết thúc không được có cùng mốc điểm.');
+  return sorted.map((r,i)=>({...r,max:i<sorted.length-1?sorted[i+1].min-1:null}));
+}
+export function createScoreEndingRules(game,statKey,rules) {
+  const stat=(game.meta.statsConfig||[]).find(s=>s.key===statKey);
+  if(!stat) throw new Error('Chọn một chỉ số có trong bộ điểm.');
+  const ranges=scoreEndingRanges(rules);
+  const next=structuredClone(game);
+  let number=Math.max(next.meta.nextSceneNumber||1,next.meta.aiWorkshop?.nextSceneNumber||1,...Object.keys(next.nodes).map(id=>/^scene_\d+$/.test(id)?Number(id.slice(6))+1:1));
+  const ids=Array.from({length:ranges.length+1},()=>`scene_${number++}`),checkpoint=ids[0];
+  next.nodes[checkpoint]={id:checkpoint,workshopTitle:'Xét kết thúc theo điểm',workshopRole:'main',text:`Hành trình đã đến hồi kết. Kết quả được mở theo chỉ số ${stat.label||statKey} bạn đã tích lũy.`,choices:ranges.map((r,i)=>({text:`Đón nhận: ${r.title.trim()}`,targetNodeId:ids[i+1],statModifiers:{},...(r.min!==null?{statRequirements:{[statKey]:r.min}}:{}),...(r.max!==null?{statRequirementsMax:{[statKey]:r.max}}:{})}))};
+  ranges.forEach((r,i)=>{const id=ids[i+1];next.nodes[id]={id,isEnding:true,endingType:r.type,workshopTitle:r.title.trim(),text:r.text?.trim()||`Hành trình khép lại: ${r.title.trim()}.`,choices:[],workshopHint:'Đây là lời kết mẫu. Viết lại theo nhân vật, bối cảnh và những lựa chọn trước đó.'};});
+  next.meta.nextSceneNumber=number;
+  if(next.meta.aiWorkshop) next.meta.aiWorkshop.nextSceneNumber=number;
+  next.meta.sourceScriptOutdated=!!next.meta.sourceScript;
+  return {game:next,checkpoint,ids};
+}
+export function createScoreEndings(game,statKey,normalAt=20,happyAt=80) {
+  if(![normalAt,happyAt].every(Number.isSafeInteger)||normalAt>=happyAt) throw new Error('Mốc HE phải cao hơn mốc Bình thường.');
+  return createScoreEndingRules(game,statKey,[{title:'BE · Kết thúc xấu',type:'BAD_END',min:null},{title:'NE · Bình thường',type:'NORMAL_END',min:normalAt},{title:'HE · Kết thúc tốt',type:'GOOD_END',min:happyAt}]);
+}

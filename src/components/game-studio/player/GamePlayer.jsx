@@ -261,10 +261,12 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
     if (!meetsStatReq(c.statRequirements, rt.stats, c.statRequirementsMax)) {
       const parts = [];
       for (const k in (c.statRequirements || {})) {
+        if ((rt.stats[k] || 0) >= c.statRequirements[k]) continue;
         const lbl = statsConfig.find((s) => s.key === k)?.label || k;
         parts.push(`${lbl} ≥ ${c.statRequirements[k]} (cần ${c.statRequirements[k] - (rt.stats[k] || 0)})`);
       }
       for (const k2 in (c.statRequirementsMax || {})) {
+        if ((rt.stats[k2] || 0) <= c.statRequirementsMax[k2]) continue;
         const lbl2 = statsConfig.find((s) => s.key === k2)?.label || k2;
         parts.push(`${lbl2} ≤ ${c.statRequirementsMax[k2]} (đang ${rt.stats[k2] || 0})`);
       }

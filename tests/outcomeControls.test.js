@@ -47,3 +47,40 @@ test('outcome audit includes unguarded, unreachable, dice and potentially blocke
  next.nodes.lonely={id:'lonely',isEnding:true,choices:[]};
  assert.ok(outcomeWarnings(next).some(w=>w.includes('lonely: chưa có đường')));
 });
+
+test('score ending template creates four isolated nodes and exactly one eligible ending per integer score',async()=>{
+ const {createScoreEndings}=await import('../src/lib/gameStudio/outcomeControls.js');
+ const original=game(),before=structuredClone(original);
+ const result=createScoreEndings(original,'trust',20,80);
+ assert.equal(Object.keys(result.game.nodes).length,Object.keys(original.nodes).length+4);
+ assert.deepEqual(original,before);
+ assert.deepEqual(result.game.nodes.start_node,original.nodes.start_node);
+ for(const points of [-5,0,19,20,79,80,100,101]){
+  const options=result.game.nodes[result.checkpoint].choices.filter(c=>choiceAvailable(c,state(points,0)));
+  assert.equal(options.length,1);
+  assert.equal(result.game.nodes[options[0].targetNodeId].endingType,points>=80?'GOOD_END':points>=20?'NORMAL_END':'BAD_END');
+  assert.deepEqual(options[0].statModifiers,{});
+ }
+ const second=createScoreEndings(result.game,'trust',20,80);
+ assert.ok(second.ids.every(id=>!result.ids.includes(id)));
+ assert.throws(()=>createScoreEndings(original,'missing'));
+ assert.throws(()=>createScoreEndings(original,'trust',80,20));
+});
+
+test('custom score endings support many branches, repeated display types and disjoint integer ranges',async()=>{
+ const {createScoreEndingRules,scoreEndingRanges}=await import('../src/lib/gameStudio/outcomeControls.js');
+ const rules=[{title:'Thất bại',type:'BAD_END',min:null},{title:'Chia xa',type:'BAD_END',min:20},{title:'Bạn bè',type:'NORMAL_END',min:40},{title:'Hạnh phúc',type:'GOOD_END',min:60},{title:'Hạnh phúc khác',type:'GOOD_END',min:80},{title:'Ngày thứ 31',type:'TRUE_END',min:100}];
+ const before=game(),next=createScoreEndingRules(before,'trust',rules);
+ assert.equal(next.ids.length,7);
+ assert.equal(next.game.nodes[next.checkpoint].choices.length,6);
+ for(const points of [-10,19,20,39,40,59,60,79,80,99,100,999]) {
+  const eligible=next.game.nodes[next.checkpoint].choices.filter(c=>choiceAvailable(c,state(points,0)));
+  assert.equal(eligible.length,1);
+  const expected=[...rules].reverse().find(r=>r.min===null||points>=r.min);
+  assert.equal(next.game.nodes[eligible[0].targetNodeId].workshopTitle,expected.title);
+ }
+ assert.equal(scoreEndingRanges([{title:'Duy nhất',type:'NORMAL_END',min:null}])[0].max,null);
+ assert.throws(()=>scoreEndingRanges([...rules,{title:'Trùng',type:'GOOD_END',min:80}]),/cùng mốc/);
+ assert.throws(()=>scoreEndingRanges(rules.slice(1)),/thấp nhất/);
+ assert.throws(()=>scoreEndingRanges([{title:'',type:'GOOD_END',min:null}]),/đặt tên/);
+});
