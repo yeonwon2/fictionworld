@@ -5,6 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import GameTestReportTab from './GameTestReportTab';
+import GamePlayer from './player/GamePlayer';
+import { makeRoutePlaytest } from '@/lib/gameStudio/routePlaytest';
+import MindMapSystemPopup from './MindMapSystemPopup';
 import MindMapEditor from './MindMapEditor';
 import { buildMindMap, gameFromMindMap } from '@/lib/gameStudio/mindMap';
 import { beginWalk, advanceWalk, walkGraph, walkCounts } from '@/lib/gameStudio/mindMapWalk';
@@ -64,8 +67,9 @@ function AiAdvice({ card, gameData, onApply, onClose }) {
   </DialogContent></Dialog>;
 }
 
-export default function MindMapTab({ gameData, setGameData, onGenerated }) {
+export default function MindMapTab({ gameData, setGameData, onGenerated, authoring = null }) {
   const fullGraph = useMemo(() => buildMindMap(gameData.nodes), [gameData.nodes]);
+  const [routeSession, setRouteSession] = useState(null);
   const [walk, setWalk] = useState(null);
   const [walkNotice, setWalkNotice] = useState('');
   const walkSource = useRef(gameData.nodes);
@@ -152,6 +156,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated }) {
     setBusy(true); setError('');
     try { await onGenerated(gameFromMindMap(gameData)); } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
+  if (routeSession) return <div className="space-y-3"><div className="rounded-xl border p-3 flex flex-wrap gap-3 items-center"><Button variant="outline" onClick={() => setRouteSession(null)}>← Quay lại sơ đồ và tuyến đã chọn</Button><Button variant="outline" onClick={() => setRouteSession({ ...routeSession, run: routeSession.run + 1 })}>Chạy lại tuyến từ đầu</Button><p className="text-xs text-muted-foreground">Bản thử độc lập: giữ nguyên toàn bộ luật, điểm, cờ, vật phẩm và thông báo. Chỉ cho chọn các lựa chọn thuộc tuyến; không sửa game gốc.</p></div><GamePlayer key={routeSession.run} gameData={routeSession.game} gameKey={null} onExit={() => setRouteSession(null)} routeTest={routeSession.route} /></div>;
   const matches = query.trim() ? graph.cards.filter((c) => `${c.title} ${c.text}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) : [];
   return <fieldset disabled={busy} className="space-y-3 min-w-0">
     <div className="glass-card rounded-2xl p-4 space-y-3">
@@ -182,6 +187,8 @@ export default function MindMapTab({ gameData, setGameData, onGenerated }) {
     </div>
     {qaSelection && <div role="status" className="rounded-xl border border-orange-400 bg-orange-500/10 p-3 text-sm"><strong>Đang xem {qaSelection.title}</strong><p className="mt-1">{qaSelection.message}</p><button type="button" className="mt-2 text-primary underline" onClick={() => setQaOpen(true)}>Quay lại danh sách lỗi QA</button></div>}
     {walk && <div ref={walkControls} className="scroll-mt-24 rounded-xl border-2 border-primary/30 bg-card p-4 space-y-3">
+      <Button onClick={() => { try { const route = makeRoutePlaytest(gameData, walk); setRouteSession({ route, game: structuredClone(gameData), run: 0 }); setError(''); } catch (e) { setError(e.message); } }}><Play size={14} className="mr-1" />Chơi thử riêng tuyến này</Button>
+      <p className="text-xs text-muted-foreground">Chạy bằng giao diện game thật, từ dẫn truyện để tích lũy đúng trạng thái. Tuyến có thể bị khóa hoặc thua theo luật game.</p>
       <h3 className="font-semibold text-sm">Đi tiếp từ {fullByKey.get(lastWalkKey)?.title}</h3>
       {walkExits.length ? <div className="grid gap-2 sm:grid-cols-2">{walkExits.map((edge, index) => {
         const target = fullByKey.get(edge.to);
@@ -203,10 +210,11 @@ export default function MindMapTab({ gameData, setGameData, onGenerated }) {
           })}
         </svg>
         {graph.cards.map((card) => <article key={card.key} ref={(element) => { if (element) cardElements.current.set(card.key, element); else cardElements.current.delete(card.key); }} data-selected={selected === card.key} tabIndex={0} aria-label={card.title} onFocus={() => setSelected(card.key)} onClick={() => setSelected(card.key)} style={{ position: 'absolute', left: card.x, top: card.y, width: 310, height: 238 }} className={`rounded-xl border-2 p-3 shadow-sm flex flex-col ${colors[card.kind]} ${selected === card.key ? 'ring-4 ring-primary/25' : ''} ${card.previewEdge ? 'border-dashed' : ''}`}>
+          {authoring && card.sceneId && card.kind !== 'combat' && <div className="flex justify-between gap-1 items-center text-xs"><label className="flex items-center gap-1"><input type="checkbox" aria-label={`Chọn AI ${card.title}`} checked={authoring.keys.includes(card.canonicalKey || card.key)} onChange={() => authoring.toggle(card.canonicalKey || card.key)} />Chọn AI</label><button className="text-primary underline" onClick={() => authoring.write(card.canonicalKey || card.key)}>AI viết ô</button>{card.kind !== 'choice' && <button className="text-primary underline" onClick={() => authoring.structure(card.sceneId)}>Thiết kế</button>}</div>}
           {card.previewEdge && <span className="text-[10px] text-primary font-semibold">NHÁNH CÓ THỂ ĐI TIẾP</span>}
           <div className="font-semibold text-sm truncate" title={card.title}>{card.title}</div>
           <div className="text-[10px] text-muted-foreground">{card.sceneId}{card.unreachable ? ' · Chưa nối từ dẫn truyện' : ''}{card.kind === 'ending' ? ` · ${gameData.nodes[card.sceneId].endingType || 'NORMAL_END'}` : ''}</div>
-          <div className="flex-1 overflow-auto my-2 text-xs leading-relaxed whitespace-pre-wrap">{card.text}{card.choice && <ChoiceDetails choice={card.choice} />}
+          <div className="flex-1 overflow-auto my-2 text-xs leading-relaxed whitespace-pre-wrap">{card.text || (authoring ? (card.kind === 'choice' ? 'Chưa viết lựa chọn' : gameData.nodes[card.sceneId]?.workshopHint || 'Chưa viết nội dung') : '')}{card.choice && <ChoiceDetails choice={card.choice} />}{card.sceneId && card.kind !== 'combat' && <MindMapSystemPopup node={gameData.nodes[card.sceneId]} choiceIndex={card.choiceIndex} onSave={(popup) => updateNode(card.sceneId, card.kind === 'choice' ? { choices: gameData.nodes[card.sceneId].choices.map((choice, index) => index === card.choiceIndex ? { ...choice, systemPopup: popup } : choice) } : { systemPopup: popup })} />}
 
             <div className="flex flex-wrap gap-1 mt-2">{!walk && graph.edges.filter((edge) => edge.from === card.key).map((edge) => <button key={edge.to + edge.label} className="text-primary underline text-[11px] text-left" onClick={(event) => { event.stopPropagation(); focus(byKey.get(edge.to)); }}>→ {byKey.get(edge.to).title}{edge.label === 'Thành công' || edge.label === 'Thất bại' ? ` (${edge.label})` : ''}</button>)}</div>
           </div>

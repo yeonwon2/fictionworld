@@ -8,6 +8,8 @@ import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/playe
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
 import { gameOverReasons, clearPlayerState, loadPlayerState, savePlayerState } from '@/lib/gameStudio/playerState';
 
+import { routePlaytestProgress } from '@/lib/gameStudio/routePlaytest';
+
 const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles, crown: Crown };
 
 function storyLogBase(runtime, nodes) {
@@ -18,7 +20,7 @@ function storyLogBase(runtime, nodes) {
   }).filter(Boolean);
 }
 
-export default function GamePlayer({ gameData, gameKey, onExit }) {
+export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
   const playbackLayout = meta.playbackLayout || 'timeline';
@@ -68,7 +70,10 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [choicesOpen, setChoicesOpen] = useState(true);
   const [bioOpen, setBioOpen] = useState(false);
-  const [systemPopup, setSystemPopup] = useState(null);
+  const [systemPopups, setSystemPopups] = useState([]);
+  const systemPopup = systemPopups[0] || null;
+  const showSystemPopup = (popup) => setSystemPopups((pending) => [...pending, popup]);
+  const dismissSystemPopup = () => setSystemPopups((pending) => pending.slice(1));
   const [events, setEvents] = useState([]);
   const [forceKey, setForceKey] = useState(0);
   const [shake, setShake] = useState(false);
@@ -187,6 +192,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     const n = gameData.nodes[cur.nodeId];
     if (!n) return;
     if (checkGameOver(cur.stats)) { setScreen('gameover'); triggerShake(); return; }
+    if (n.systemPopup && n.systemPopup.title) { showSystemPopup(n.systemPopup); playTing(); }
     if (n.isEnding) {
       setScreen('ending');
       if (n.endingType === 'BAD_END') triggerShake();
@@ -216,7 +222,6 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
       if (nextEra !== eraReachedRef.current) setEraReached(nextEra);
       for (const [ic, tx] of evEra) pushEvent(ic, tx);
     }
-    if (n.systemPopup && n.systemPopup.title) { setSystemPopup(n.systemPopup); playTing(); }
     if (n.grantItem && !inv.includes(n.grantItem) && canCarryMore(inv.length)) {
       inv.push(n.grantItem);
       pushEvent('•', 'Nhặt được: ' + n.grantItem);
@@ -235,7 +240,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     startTypewriter(n.text);
     return () => { if (typingRef.current) clearInterval(typingRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rt.nodeId, forceKey, posterOpen]);
+  }, [rt.nodeId, rt.history.length, forceKey, posterOpen]);
 
   const skipTyping = () => {
     if (typingRef.current) { clearInterval(typingRef.current); typingRef.current = null; }
@@ -250,7 +255,9 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     return true;
   };
 
+  const routeProgress = routePlaytestProgress(routeTest, rt, screen);
   const choiceStatus = (c) => {
+    if (routeProgress && (routeProgress.state !== 'playing' || (gameData.nodes[rt.nodeId]?.choices || []).indexOf(c) !== routeProgress.step.choiceIndex)) return { ok: false, reason: routeProgress.state === 'playing' ? 'Lựa chọn ngoài tuyến đang thử' : 'Đã dừng tuyến thử; quay lại sơ đồ hoặc chơi lại.' };
     if (!meetsStatReq(c.statRequirements, rt.stats, c.statRequirementsMax)) {
       const parts = [];
       for (const k in (c.statRequirements || {})) {
@@ -352,12 +359,13 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     setRt(newRt);
     if (nextEraReached !== eraReachedRef.current) setEraReached(nextEraReached);
     for (const [ic, tx] of ev) pushEvent(ic, tx);
-    if (c.systemPopup && c.systemPopup.title) { setSystemPopup(c.systemPopup); playTing(); }
+    if (c.systemPopup && c.systemPopup.title) { showSystemPopup(c.systemPopup); playTing(); }
     if (dead) { setScreen('gameover'); triggerShake(); }
   };
 
   const onDiceDone = (result) => {
     const c = dicePending.choice;
+    if (c.systemPopup?.title) { showSystemPopup(c.systemPopup); playTing(); }
     const { stats: newStats, target, mods } = applyDiceResult(c.diceRoll, result, rt.stats);
     const evEra = [];
     let nextEraReached = eraReachedRef.current;
@@ -428,6 +436,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
     setScreen('scene');
     setCombatActive(false);
     setDicePending(null);
+    setSystemPopups([]);
     setSheetOpen(false);
     setChoicesOpen(true);
     setBioOpen(false);
@@ -504,6 +513,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
 
   return (
     <div ref={rootRef} style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+      {routeProgress && <div role="status" className="relative z-10 p-3 text-sm border-b" style={{ background: 'var(--rpg-panel)', color: 'var(--rpg-text)' }}><strong>Chạy thử riêng tuyến · Không lưu tiến trình</strong><p>{routeProgress.message}</p>{routeProgress.state === 'playing' && routeProgress.step.choiceIndex !== null && !choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).ok && <p className="text-amber-500">Tuyến bị chặn: {choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).reason}</p>}</div>}
       <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
       {posterOpen && (
         <div className="rpg-poster" style={{ backgroundImage: `url(${posterArt})` }}>
@@ -657,15 +667,15 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
 
       {/* System Popup modal */}
       {systemPopup && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setSystemPopup(null)}>
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => dismissSystemPopup()}>
           <div className="max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent2) 30%, transparent)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-2 mb-2">
               <Sparkles size={18} style={{ color: 'var(--rpg-accent)' }} />
               <span className="font-bold tracking-widest text-sm uppercase" style={{ color: 'var(--rpg-accent2)' }}>{systemPopup.title || 'Hệ Thống'}</span>
             </div>
             <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{systemPopup.text}</p>
-            <Button size="sm" onClick={() => setSystemPopup(null)} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>Đã hiểu</Button>
-            <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => setSystemPopup(null)}><X size={16} /></button>
+            <Button size="sm" onClick={() => dismissSystemPopup()} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>Đã hiểu</Button>
+            <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => dismissSystemPopup()}><X size={16} /></button>
           </div>
         </div>
       )}

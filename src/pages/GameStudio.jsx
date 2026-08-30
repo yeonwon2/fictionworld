@@ -8,6 +8,7 @@ import NpcScriptImporter from "@/components/game-studio/NpcScriptImporter";
 import PalaceScriptImporter from "@/components/game-studio/PalaceScriptImporter";
 import RebirthScriptImporter from "@/components/game-studio/RebirthScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
+import AIMapWorkshop from "@/components/game-studio/AIMapWorkshop";
 import MindMapTab from "@/components/game-studio/MindMapTab";
 import GameTestReportTab from "@/components/game-studio/GameTestReportTab";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
@@ -33,6 +34,7 @@ const MAIN_TABS = [
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
 const WORKSHOP_TABS = [
+  { id: "aimap", label: "Xưởng Kịch Bản Sơ Đồ AI", short: "Sơ Đồ AI", icon: GitBranch },
   { id: "studio", label: "Xưởng Thiết Kế", short: "Xưởng", icon: Wrench },
   { id: "system", label: "Xưởng Hệ Thống", short: "Hệ Thống", icon: Bot },
   { id: "npc", label: "Xưởng NPC", short: "NPC", icon: Heart },
@@ -321,6 +323,7 @@ function GameEditor({ gameId, onBack }) {
             </div>
           </div>
         )}
+        {tab === "aimap" && <AIMapWorkshop gameData={gameData} setGameData={handleChange} onGenerated={handleMindMapGenerated} />}
         {tab === "mindmap" && (
           <div className="space-y-4">
             <MindMapTab gameData={gameData} setGameData={handleChange} onGenerated={handleMindMapGenerated} />

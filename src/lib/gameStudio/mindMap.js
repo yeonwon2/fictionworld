@@ -1,3 +1,4 @@
+import { unfinishedWorkshop } from './aiMindMap.js';
 // A lossless view of the player's canonical nodes. Never repair or sample links.
 export function choiceLabel(index) {
   let n = index + 1, label = '';
@@ -78,8 +79,11 @@ export function buildMindMap(nodes = {}) {
 }
 
 export function gameFromMindMap(game) {
+  const pending = unfinishedWorkshop(game);
+  if (pending.length) throw new Error(`Cần viết xong ${pending.length} ô trước khi tạo game:\n${pending.join('\n')}`);
   const graph = buildMindMap(game.nodes);
   if (graph.errors.length) throw new Error(graph.errors.join('\n'));
+  if (game.meta.aiWorkshop && !game.meta.aiWorkshop.setupApproved) throw new Error('Hãy duyệt bối cảnh và bộ điểm trong Xưởng Kịch Bản Sơ Đồ AI trước khi tạo game.');
   // Preserve every gameplay field; in particular don't reparse sourceScript.
   const result = JSON.parse(JSON.stringify(game));
   result.meta.mindMapRevision = (result.meta.mindMapRevision || 0) + 1;

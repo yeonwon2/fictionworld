@@ -85,3 +85,24 @@ Trong tab Sơ Đồ Tư Duy, mở **QA kịch bản** để chạy lại bộ Ki
 **Đi từng tuyến từ đầu** cho phép duyệt kịch bản từng bước như chơi trên sơ đồ: bấm lựa chọn ngay trong ô cuối, xem riêng các cảnh/lựa chọn đã đi qua, quay lại hoặc bấm một bước cũ để đổi nhánh. Mỗi ô có **Xem tuyến từ đây** để bắt đầu từ một cảnh/lựa chọn cụ thể (ví dụ 1A rồi 2B), không giả định lịch sử trước đó. Vòng quay lại được vẽ thành các lần ghé thăm riêng theo thứ tự. Đây là chế độ duyệt nội dung theo cấu trúc: điều kiện vẫn hiện để đối chiếu nhưng không mô phỏng chỉ số/vật phẩm, và tác giả tự chọn kết quả vận may/trận đấu. Sửa dữ liệu sẽ đưa tuyến về dẫn truyện để tránh dùng liên kết cũ; QA chuyển về toàn bộ sơ đồ khi định vị lỗi. Chế độ này không thay đổi tiến trình chơi thật hoặc cắt bỏ dữ liệu game.
 
 Khi mở một tuyến, các nhánh có thể đi tiếp hiện ngay bằng ô nét đứt nối bên phải. Chọn bằng nút **Chọn nhánh này** trên ô hoặc **Đi tiếp** trong bảng phía trên sơ đồ. Các nút đi tiếp nằm riêng khỏi phần văn bản cuộn, nên không bị khuất khi cảnh có nội dung dài.
+
+### Viết game trực tiếp bằng sơ đồ AI
+
+Trong `/xuong-game`, mở một game → **Xưởng → Xưởng Kịch Bản Sơ Đồ AI**.
+
+- Chọn mẫu Thiết kế / Hệ thống / NPC / Cung đấu / Trọng sinh làm giàu, hoặc bắt đầu từ một ô lời dẫn. Thay mẫu cần xác nhận vì thay các cảnh và bộ điểm hiện tại.
+- Nhập ý tưởng, để AI đề xuất bối cảnh thống nhất và bộ điểm, rồi duyệt. Cung đấu có phẩm cấp, trọng sinh có vốn và mốc thời đại; mẫu NPC có thẻ nhân vật ở cảnh chọn tuyến; hệ thống hỗ trợ thông báo hệ thống.
+- Thêm chuỗi cảnh, kết thúc; nút **Thiết kế** trên cảnh cho phép thêm/xóa lựa chọn và nối tới bất kỳ cảnh nào (hội tụ hoặc vòng lặp đều được). Xóa cảnh giữ các liên kết nguồn để QA chỉ ra chỗ cần sửa.
+- Chọn nhiều ô hoặc **AI viết ô**. Chọn cảnh bao gồm các lựa chọn của cảnh; chọn riêng lựa chọn không sửa cảnh. AI dùng cấu hình AI hiện tại, đọc toàn bộ dữ liệu kịch bản và viết nhóm tối đa 4 phạm vi mỗi lượt. Giới hạn ngữ cảnh 240.000 ký tự báo lỗi rõ ràng, không âm thầm cắt cảnh.
+- Kết quả AI luôn qua bước duyệt. AI chỉ được cập nhật nội dung, điểm lựa chọn và các trường trình bày riêng của thể loại; không được đổi cấu trúc. Đề xuất nhánh chỉ hiển thị để tác giả tự sửa. Kết quả cũ không được áp dụng nếu dữ liệu đã thay đổi trong khi chờ.
+- Dùng QA và xem từng tuyến ngay dưới sơ đồ. **Tạo lại game từ sơ đồ** yêu cầu hết ô trống, đã duyệt thiết lập và không có lỗi liên kết; dùng thẳng dữ liệu cảnh, không đọc lại kịch bản văn bản.
+
+Bản nháp lưu trong `games.meta.aiWorkshop` và `games.nodes`, dùng cơ chế tự lưu sẵn có; không cần thay schema. Hoàn tác trong xưởng chỉ giữ thao tác gần nhất trong phiên hiện tại. AI không đảm bảo tuyệt đối tính nhất quán hoặc cân bằng — cần duyệt nội dung và QA trước khi xuất bản.
+
+### Thông báo và chơi thử tuyến từ sơ đồ
+
+- Ô có `systemPopup` hiển thị tiêu đề, nội dung, thời điểm bật (vào cảnh / chọn lựa chọn) và nút **Sửa thông báo** ngay trong sơ đồ, kể cả khi xem riêng tuyến. Không tạo thêm cảnh giả.
+- Chọn **Đi từng tuyến từ đầu**, đi theo các lựa chọn cần kiểm tra, rồi bấm **Chơi thử riêng tuyến này**. Xưởng mở chính `GamePlayer`, giữ nguyên cả game và luật chơi, chỉ khóa lựa chọn ngoài tuyến. Điểm số, cờ, vật phẩm, xúc xắc và chiến đấu vẫn chạy thật.
+- Tuyến bắt đầu giữa truyện không được chạy với trạng thái giả định: cần chọn từ lời dẫn. Tuyến thử có thể kết thúc ở bất kỳ cảnh đã chọn nào, không nhất thiết tới kết thúc truyện.
+- Lượt thử dùng bản chụp dữ liệu trong bộ nhớ, không đọc/ghi tiến trình chơi đã lưu và không sửa game. Có nút quay lại sơ đồ (giữ tuyến) hoặc chạy lại từ đầu. Báo riêng trường hợp đến cuối tuyến, bị điều kiện chặn, game over hoặc kết quả thực tế rẽ sang nhánh khác; không ép kết quả xúc xắc.
+- Thông báo ở lựa chọn và cảnh đích được xếp hàng để không che mất nhau; thông báo ở cảnh kết thúc cũng được hiển thị. Đi lại vòng lặp vào cùng cảnh vẫn xử lý hiệu ứng vào cảnh.
