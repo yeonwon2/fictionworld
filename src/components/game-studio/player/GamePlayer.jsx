@@ -6,7 +6,7 @@ import { palaceRankIndex, palaceProgressToNext } from '@/lib/gameStudio/palaceSc
 import { rebirthEraIndex, rebirthEraProgress, rebirthUnclaimedBonus } from '@/lib/gameStudio/rebirthScriptParser';
 import DiceRollOverlay, { applyDiceResult } from '@/components/game-studio/player/DiceRollOverlay';
 import CombatScreen from '@/components/game-studio/player/CombatScreen';
-import { clearPlayerState, loadPlayerState, savePlayerState } from '@/lib/gameStudio/playerState';
+import { gameOverReasons, clearPlayerState, loadPlayerState, savePlayerState } from '@/lib/gameStudio/playerState';
 
 const STAT_ICONS = { heart: Heart, droplet: Droplet, coins: Coins, star: Star, brain: Brain, flame: Flame, book: Book, circle: Circle, sparkles: Sparkles, crown: Crown };
 
@@ -133,8 +133,7 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
   }, []);
 
   const checkGameOver = useCallback((s) => {
-    for (const sc of statsConfig) if (sc.isVital && (s[sc.key] || 0) <= (sc.deathThreshold ?? 0)) return true;
-    return false;
+    return gameOverReasons(s, statsConfig).length > 0;
   }, [statsConfig]);
 
   // Cộng thu nhập thời đại MỘT LẦN khi Vốn chạm mốc niên đại mới — gọi SAU khi
@@ -628,6 +627,13 @@ export default function GamePlayer({ gameData, gameKey, onExit }) {
           <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
             <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ef4444', color: '#fff' }}><Skull size={22} /> {meta.gameOverTitle || 'GAME OVER'}</div>
             <p className="text-base" style={{ color: 'var(--rpg-text)' }}>{meta.gameOverText || 'Bạn đã gục ngã. Số phận đã khép lại quá sớm...'}</p>
+            <div className="rounded-lg border p-3 text-sm text-left w-full" style={{ color: 'var(--rpg-text)' }}>
+              <p className="font-semibold">Lý do dừng tại {rt.nodeId}</p>
+              {gameOverReasons(rt.stats, statsConfig).map((reason) => <p key={reason.key}>{reason.label}: {reason.value} ≤ {reason.threshold} (ngưỡng Sinh tử).</p>)}
+              {!gameOverReasons(rt.stats, statsConfig).length && <p>Thua trận đấu.</p>}
+              {rt.lastChoiceText && <p className="mt-2">Lựa chọn vừa chọn: {rt.lastChoiceText}</p>}
+              <p className="mt-2 text-xs">Game kết thúc do luật chơi, không phải do giới hạn số cảnh.</p>
+            </div>
             <Summary statsConfig={statsConfig} rt={rt} />
             <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Bắt đầu lại</Button>
           </div>

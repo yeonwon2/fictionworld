@@ -110,8 +110,8 @@
 // có thể gõ thành "->" hoặc "=>" nếu bàn phím không gõ được ký tự →.
 // =============================================================================
 
-import { normalizeAndRepair } from "./postprocess";
-import { PRESENTATION_ART } from "./rpgThemes";
+import { normalizeAndRepair } from "./postprocess.js";
+import { PRESENTATION_ART } from "./rpgThemes.js";
 
 export function slugifyPalace(label) {
   return String(label || "")
@@ -515,6 +515,7 @@ export function parsePalaceScript(scriptText, baseMeta = {}) {
     throw new Error("Không tìm thấy cảnh nào (cần ít nhất 1 dòng \"## CẢNH 1 — ...\"). Kiểm tra lại cú pháp kịch bản.");
   }
 
+  const entrySceneId = sceneOrder[0];
   if (introNode) {
     introNode.choices = [{ text: "Bắt đầu", targetNodeId: sceneOrder[0], statRequirements: {}, statModifiers: {} }];
     nodesMap["start_node"] = introNode;
@@ -532,7 +533,7 @@ export function parsePalaceScript(scriptText, baseMeta = {}) {
     const nextId = sceneOrder[idx + 1];
     for (const c of node.choices) {
       if (c.__explicitTarget) {
-        c.targetNodeId = c.__explicitTarget;
+        c.targetNodeId = !introNode && c.__explicitTarget === entrySceneId ? "start_node" : c.__explicitTarget;
         delete c.__explicitTarget;
       } else if (nextId) {
         c.targetNodeId = nextId;

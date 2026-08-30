@@ -441,6 +441,7 @@ export default function RebirthScriptImporter({ gameData, setGameData, onGenerat
   };
 
 const handleProduce = () => {
+    if (gameData.meta?.sourceScriptOutdated && !window.confirm("Sản xuất từ văn bản sẽ thay thế các chỉnh sửa trên sơ đồ tư duy. Tiếp tục?")) return;
     if (!script.trim()) {
       toast({ variant: "destructive", title: "Chưa có kịch bản", description: "Dán hoặc viết kịch bản trước." });
       return;
@@ -448,7 +449,7 @@ const handleProduce = () => {
     setProducing(true);
     try {
       const result = parseRebirthScript(script, gameData.meta);
-      result.meta = { ...(result.meta || {}), sourceScript: script };
+      result.meta = { ...(result.meta || {}), sourceScript: script, sourceScriptOutdated: false };
       setGameData(result);
       setWarnings(result.warnings || []);
       setChecked(true);

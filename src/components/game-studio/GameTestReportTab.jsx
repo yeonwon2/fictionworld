@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FlaskConical, AlertOctagon, AlertTriangle, AlertCircle, Info, Loader2, PlayCircle, Sparkles, Copy, Pencil, CheckCircle2, Wrench, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,11 @@ import { buildGameTestReport, getNarrativeCheckCandidates, endingTextFor, format
 import { runNarrativeAiChecks } from "@/lib/gameStudio/narrativeAiTester";
 import { computeBalanceFixOptions } from "@/lib/gameStudio/balanceFixer";
 import { removeOrphanGrant } from "@/lib/gameStudio/orphanFixer";
+import { findingLocations } from "@/lib/gameStudio/qaLocations";
+import { choiceLabel, sceneLabel } from "@/lib/gameStudio/mindMap";
 import NodeEditorDrawer from "@/components/game-studio/NodeEditorDrawer";
 
-// Tính năng MỚI, độc lập với "Tuyến Chơi & Vấn Đề" (RouteExplorerTab.jsx) —
+// Kiểm tra trạng thái và logic chơi, bổ sung cho Sơ Đồ Tư Duy —
 // không import/sửa gì từ file đó để không ảnh hưởng tính năng đang chạy tốt.
 // Chỉ đọc gameData.nodes/meta (Canonical Script Model) qua gameTestReport.js.
 
@@ -114,36 +116,42 @@ function OrphanDeleteButton({ orphan, gameData, setGameData }) {
   );
 }
 
-function FindingRow({ finding, onEditScene, gameData, setGameData }) {
+function FindingRow({ finding, onEditScene, gameData, setGameData, onLocateFinding = null, stale = false }) {
   const meta = SEVERITY_META[finding.severity] || SEVERITY_META.low;
   const Icon = meta.icon;
   const sceneId = finding.sceneIds?.[0];
+  const locations = onLocateFinding ? findingLocations(finding, gameData.nodes || {}) : [];
   return (
     <div className={`flex items-start gap-2 text-xs rounded-lg border border-border p-2.5 ${meta.bg}`}>
       <Icon size={14} className={`${meta.color} shrink-0 mt-0.5`} />
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-background/60 border border-border/60">{finding.category}</span>
-          <span className="leading-relaxed">{finding.message}</span>
+          {onLocateFinding && locations.length ? <button type="button" disabled={stale} className="text-left leading-relaxed underline decoration-dotted underline-offset-4 hover:text-primary disabled:opacity-50" onClick={() => onLocateFinding(finding, locations[0])}>{finding.message}</button> : <span className="leading-relaxed">{finding.message}</span>}
         </div>
+        {onLocateFinding && <div className="flex flex-wrap gap-1">{locations.length ? locations.map((location) => <button key={location.key} type="button" disabled={stale} className="rounded border px-2 py-1 text-primary hover:bg-accent disabled:opacity-50" onClick={() => onLocateFinding(finding, location)}>Xem {sceneLabel(location.sceneId, gameData.nodes[location.sceneId])}{location.choiceIndex != null ? ` · ${choiceLabel(location.choiceIndex)}` : ''}</button>) : <span className="text-muted-foreground">Vấn đề tổng thể — chưa xác định được ô cụ thể.</span>}</div>}
         {finding.reproPath && <ReproPath path={finding.reproPath} />}
-        {finding.category === "balance" && <BalanceFixPanel finding={finding} gameData={gameData} setGameData={setGameData} />}
+        {!stale && finding.category === "balance" && <BalanceFixPanel finding={finding} gameData={gameData} setGameData={setGameData} />}
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
-        {sceneId && (
+        {!onLocateFinding && sceneId && (
           <Button size="sm" variant="outline" className="h-6 text-[10px] px-1.5" onClick={() => onEditScene(sceneId)}>
             <Pencil size={10} className="mr-1" /> Sửa cảnh
           </Button>
         )}
-        {finding.orphan && <OrphanDeleteButton orphan={finding.orphan} gameData={gameData} setGameData={setGameData} />}
+        {!stale && finding.orphan && <OrphanDeleteButton orphan={finding.orphan} gameData={gameData} setGameData={setGameData} />}
       </div>
     </div>
   );
 }
 
-export default function GameTestReportTab({ gameData, setGameData }) {
+export default function GameTestReportTab({ gameData, setGameData, onLocateFinding = null }) {
   const { toast } = useToast();
   const [report, setReport] = useState(null);
+  const [reportSource, setReportSource] = useState(null);
+  const simulationTimer = useRef(null);
+  useEffect(() => () => clearTimeout(simulationTimer.current), []);
+  const stale = !!report && (reportSource?.nodes !== gameData.nodes || reportSource?.meta !== gameData.meta);
   const [running, setRunning] = useState(false);
   const [runsPerPersona, setRunsPerPersona] = useState(1000);
   const [aiCandidates, setAiCandidates] = useState([]);
@@ -155,17 +163,19 @@ export default function GameTestReportTab({ gameData, setGameData }) {
 
   const runSimulation = () => {
     setRunning(true);
+    setReport(null);
     setAiFindings([]);
     setAiCandidates([]);
     // setTimeout 0 để UI kịp vẽ spinner trước khi mô phỏng (đồng bộ, có thể mất
     // 1-2s với kịch bản lớn + số lượt cao) chiếm luồng chính.
-    setTimeout(() => {
+    simulationTimer.current = setTimeout(() => {
       try {
         const r = buildGameTestReport(gameData, { runsPerPersona });
         if (r.error) {
           toast({ variant: "destructive", title: "Không đọc được dữ liệu game", description: r.error });
           setReport(null);
         } else {
+          setReportSource(gameData);
           setReport(r);
         }
       } catch (e) {
@@ -177,7 +187,7 @@ export default function GameTestReportTab({ gameData, setGameData }) {
   };
 
   const runAiCheck = async () => {
-    if (!report) return;
+    if (!report || stale) return;
     const candidates = getNarrativeCheckCandidates(report, { max: aiSampleSize });
     if (!candidates.length) { toast({ title: "Không có tuyến nào để kiểm tra" }); return; }
     setAiCandidates(candidates);
@@ -220,7 +230,7 @@ export default function GameTestReportTab({ gameData, setGameData }) {
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-sm flex items-center gap-2"><FlaskConical size={15} /> Kiểm Tra Toàn Diện</h3>
+        <h3 className="font-semibold text-sm flex items-center gap-2"><FlaskConical size={15} /> {onLocateFinding ? "QA Kịch Bản Trên Sơ Đồ" : "Kiểm Tra Toàn Diện"}</h3>
         <span className="text-[11px] text-muted-foreground">3 tầng: quét cấu trúc, mô phỏng nhiều tính cách bot, AI đọc tuyến — không đụng tới dữ liệu game, chỉ đọc.</span>
       </div>
 
@@ -229,14 +239,26 @@ export default function GameTestReportTab({ gameData, setGameData }) {
           <Label className="text-[11px]">Số lượt mô phỏng / persona</Label>
           <Input type="number" min={100} max={10000} step={100} value={runsPerPersona} onChange={(e) => setRunsPerPersona(Math.max(100, Math.min(10000, Number(e.target.value) || 1000)))} className="h-8 w-28 text-xs" />
         </div>
-        <Button onClick={runSimulation} disabled={running} className="h-8">
+        <Button onClick={runSimulation} disabled={running || aiRunning} className="h-8">
           {running ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <PlayCircle size={14} className="mr-1.5" />}
           {running ? "Đang chạy..." : "Chạy Mô Phỏng (Tầng 1+2, miễn phí)"}
         </Button>
       </div>
 
+      {stale && <p role="status" className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">Sơ đồ đã thay đổi. Kết quả bên dưới là của bản cũ; chạy lại QA để cập nhật lỗi và vị trí.</p>}
       {report && (
         <>
+          <div className="space-y-3">
+            {groupedFindings.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Không có vấn đề nào được phát hiện. 🎉</p>
+            ) : groupedFindings.map(({ sev, items }) => (
+              <div key={sev} className="space-y-1.5">
+                <h4 className="text-xs font-semibold">{SEVERITY_META[sev].label} ({items.length})</h4>
+                {items.map((f, i) => <FindingRow key={i} finding={f} onEditScene={setEditingId} gameData={gameData} setGameData={setGameData} onLocateFinding={onLocateFinding} stale={stale} />)}
+              </div>
+            ))}
+          </div>
+          {onLocateFinding && <p className="text-xs text-muted-foreground">QA chỉ mô phỏng trên bản sao, không tự sửa sơ đồ. Các “cảnh tạm” và số liệu mô phỏng có thể khác sơ đồ gốc; nút xem lỗi luôn dẫn về ô gốc để bạn kiểm tra.</p>}
           <div className="flex flex-wrap gap-2 text-xs">
             {SEVERITY_ORDER.map((sev) => (
               <Badge key={sev} variant={sev === "critical" ? "destructive" : "secondary"}>{SEVERITY_META[sev].label}: {report.summary[sev]}</Badge>
@@ -246,7 +268,7 @@ export default function GameTestReportTab({ gameData, setGameData }) {
             <Badge variant="outline">Kết thúc: {report.endings.reachedInSample}/{report.endings.total} đạt được trong mẫu</Badge>
           </div>
 
-          {report.summary.critical === 0 && report.summary.high === 0 && (
+          {!stale && report.summary.critical === 0 && report.summary.high === 0 && (
             <div className="text-[11px] rounded-lg p-2.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 font-semibold">
               <CheckCircle2 size={12} /> Không có lỗi Critical/High nào từ quét cấu trúc + mô phỏng.
             </div>
@@ -286,23 +308,14 @@ export default function GameTestReportTab({ gameData, setGameData }) {
                 <Label className="text-[11px]">Số tuyến kiểm tra (tốn {aiSampleSize} lượt gọi AI)</Label>
                 <Input type="number" min={1} max={15} value={aiSampleSize} onChange={(e) => setAiSampleSize(Math.max(1, Math.min(15, Number(e.target.value) || 6)))} className="h-8 w-24 text-xs" />
               </div>
-              <Button onClick={runAiCheck} disabled={aiRunning} variant="outline" className="h-8">
+              <Button onClick={runAiCheck} disabled={aiRunning || running || stale} variant="outline" className="h-8">
                 {aiRunning ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Sparkles size={14} className="mr-1.5" />}
                 {aiRunning ? `Đang kiểm tra ${aiProgress ? `${aiProgress.done}/${aiProgress.total}` : "..."}` : "Chạy AI Kiểm Tra"}
               </Button>
             </div>
           </div>
 
-          <div className="space-y-3">
-            {groupedFindings.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Không có vấn đề nào được phát hiện. 🎉</p>
-            ) : groupedFindings.map(({ sev, items }) => (
-              <div key={sev} className="space-y-1.5">
-                <h4 className="text-xs font-semibold">{SEVERITY_META[sev].label} ({items.length})</h4>
-                {items.map((f, i) => <FindingRow key={i} finding={f} onEditScene={setEditingId} gameData={gameData} setGameData={setGameData} />)}
-              </div>
-            ))}
-          </div>
+
         </>
       )}
 

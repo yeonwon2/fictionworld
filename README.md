@@ -71,3 +71,17 @@ Nếu bạn đã có database từ trước: chạy lại `supabase/migration.sq
 ## Cấu trúc dữ liệu
 
 Xem `supabase/migration.sql` để biết schema đầy đủ (15 bảng + RLS + storage bucket `fictionworld-media`). `base44/entities/*.jsonc` chỉ còn là tài liệu tham khảo mô tả field, không được app đọc lúc chạy.
+
+### Sơ đồ tư duy trong Xưởng Game
+
+Sau khi sản xuất từ kịch bản ở bất kỳ xưởng nào, ứng dụng mở **Sơ Đồ Tư Duy** để duyệt toàn bộ cảnh và lựa chọn. Sơ đồ dùng trực tiếp dữ liệu game, không lấy mẫu tuyến hoặc tự nối lại nhánh. Cảnh chung, vòng quay lại, nhánh xúc xắc, kết thúc và cảnh chưa nối từ mở đầu đều hiện trên cùng sơ đồ. Dùng tìm kiếm, thu phóng và nút Toàn cảnh để di chuyển.
+
+Mỗi cảnh/lựa chọn có nút **Sửa** và **Hỏi AI**. Cửa sổ sửa chỉ hiện thông tin đang dùng của đúng ô được chọn, có nút Lưu thay đổi / Hủy và mục Thêm thông tin thu gọn. Sau khi bấm Lưu thay đổi, game được tự lưu; Hỏi AI chỉ gửi cảnh đang chọn và các cảnh liền kề khi bấm Lấy gợi ý, dùng cấu hình AI hiện có. Bản đề xuất phải được tác giả duyệt trước khi thay văn bản; liên kết và điều kiện chỉ thay khi sửa trực tiếp.
+
+**Tạo lại game từ sơ đồ** kiểm tra liên kết, lưu đúng dữ liệu đã sửa và mở lượt chơi mới. Không phân tích lại bản văn bản gốc, không làm mất điều kiện/chỉ số/vật phẩm. Kịch bản gốc vẫn được giữ để tham khảo và có cảnh báo khi đã cũ; nhập lại nó sẽ yêu cầu xác nhận vì sẽ thay thế sửa đổi trên sơ đồ. Sơ đồ không chứng minh mọi điều kiện đều khả thi: dùng **Kiểm Tra Toàn Diện** để kiểm tra sâu hơn. Không cần thay đổi schema Supabase.
+
+Trong tab Sơ Đồ Tư Duy, mở **QA kịch bản** để chạy lại bộ Kiểm Tra Toàn Diện trên dữ liệu đã sửa. Bấm nội dung lỗi hoặc nút **Xem cảnh/lựa chọn** để thu gọn báo cáo, di chuyển và tô sáng ô liên quan; thông báo lỗi được giữ ngay trên sơ đồ. Lỗi nhiều vị trí có nút xem từng ô, lỗi tổng thể không đoán vị trí. Sau khi lưu sửa, báo cáo cũ được đánh dấu và khóa thao tác theo lỗi cũ cho đến khi chạy lại QA. Kiểm tra AI vẫn chỉ chạy khi chủ động bấm, dùng cấu hình AI hiện có.
+
+**Đi từng tuyến từ đầu** cho phép duyệt kịch bản từng bước như chơi trên sơ đồ: bấm lựa chọn ngay trong ô cuối, xem riêng các cảnh/lựa chọn đã đi qua, quay lại hoặc bấm một bước cũ để đổi nhánh. Mỗi ô có **Xem tuyến từ đây** để bắt đầu từ một cảnh/lựa chọn cụ thể (ví dụ 1A rồi 2B), không giả định lịch sử trước đó. Vòng quay lại được vẽ thành các lần ghé thăm riêng theo thứ tự. Đây là chế độ duyệt nội dung theo cấu trúc: điều kiện vẫn hiện để đối chiếu nhưng không mô phỏng chỉ số/vật phẩm, và tác giả tự chọn kết quả vận may/trận đấu. Sửa dữ liệu sẽ đưa tuyến về dẫn truyện để tránh dùng liên kết cũ; QA chuyển về toàn bộ sơ đồ khi định vị lỗi. Chế độ này không thay đổi tiến trình chơi thật hoặc cắt bỏ dữ liệu game.
+
+Khi mở một tuyến, các nhánh có thể đi tiếp hiện ngay bằng ô nét đứt nối bên phải. Chọn bằng nút **Chọn nhánh này** trên ô hoặc **Đi tiếp** trong bảng phía trên sơ đồ. Các nút đi tiếp nằm riêng khỏi phần văn bản cuộn, nên không bị khuất khi cảnh có nội dung dài.

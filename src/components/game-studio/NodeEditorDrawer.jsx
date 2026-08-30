@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { ENDING_TYPES, makeId } from '@/lib/gameStudio/rpgThemes';
 import FileUrlInput from '@/components/FileUrlInput';
 
-export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetype, defaultNpcAvatar, open, onClose, onChange }) {
+export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetype, defaultNpcAvatar, open, onClose, onChange, initialChoiceIndex = null, showAllConditions = false }) {
+  const choiceRefs = useRef({});
   if (!node) return null;
   const arch = archetype || 'none';
 
@@ -121,7 +122,14 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" onOpenAutoFocus={(event) => {
+        const selected = choiceRefs.current[initialChoiceIndex];
+        if (initialChoiceIndex != null && selected) {
+          event.preventDefault();
+          selected.scrollIntoView({ block: 'center' });
+          selected.querySelector('input, textarea, button')?.focus({ preventScroll: true });
+        }
+      }}>
         <DialogHeader>
           <DialogTitle className="text-base">Chỉnh sửa Node: <code className="text-xs font-mono">{node.id}</code></DialogTitle>
         </DialogHeader>
@@ -189,9 +197,9 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
             </div>
           )}
 
-          {arch === 'isekai' && (
+          {(arch === 'isekai' || showAllConditions) && (
             <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-2">
-              <Label className="text-xs font-semibold text-sky-600">Xuyên Không / Trọng Sinh — cấp Node</Label>
+              <Label className="text-xs font-semibold text-sky-600">{showAllConditions ? 'Cờ trạng thái của cảnh' : 'Xuyên Không / Trọng Sinh — cấp Node'}</Label>
               <div className="space-y-1">
                 <Label className="text-[10px]">Story Flags đặt khi vào node (cách nhau bởi dấu phẩy)</Label>
                 <Input value={setFlagsStr} onChange={(e) => onSetFlags(e.target.value)} className="text-xs" placeholder="vd: da_gap_lao_dao_si, chon_cung_tinh" />
@@ -199,9 +207,9 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
             </div>
           )}
 
-          {arch === 'mystery' && (
+          {(arch === 'mystery' || showAllConditions) && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 space-y-2">
-              <Label className="text-xs font-semibold text-rose-600">Trinh thám / Kinh dị — cấp Node</Label>
+              <Label className="text-xs font-semibold text-rose-600">{showAllConditions ? 'Vật phẩm của cảnh' : 'Trinh thám / Kinh dị — cấp Node'}</Label>
               <div className="space-y-1">
                 <Label className="text-[10px]">Vật phẩm nhặt được khi vào node (grantItem)</Label>
                 <Input value={node.grantItem || ''} onChange={(e) => onChange({ grantItem: e.target.value })} className="text-xs" placeholder="vd: Chìa khóa gỉ" />
@@ -305,7 +313,7 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
                   const npcName = c.npcAffinity ? Object.keys(c.npcAffinity)[0] || '' : '';
                   const npcDelta = c.npcAffinity ? c.npcAffinity[npcName] : '';
                   return (
-                    <div key={idx} className="rounded-lg border border-border p-3 space-y-2 bg-muted/30">
+                    <div key={idx} ref={(element) => { choiceRefs.current[idx] = element; }} className="rounded-lg border border-border p-3 space-y-2 bg-muted/30">
                       <div className="flex gap-2">
                         <Input value={c.text} onChange={(e) => updateChoice(idx, { text: e.target.value })} placeholder="Text hiển thị" className="flex-1 text-sm" />
                         <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeChoice(idx)}>
@@ -360,8 +368,19 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
                         </div>
                       </div>
 
+                      {showAllConditions && <div className="space-y-2 rounded-lg border p-3">
+                        <Label className="text-xs">Điều kiện chỉ số tối đa (≤)</Label>
+                        <div className="flex flex-wrap gap-2">{statsConfig.map((stat) => <Input key={stat.key} type="number" className="h-8 w-32 text-xs" aria-label={`${stat.label || stat.key} tối đa`} placeholder={`${stat.label || stat.key} ≤`} value={c.statRequirementsMax?.[stat.key] ?? ''} onChange={(event) => {
+                          const maximums = { ...c.statRequirementsMax };
+                          if (event.target.value === '') delete maximums[stat.key];
+                          else maximums[stat.key] = Number(event.target.value);
+                          updateChoice(idx, { statRequirementsMax: maximums });
+                        }} />)}</div>
+                        <Label className="text-xs">Các cờ được cấp (cách nhau bởi dấu phẩy)</Label>
+                        <Input aria-label="Các cờ được cấp" defaultValue={(c.grantFlags || []).join(', ')} onBlur={(event) => updateChoice(idx, { grantFlags: event.target.value.split(',').map((flag) => flag.trim()).filter(Boolean) })} />
+                      </div>}
                       {/* Archetype choice fields */}
-                      {arch === 'mystery' && (
+                      {(arch === 'mystery' || showAllConditions) && (
                         <div className="grid grid-cols-3 gap-2">
                           <div className="space-y-1">
                             <Label className="text-[10px] text-rose-600">Cần vật phẩm</Label>
@@ -378,7 +397,7 @@ export default function NodeEditorDrawer({ node, allNodes, statsConfig, archetyp
                         </div>
                       )}
 
-                      {arch === 'isekai' && (
+                      {(arch === 'isekai' || showAllConditions) && (
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
                             <Label className="text-[10px] text-sky-600">Cần Story Flag</Label>

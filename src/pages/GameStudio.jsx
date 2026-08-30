@@ -8,7 +8,7 @@ import NpcScriptImporter from "@/components/game-studio/NpcScriptImporter";
 import PalaceScriptImporter from "@/components/game-studio/PalaceScriptImporter";
 import RebirthScriptImporter from "@/components/game-studio/RebirthScriptImporter";
 import NodeTreeEditor from "@/components/game-studio/NodeTreeEditor";
-import RouteExplorerTab from "@/components/game-studio/RouteExplorerTab";
+import MindMapTab from "@/components/game-studio/MindMapTab";
 import GameTestReportTab from "@/components/game-studio/GameTestReportTab";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
@@ -28,7 +28,7 @@ import { useToast } from "@/components/ui/use-toast";
 // nhầm — thay vì xếp thẳng hàng từng xưởng.
 const MAIN_TABS = [
   { id: "play", label: "Trải Nghiệm Game", short: "Chơi", icon: Gamepad2 },
-  { id: "routes", label: "Tuyến Chơi & Vấn Đề", short: "Tuyến", icon: GitBranch },
+  { id: "mindmap", label: "Sơ Đồ Tư Duy", short: "Sơ đồ", icon: GitBranch },
   { id: "gametest", label: "Kiểm Tra Toàn Diện", short: "Test", icon: FlaskConical },
   { id: "export", label: "Xuất Bản & Embed", short: "Xuất", icon: Share2 },
 ];
@@ -154,6 +154,8 @@ function GameEditor({ gameId, onBack }) {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [previewDevice, setPreviewDevice] = useState("desktop");
   const saveTimer = useRef(null);
+  const saveQueue = useRef(Promise.resolve());
+  const pendingSave = useRef(null);
   const { toast } = useToast();
   const activeWorkshopTab = WORKSHOP_TABS.find((t) => t.id === tab);
   const isWorkshopActive = !!activeWorkshopTab;
@@ -167,17 +169,28 @@ function GameEditor({ gameId, onBack }) {
       toast({ variant: "destructive", title: "Không mở được game", description: e.message });
       onBack();
     }).finally(() => setLoading(false));
-    return () => clearTimeout(saveTimer.current);
+    return () => {
+      clearTimeout(saveTimer.current);
+      if (pendingSave.current) {
+        const data = pendingSave.current;
+        pendingSave.current = null;
+        persist(data);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
-  async function persist(data) {
+  async function persist(data, rethrow = false) {
     setSaving(true);
     try {
-      await updateGame(gameId, { title: data.meta?.title || "Tựa Game Mới", meta: data.meta, nodes: data.nodes });
+      // Serialize writes so an older autosave cannot overwrite a rebuilt game.
+      const pending = saveQueue.current.catch(() => {}).then(() => updateGame(gameId, { title: data.meta?.title || "Tựa Game Mới", meta: data.meta, nodes: data.nodes }));
+      saveQueue.current = pending;
+      await pending;
       setLastSavedAt(new Date());
     } catch (e) {
       toast({ variant: "destructive", title: "Không lưu được game", description: e.message });
+      if (rethrow) throw e;
     } finally {
       setSaving(false);
     }
@@ -187,15 +200,27 @@ function GameEditor({ gameId, onBack }) {
   function handleChange(data) {
     setGameData(data);
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persist(data), 1200);
+    pendingSave.current = data;
+    saveTimer.current = setTimeout(() => { pendingSave.current = null; persist(data); }, 1200);
   }
 
   function handleGenerated(data) {
+    pendingSave.current = null;
     setGameData(data);
     clearTimeout(saveTimer.current);
     persist(data);
     setPlayKey((k) => k + 1);
+    setTab("mindmap");
+  }
+
+  async function handleMindMapGenerated(data) {
+    pendingSave.current = null;
+    clearTimeout(saveTimer.current);
+    await persist(data, true);
+    setGameData(data);
+    setPlayKey((k) => k + 1);
     setTab("play");
+    toast({ title: "Đã tạo lại game từ sơ đồ", description: "Đã lưu các cảnh và lựa chọn. Bắt đầu lượt chơi mới." });
   }
 
   if (loading || !gameData) {
@@ -276,6 +301,7 @@ function GameEditor({ gameId, onBack }) {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4">
+        {isWorkshopActive && gameData.meta.sourceScriptOutdated && <p className="max-w-2xl mx-auto mb-4 rounded-xl border border-amber-400 bg-amber-500/10 p-3 text-sm">Sơ đồ đã có chỉnh sửa mới hơn kịch bản gốc. Sản xuất lại từ văn bản sẽ thay thế các sửa đổi đó. Để giữ bản đã sửa, dùng “Tạo lại game từ sơ đồ” trong tab Sơ Đồ Tư Duy.</p>}
         {tab === "play" && (
           <div className="space-y-3">
             <div className="flex items-center justify-center gap-1.5">
@@ -290,14 +316,14 @@ function GameEditor({ gameId, onBack }) {
             </div>
             <div className="mx-auto transition-[max-width] duration-300" style={{ maxWidth: previewDevice === "phone" ? 430 : previewDevice === "tablet" ? 760 : 900, containerType: "inline-size", containerName: "game-preview" }}>
               <div className={previewDevice !== "desktop" ? "rounded-[28px] border-[6px] border-slate-900 bg-slate-900 overflow-hidden shadow-2xl" : ""}>
-                <GamePlayer key={playKey} gameData={gameData} gameKey={gameId} onExit={onBack} />
+                <GamePlayer key={playKey} gameData={gameData} gameKey={gameData.meta.mindMapRevision ? `${gameId}:map:${gameData.meta.mindMapRevision}` : gameId} onExit={onBack} />
               </div>
             </div>
           </div>
         )}
-        {tab === "routes" && (
-          <div className="max-w-4xl mx-auto space-y-4">
-            <RouteExplorerTab gameData={gameData} setGameData={handleChange} />
+        {tab === "mindmap" && (
+          <div className="space-y-4">
+            <MindMapTab gameData={gameData} setGameData={handleChange} onGenerated={handleMindMapGenerated} />
           </div>
         )}
         {tab === "gametest" && (

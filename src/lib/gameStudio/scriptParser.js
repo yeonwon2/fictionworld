@@ -75,7 +75,7 @@
 // gõ thành "->" hoặc "=>" nếu bàn phím không gõ được ký tự →.
 // =============================================================================
 
-import { normalizeAndRepair } from "./postprocess";
+import { normalizeAndRepair } from "./postprocess.js";
 
 export function slugify(label) {
   return String(label || "")
@@ -362,6 +362,7 @@ export function parseScript(scriptText, baseMeta = {}) {
 
   // start_node: dùng GIỚI THIỆU nếu có (nối vào cảnh 1 bằng 1 lựa chọn "Tiếp tục"),
   // nếu không thì chính CẢNH 1 trở thành start_node.
+  const entrySceneId = sceneOrder[0];
   if (introNode) {
     introNode.choices = [{ text: "Bắt đầu", targetNodeId: sceneOrder[0], statRequirements: {}, statModifiers: {} }];
     nodesMap["start_node"] = introNode;
@@ -383,7 +384,7 @@ export function parseScript(scriptText, baseMeta = {}) {
     const nextId = sceneOrder[idx + 1];
     for (const c of node.choices) {
       if (c.__explicitTarget) {
-        c.targetNodeId = c.__explicitTarget;
+        c.targetNodeId = !introNode && c.__explicitTarget === entrySceneId ? "start_node" : c.__explicitTarget;
         delete c.__explicitTarget;
       } else if (nextId) {
         c.targetNodeId = nextId;

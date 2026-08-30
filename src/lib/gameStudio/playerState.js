@@ -29,3 +29,10 @@ export function clearPlayerState(gameKey, storage = globalThis.localStorage) {
   try { storage.removeItem(key); } catch (_) { /* storage may be unavailable */ }
 }
 
+
+// Shared diagnostic uses exactly the player's vital-stat stopping rule.
+export function gameOverReasons(stats, statsConfig = []) {
+  return statsConfig.filter((stat) => stat.isVital && (stats[stat.key] || 0) <= (stat.deathThreshold ?? 0)).map((stat) => ({
+    key: stat.key, label: stat.label || stat.key, value: stats[stat.key] || 0, threshold: stat.deathThreshold ?? 0,
+  }));
+}
