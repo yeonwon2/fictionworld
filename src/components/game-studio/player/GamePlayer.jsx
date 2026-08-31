@@ -1,3 +1,4 @@
+import GameFrameOverlay from './GameFrameOverlay';
 import { createPortal } from 'react-dom';
 import { resolveAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
 import { getReadingTheme, READING_THEME_CSS } from '@/lib/gameStudio/readingThemes';
@@ -528,6 +529,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
 
   useEffect(()=>{if(readingTheme)rootRef.current?.scrollTo({top:0,behavior:'instant'});},[rt.nodeId,readingTheme]);
   useEffect(()=>{if(readingTheme){if(typingRef.current)clearInterval(typingRef.current);setTyped(fullTextRef.current);setTypingDone(true);}},[readingTheme]);
+  const systemOverlay=element=>readingTheme?<GameFrameOverlay anchor={rootRef} theme={readingTheme}>{element}</GameFrameOverlay>:element;
   const readingOverlay=element=>readingTheme?createPortal(<div data-reading-theme={readingTheme.id} style={readingTheme.vars}>{element}</div>,document.body):element;
   return (
     <div ref={rootRef} style={rootStyle} data-reading-theme={readingTheme?.id} data-presentation={presentation} data-bg-pattern={!readingTheme && isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={!readingTheme && isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
@@ -536,7 +538,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
       {routeProgress && <div role="status" className="relative z-10 p-3 text-sm border-b" style={{ background: 'var(--rpg-panel)', color: 'var(--rpg-text)' }}><strong>Chạy thử riêng tuyến · Không lưu tiến trình</strong><p>{routeProgress.message}</p>{routeProgress.state === 'playing' && routeProgress.step.choiceIndex !== null && !choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).ok && <p className="text-amber-500">Tuyến bị chặn: {choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).reason}</p>}</div>}
       <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
       {posterOpen && (
-        <div className="rpg-poster" style={{ backgroundImage: posterArt ? `url(${posterArt})` : undefined }}>
+        <div className={`rpg-poster ${readingTheme && posterArt ? 'rpg-poster-with-art' : ''}`} style={{ backgroundImage: posterArt ? `url(${posterArt})` : undefined }}>
           <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
           <div className="rpg-poster-shade" />
           <div className="rpg-poster-inner">
@@ -688,16 +690,16 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
       )}
 
       {/* System Popup modal */}
-      {systemPopup && readingOverlay(
-        <div className={readingTheme?"fixed inset-0 z-50 flex items-center justify-center p-4":"absolute inset-0 z-30 flex items-center justify-center p-4"} style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => dismissSystemPopup()}>
-          <div className="max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent2) 30%, transparent)' }} onClick={(e) => e.stopPropagation()}>
+      {systemPopup && systemOverlay(
+        <div className={readingTheme?"rpg-system-frame-overlay absolute inset-0 flex items-center justify-center p-3":"absolute inset-0 z-30 flex items-center justify-center p-4"} style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => dismissSystemPopup()}>
+          <div role="dialog" aria-modal="true" aria-label={systemPopup.title||'Hệ Thống'} className="rpg-system-card max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent2) 30%, transparent)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-2 mb-2">
               <Sparkles size={18} style={{ color: 'var(--rpg-accent)' }} />
               <span className="font-bold tracking-widest text-sm uppercase" style={{ color: 'var(--rpg-accent2)' }}>{systemPopup.title || 'Hệ Thống'}</span>
             </div>
             <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{systemPopup.text}</p>
             <Button size="sm" onClick={() => dismissSystemPopup()} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}>Đã hiểu</Button>
-            <button className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => dismissSystemPopup()}><X size={16} /></button>
+            <button aria-label="Đóng thông báo hệ thống" className="absolute top-2 right-2 opacity-60 hover:opacity-100" style={{ color: 'var(--rpg-accent2)' }} onClick={() => dismissSystemPopup()}><X size={16} /></button>
           </div>
         </div>
       )}
