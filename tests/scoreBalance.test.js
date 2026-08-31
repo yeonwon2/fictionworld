@@ -41,3 +41,47 @@ test('prompt sends current graph and endings, rejects excess context without sil
  const prompt=balancePrompt(game,cs,'favor','Cân bằng');assert.ok(prompt.includes('Một cuộc tranh luận'));assert.ok(prompt.includes('statRequirements'));assert.ok(!prompt.includes('sourceScript'));
  game.nodes.scene_1.text='x'.repeat(240001);assert.throws(()=>balancePrompt(game,cs,'favor',''),/quá dài/);
 });
+
+test('missing AI rows are retried without repeating accepted or unchanged decisions', async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
+ const candidates=scoreCandidates(base(),'favor'),calls=[];
+ const result=await collectScoreProposals(candidates,[],async batch=>{
+  calls.push(batch.map(c=>c.id));
+  const selected=calls.length===1?batch.slice(0,2):batch;
+  return {proposals:selected.map(c=>({id:c.id,value:c.oldValue,reason:'Giữ nguyên'}))};
+ });
+ assert.equal(result.accepted.length,4);assert.equal(calls.length,2);
+ assert.deepEqual(calls[1],candidates.slice(2).map(c=>c.id));
+});
+test('resume after provider failure retains earlier proposals and never rechecks them',async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
+ const candidates=Array.from({length:25},(_,i)=>({...scoreCandidates(base(),'favor')[0],id:String(i)}));
+ let calls=0;
+ const first=await collectScoreProposals(candidates,[],async batch=>{
+  if(++calls===2)throw new Error('quota');
+  return {proposals:batch.map(c=>({id:c.id,value:-3,reason:'Điều chỉnh'}))};
+ });
+ assert.equal(first.accepted.length,20);assert.equal(first.error,'quota');
+ const second=await collectScoreProposals(candidates,first.accepted,async batch=>{
+  assert.ok(batch.every(c=>Number(c.id)>=20));
+  return {proposals:batch.map(c=>({id:c.id,value:-4,reason:'Điều chỉnh'}))};
+ });
+ assert.equal(second.accepted.length,25);assert.equal(second.accepted[0].value,-3);
+});
+test('empty responses have a bounded retry budget',async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');let calls=0;
+ const result=await collectScoreProposals(scoreCandidates(base(),'favor'),[],async()=>{calls++;return {proposals:[]};});
+ assert.equal(calls,6);assert.equal(result.accepted.length,0);
+});
+test('one invalid or duplicate AI row cannot discard the valid rows from its batch',async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
+ const candidates=scoreCandidates(base(),'favor');let calls=0;
+ const result=await collectScoreProposals(candidates,[],async batch=>{
+  calls++;
+  const proposals=batch.map(c=>({id:c.id,value:-3,reason:'Đổi điểm'}));
+  if(calls===1){proposals[1].value='invalid';proposals.push({...proposals[2]}, {id:'not_allowed',value:5,reason:'Extra'});}
+  else assert.deepEqual(batch.map(c=>c.id),[candidates[1].id,candidates[2].id]);
+  return {proposals};
+ });
+ assert.equal(result.accepted.length,4);assert.equal(calls,2);
+});

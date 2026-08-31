@@ -37,7 +37,7 @@ export function readScoreProposals(response, candidates) {
     seen.add(p.id);
     return { ...candidate, value: p.value, reason: p.reason };
   });
-  return { rows: rows.filter(r => r.value !== r.oldValue), missing: candidates.length - seen.size, unchanged: rows.filter(r => r.value === r.oldValue).length };
+  return { accepted: rows, rows: rows.filter(r => r.value !== r.oldValue), missing: candidates.length - seen.size, unchanged: rows.filter(r => r.value === r.oldValue).length };
 }
 export function applyScoreProposals(game, snapshot, rows, approvedIds) {
   if (JSON.stringify(game) !== snapshot) throw new Error('Game đã thay đổi từ lúc AI đọc. Hãy lấy đề xuất mới để tránh ghi đè.');
@@ -55,4 +55,38 @@ export function applyScoreProposals(game, snapshot, rows, approvedIds) {
   }
   next.meta.sourceScriptOutdated = !!next.meta.sourceScript;
   return next;
+}
+
+
+// Retain unchanged decisions too: absence of an edit is not an unchecked row.
+export async function collectScoreProposals(candidates, accepted, request, onProgress = () => {}, active = () => true) {
+  const results = new Map(accepted.map(row => [row.id, row]));
+  let error = '';
+  // Retry only omitted IDs, in smaller groups. Never loop indefinitely.
+  for (const size of [20, 5, 1]) {
+    const pending = candidates.filter(c => !results.has(c.id));
+    if (!pending.length || !active()) break;
+    for (let i = 0; i < pending.length; i += size) {
+      if (!active()) break;
+      const batch = pending.slice(i, i + size);
+      try {
+        const response = await request(batch);
+        if (!Array.isArray(response?.proposals)) throw new Error('AI chưa trả danh sách đề xuất hợp lệ.');
+        // Salvage independent valid rows; duplicate/conflicting IDs are retried,
+        // never guessed. Extra IDs cannot enter the approval table.
+        const valid = response.proposals.filter(p => {
+          if (response.proposals.filter(other => other?.id === p?.id).length !== 1) return false;
+          try { readScoreProposals({ proposals: [p] }, batch); return true; } catch { return false; }
+        });
+        const parsed = readScoreProposals({ proposals: valid }, batch);
+        if (!active()) break;
+        parsed.accepted.forEach(row => results.set(row.id, row));
+        onProgress([...results.values()]);
+      } catch (e) {
+        error = e.message || 'Chưa nhận được phản hồi AI.';
+        return { accepted: [...results.values()], error };
+      }
+    }
+  }
+  return { accepted: [...results.values()], error };
 }
