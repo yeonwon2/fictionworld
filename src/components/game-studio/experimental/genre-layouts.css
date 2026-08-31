@@ -1,0 +1,144 @@
+.cinema-lab .cl-genre-picker {display:grid;gap:8px;margin:0 0 18px;}
+.cinema-lab .cl-genre-picker label {display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14px;font-weight:600;}
+.cinema-lab .cl-genre-picker select {padding:10px 14px;border:1px solid #aaa6;border-radius:8px;background:transparent;max-width:100%;}
+.cinema-lab .cl-genre-picker p {font-size:13px;opacity:.8;}
+.cinema-lab .cl-genre-picker small {font-size:11px;opacity:.65;}
+.cinema-lab .cl-reading-anchor {flex:1;scroll-margin-top:150px;}
+.cinema-lab .cl-scene-layout {position:relative;}
+.cinema-lab .cl-ending {max-width:700px;margin:auto;text-align:center;padding:55px 42px 65px;animation:cl-enter .6s ease;}
+.cinema-lab .cl-ending h1 {font:normal 42px/1.25 Georgia,serif;color:#f4ead8;margin:22px auto 30px;text-wrap:balance;overflow-wrap:anywhere;}
+.cinema-lab .cl-ending-emblem {display:grid;place-items:center;width:90px;height:90px;margin:0 auto 25px;border:1px solid #d9bd8c60;border-radius:50%;color:var(--cl-gold);background:#101b20aa;}
+.cinema-lab .cl-ending-eyebrow {font-size:10px;letter-spacing:3px;color:var(--cl-gold);margin-bottom:16px;}
+.cinema-lab .cl-ending-badge {display:inline-block;padding:7px 14px;border:1px solid #d9bd8c55;font-size:12px;color:var(--cl-gold);}
+.cinema-lab .cl-ending .cl-prose {text-align:left;}
+.cinema-lab .cl-ending .cl-prose blockquote {text-align:center;border:0;padding:0;}
+.cinema-lab .cl-ending-totals {display:flex;justify-content:center;gap:26px;flex-wrap:wrap;border-top:1px solid #d9bd8c40;padding-top:25px;margin:28px 0;}
+.cinema-lab .cl-ending-totals small,.cinema-lab .cl-ending-totals strong {display:block;}
+.cinema-lab .cl-ending-totals small {font-size:11px;color:#bcb5a9;margin-bottom:8px;}
+.cinema-lab .cl-ending-totals strong {font-size:24px;font-weight:400;color:var(--cl-gold);}
+.cinema-lab .cl-ending-actions {display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:28px;}
+.cinema-lab .cl-ending-actions button {padding:13px 20px;border:1px solid #d9bd8c80;color:#edce96;background:#101b20d9;font-size:13px;}
+.cinema-lab .cl-preview-label {font-size:11px;color:#e8d8bc;margin-top:18px;}
+.cinema-lab .cl-rail-title {display:flex;gap:12px;align-items:center;font-size:10px;letter-spacing:2px;color:var(--cl-gold);}
+/* Book pages: centered paper, generous inner margins, spine and chapter marker. */
+.cl-genre-storybook {--cl-gold:#775a31;--cl-ink:#eee0c3;}
+.cl-genre-storybook .cl-game {background:#eee0c3;color:#392e24;}
+.cl-genre-storybook .cl-art {opacity:.1;background-size:auto 730px;background-position:right bottom;}
+.cl-genre-storybook .cl-shade {background:linear-gradient(90deg,#c2a57666,transparent 7%,transparent 93%,#c2a57666);}
+.cl-genre-storybook .cl-top {background:#efe3cdf5;border-color:#9e80514d;}
+.cl-genre-storybook .cl-wordmark span,.cl-genre-storybook .cl-time {color:#78644a;}
+.cl-genre-storybook .cl-menu-trigger {color:#5d452a;background:#e4d2af;border-color:#aa8d64;}
+.cl-genre-storybook .cl-content {width:100%;max-width:690px;margin:auto;padding:55px 55px;}
+.cl-genre-storybook .cl-content h1,.cl-genre-storybook .cl-ending h1 {color:#493623;}
+.cl-genre-storybook .cl-prose {font-size:18px;line-height:2;color:#392e24;}
+.cl-genre-storybook .cl-prose>p:first-child:first-letter {float:left;font-size:52px;line-height:1;padding:6px 10px 0 0;color:#79582f;}
+.cl-genre-storybook .cl-prose blockquote,.cl-genre-storybook .cl-prompt {color:#765532;}
+.cl-genre-storybook .cl-choices button {background:#f6ecd9;border-color:#bba37c;color:#493623;box-shadow:inset 0 0 0 3px #e7d8bb;}
+.cl-genre-storybook .cl-choices button:hover {background:#dfcda9;}
+.cl-genre-storybook .cl-book-edge {position:absolute;left:20px;top:65px;writing-mode:vertical-rl;letter-spacing:3px;font-size:9px;color:#947a56;}
+.cl-genre-storybook .cl-ending {border-left:1px solid #ad926144;border-right:1px solid #ad926144;}
+.cl-genre-storybook .cl-ending-emblem {border-radius:0;background:transparent;border:0;}
+.cl-genre-storybook .cl-ending-actions button {background:#e2d0ac;color:#493623;}
+.cl-genre-storybook .cl-ending-totals small,.cl-genre-storybook .cl-preview-label {color:#766345;}
+.cl-genre-storybook .cl-modal-card {background:#eee0c3;color:#392e24;}
+.cl-genre-storybook .cl-menu-links button,.cl-genre-storybook .cl-menu-back {color:#634620;border-color:#ac936c;}
+.cl-genre-storybook .cl-notice {background:#f0e2c9;color:#50391e;border-color:#ab8e5f;}
+/* System: mission rail beside the story, angular controls and mission report. */
+.cl-genre-system {--cl-gold:#94d9dc;--cl-ink:#091820;}
+.cl-genre-system .cl-art {opacity:.3;}
+.cl-genre-system .cl-shade {background:linear-gradient(90deg,#071620ea,#07162090),linear-gradient(0deg,#091820,transparent);}
+.cl-genre-system .cl-layout-system {display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:24px;padding:35px;}
+.cl-genre-system .cl-content {width:100%;max-width:none;padding:24px 10px;}
+.cinema-lab .cl-mission {align-self:start;background:#10252bea;border:1px solid #497e87;padding:24px;box-shadow:inset 3px 0 #8ad9dc;}
+.cinema-lab .cl-mission h3 {font-size:20px;line-height:1.5;color:#d9f2ef;margin:20px 0 12px;}
+.cinema-lab .cl-mission p,.cinema-lab .cl-mission-note {font-size:12px;line-height:1.9;color:#acc4c6;}
+.cinema-lab .cl-mission ol {list-style:none;padding:20px 0;margin:0;}
+.cinema-lab .cl-mission li {display:flex;align-items:center;gap:10px;padding:12px 0;font-size:12px;border-bottom:1px solid #497e8744;color:#c3d8d9;}
+.cinema-lab .cl-mission li>span {font-size:10px;color:#82b6bf;}
+.cinema-lab .cl-mission .cl-done {color:#90d8ab;}
+.cl-genre-system .cl-content h1 {font-family:system-ui,sans-serif;font-size:31px;font-weight:500;}
+.cl-genre-system .cl-choices button {border-color:#427582;border-left:3px solid #77c6d0;background:#10242bee;font-family:system-ui,sans-serif;}
+.cinema-lab .cl-system-message {border:1px solid #71b9c0;border-left-width:4px;padding:20px;background:#112c33;color:#d6f0ed;margin-bottom:20px;}
+.cinema-lab .cl-system-message strong {color:#94d9dc;font-size:11px;letter-spacing:2px;}
+.cinema-lab .cl-system-journal {border-left:2px solid #94d9dc;padding:10px;font-size:12px;}
+.cl-genre-system .cl-ending {margin:40px auto;border:1px solid #497e87;background:#10252bf0;max-width:680px;}
+.cl-genre-system .cl-ending-emblem {border-radius:14px;border-color:#497e87;}
+.cl-genre-system .cl-ending h1 {font-family:system-ui,sans-serif;font-size:36px;}
+/* Mystery: evidence dossier, narrow text measure, stamped conclusion. */
+.cl-genre-mystery {--cl-gold:#c7ada3;--cl-ink:#101316;}
+.cl-genre-mystery .cl-art {opacity:.28;filter:grayscale(.75);}
+.cl-genre-mystery .cl-shade {background:linear-gradient(0deg,#101316,transparent),#10131670;}
+.cl-genre-mystery .cl-top {background:#101316f2;}
+.cl-genre-mystery .cl-case-label {display:flex;gap:14px;align-items:center;max-width:620px;margin:35px auto 0;border-bottom:1px solid #8e6e6260;padding:0 25px 22px;font-size:12px;letter-spacing:3px;color:#b8968a;}
+.cl-genre-mystery .cl-case-label small {letter-spacing:1px;font-size:10px;line-height:2;}
+.cl-genre-mystery .cl-content {width:100%;max-width:670px;margin:auto;padding:30px 45px 55px;}
+.cl-genre-mystery .cl-prose {line-height:2.2;}
+.cl-genre-mystery .cl-choices button {background:#111416d9;border-color:#734c43;box-shadow:none;}
+.cl-genre-mystery .cl-ending {text-align:left;border-top:3px solid #80594e;margin-top:50px;}
+.cl-genre-mystery .cl-ending-emblem {margin-left:0;border-radius:0;border:0;background:none;}
+.cl-genre-mystery .cl-ending-badge {transform:rotate(-3deg);border:2px solid #967569;letter-spacing:2px;}
+/* Palace: ceremonial title, framed speech and a two-column decision court. */
+.cl-genre-palace {--cl-gold:#e1c78e;--cl-ink:#21170f;}
+.cl-genre-palace .cl-art {opacity:.3;filter:sepia(.6);}
+.cl-genre-palace .cl-shade {background:linear-gradient(0deg,#21170f,transparent),#21170f66;}
+.cl-genre-palace .cl-top {background:#21170fed;}
+.cinema-lab .cl-court-heading {display:flex;flex-direction:column;align-items:center;gap:12px;color:#e1c78e;padding:30px 20px 0;}
+.cinema-lab .cl-court-heading span {font:16px Georgia,serif;letter-spacing:4px;}
+.cinema-lab .cl-court-heading i {font-size:12px;opacity:.7;}
+.cl-genre-palace .cl-content {width:100%;max-width:860px;margin:auto;padding:30px 45px 50px;}
+.cl-genre-palace .cl-content h1 {max-width:none;text-align:center;font-size:36px;}
+.cl-genre-palace .cl-chapter,.cl-genre-palace .cl-time {justify-content:center;text-align:center;}
+.cl-genre-palace .cl-content>.cl-prose {background:#1a120be6;border:1px solid #b2945c75;outline:1px solid #b2945c35;outline-offset:5px;padding:28px 32px;margin:26px 0;}
+.cl-genre-palace .cl-choices {grid-template-columns:1fr 1fr;}
+.cl-genre-palace .cl-prompt {grid-column:1/-1;}
+.cl-genre-palace .cl-choices button {background:#342416ed;border-color:#b2945c90;}
+.cl-genre-palace .cl-ending {background:#e9d5a6;color:#4c321d;margin:45px auto;border:8px double #9e7640;box-shadow:0 20px 60px #0005;}
+.cl-genre-palace .cl-ending h1,.cl-genre-palace .cl-ending .cl-prose blockquote,.cl-genre-palace .cl-ending-totals strong {color:#62421d;}
+.cl-genre-palace .cl-ending-eyebrow,.cl-genre-palace .cl-ending-badge,.cl-genre-palace .cl-ending-totals small,.cl-genre-palace .cl-preview-label {color:#775527;border-color:#9d794d;}
+.cl-genre-palace .cl-ending-emblem {border-radius:0;border:2px solid #a23d2e;color:#a23d2e;background:transparent;transform:rotate(-4deg);}
+.cl-genre-palace .cl-ending-actions button {background:#513621;color:#f2dfb2;}
+/* Tycoon: business memo + actual decision ledger, no fabricated chart data. */
+.cl-genre-tycoon {--cl-gold:#9dd9c0;--cl-ink:#10201f;}
+.cl-genre-tycoon .cl-art {opacity:.22;}
+.cl-genre-tycoon .cl-shade {background:linear-gradient(90deg,#10201fdd,#10201f66),linear-gradient(0deg,#10201f,transparent);}
+.cl-genre-tycoon .cl-layout-tycoon {display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:25px;padding:40px;}
+.cl-genre-tycoon .cl-content {width:100%;max-width:none;padding:26px;background:#112724e8;border-top:3px solid #8dbfa7;}
+.cl-genre-tycoon .cl-content h1 {font-family:system-ui,sans-serif;font-size:30px;font-weight:500;}
+.cl-genre-tycoon .cl-choices button {background:#1b3630eb;border-color:#71998480;font-family:system-ui,sans-serif;}
+.cinema-lab .cl-ledger {align-self:start;border:1px solid #5d89756b;background:#102420ed;padding:25px;}
+.cinema-lab .cl-ledger h3 {font:42px/1.2 Georgia,serif;color:#c0e6d2;margin:30px 0;}
+.cinema-lab .cl-ledger h3 span {display:block;font:11px system-ui,sans-serif;letter-spacing:2px;margin-top:10px;color:#99b8ab;}
+.cinema-lab .cl-ledger-item {border-top:1px solid #5d89754d;padding:20px 0;}
+.cinema-lab .cl-ledger-item small {display:block;color:#9fbcaf;font-size:11px;margin-bottom:10px;}
+.cinema-lab .cl-ledger-item strong {font-size:15px;font-weight:500;}
+.cinema-lab .cl-ledger-item p,.cinema-lab .cl-ledger-note {font-size:12px;line-height:1.8;color:#c6d9d1;}
+.cl-genre-tycoon .cl-ending {max-width:800px;margin:40px auto;text-align:left;border-top:4px solid #8dbfa7;background:#112724ed;}
+.cl-genre-tycoon .cl-ending-emblem {border-radius:12px;margin-left:0;}
+.cl-genre-tycoon .cl-ending h1 {font-family:system-ui,sans-serif;font-size:36px;}
+.cl-genre-tycoon .cl-ending-totals {justify-content:space-between;}
+@container(max-width:760px){
+ .cl-genre-system .cl-layout-system,.cl-genre-tycoon .cl-layout-tycoon {display:flex;flex-direction:column;padding:24px;gap:20px;}
+ .cinema-lab .cl-mission,.cinema-lab .cl-ledger {width:100%;order:-1;padding:20px;}
+ .cinema-lab .cl-mission ol {padding:8px 0;}
+ .cinema-lab .cl-mission h3 {margin:12px 0 8px;font-size:18px;}
+ .cinema-lab .cl-ledger {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+ .cinema-lab .cl-ledger .cl-rail-title,.cinema-lab .cl-ledger-note {grid-column:1/-1;}
+ .cinema-lab .cl-ledger h3 {margin:0;font-size:30px;}
+ .cinema-lab .cl-ledger-item {padding:12px 0;}
+ .cinema-lab .cl-ledger-item:last-of-type {grid-column:1/-1;}
+ .cl-genre-system .cl-content,.cl-genre-tycoon .cl-content {padding:12px 0;}
+ .cl-genre-tycoon .cl-content {padding:20px;}
+ .cl-genre-storybook .cl-content {padding:35px 28px;}
+ .cl-genre-storybook .cl-book-edge {display:none;}
+ .cl-genre-mystery .cl-content {padding:25px;}
+ .cl-genre-palace .cl-content {padding:28px 24px;}
+ .cl-genre-palace .cl-content>.cl-prose {padding:20px;}
+ .cl-genre-palace .cl-choices {grid-template-columns:1fr;}
+ .cinema-lab .cl-ending {width:calc(100% - 32px);padding:35px 24px;}
+ .cinema-lab .cl-ending h1 {font-size:32px;}
+ .cl-genre-palace .cl-ending {margin:28px 16px;}
+}
+@media(prefers-reduced-motion:reduce){.cinema-lab .cl-ending{animation:none;}}
+.cl-genre-system .cl-ending-failure {border-color:#bd6965;background:#251a20f2;}
+.cl-genre-system .cl-ending-failure .cl-ending-emblem {color:#efa29b;border-color:#bd6965;background:#45252a;}
+.cl-genre-system .cl-ending-failure .cl-ending-eyebrow,.cl-genre-system .cl-ending-failure .cl-ending-badge {color:#efa29b;border-color:#bd6965;}

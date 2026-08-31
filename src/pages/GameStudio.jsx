@@ -1,3 +1,4 @@
+import CinematicLab from '@/components/game-studio/experimental/CinematicLab';
 import React, { useEffect, useRef, useState } from "react";
 import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor, FlaskConical } from "lucide-react";
 import GameMetaConfig from "@/components/game-studio/GameMetaConfig";
@@ -43,7 +44,7 @@ const WORKSHOP_TABS = [
 ];
 const ALL_TABS = [...MAIN_TABS, ...WORKSHOP_TABS];
 
-function GameLibrary({ onOpen, onOpenThemeWorkshop, onOpenPromptHandbook }) {
+function GameLibrary({ onOpen, onOpenThemeWorkshop, onOpenPromptHandbook, onOpenInterfaceLab }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -90,13 +91,14 @@ function GameLibrary({ onOpen, onOpenThemeWorkshop, onOpenPromptHandbook }) {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Xưởng sản xuất game nhập vai AI — cho LilyHub.</p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 shrink-0">
           <button
             onClick={onOpenPromptHandbook}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent transition"
           >
             <NotebookText className="w-4 h-4" /> Sổ Tay AI
           </button>
+          <button onClick={onOpenInterfaceLab} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent"><FlaskConical size={16}/> Giao diện thử nghiệm</button>
           <button
             onClick={onOpenThemeWorkshop}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium hover:bg-accent transition"
@@ -444,11 +446,12 @@ export default function GameStudio() {
   if (activeGameId) {
     return <GameEditor gameId={activeGameId} onBack={() => setActiveGameId(null)} />;
   }
+  if (view === "interface-lab") return <CinematicLab onBack={() => setView("library")} />;
   if (view === "theme-workshop") {
     return <ThemeWorkshop onBack={() => setView("library")} />;
   }
   if (view === "prompt-handbook") {
     return <PromptHandbook onBack={() => setView("library")} />;
   }
-  return <GameLibrary onOpen={setActiveGameId} onOpenThemeWorkshop={() => setView("theme-workshop")} onOpenPromptHandbook={() => setView("prompt-handbook")} />;
+  return <GameLibrary onOpenInterfaceLab={() => setView("interface-lab")} onOpen={setActiveGameId} onOpenThemeWorkshop={() => setView("theme-workshop")} onOpenPromptHandbook={() => setView("prompt-handbook")} />;
 }
