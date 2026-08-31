@@ -1,7 +1,7 @@
 import GameFrameOverlay from './GameFrameOverlay';
 import { createPortal } from 'react-dom';
 import { resolveAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
-import { getReadingTheme, READING_THEME_CSS } from '@/lib/gameStudio/readingThemes';
+import { getReadingTheme, getReadingEffect, READING_THEME_CSS } from '@/lib/gameStudio/readingThemes';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save, ArrowDown } from 'lucide-react';
@@ -524,7 +524,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
   const visitedCount = new Set([...rt.history, rt.nodeId].filter((id) => id !== 'start_node' && !gameData.nodes[id]?.automaticEnding && !gameData.nodes[id]?.isEnding)).size;
   const storyProgress = Math.min(100, Math.round((visitedCount / playableNodeCount) * 100));
   const isCustomTheme = meta.theme === 'custom';
-  const ambientEffect = readingTheme ? 'none' : isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
+  const ambientEffect = readingTheme ? getReadingEffect(meta) : isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
   const compactStats = [...statsConfig].sort((a, b) => Number(Boolean(b.isVital)) - Number(Boolean(a.isVital)));
 
   useEffect(()=>{if(readingTheme)rootRef.current?.scrollTo({top:0,behavior:'instant'});},[rt.nodeId,readingTheme]);
@@ -536,7 +536,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
       {readingTheme&&<style>{READING_THEME_CSS}</style>}
       {readingTheme?.art&&<div className="rpg-reading-backdrop" style={{backgroundImage:`url(${readingTheme.art})`}}/>}
       {routeProgress && <div role="status" className="relative z-10 p-3 text-sm border-b" style={{ background: 'var(--rpg-panel)', color: 'var(--rpg-text)' }}><strong>Chạy thử riêng tuyến · Không lưu tiến trình</strong><p>{routeProgress.message}</p>{routeProgress.state === 'playing' && routeProgress.step.choiceIndex !== null && !choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).ok && <p className="text-amber-500">Tuyến bị chặn: {choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).reason}</p>}</div>}
-      <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
+      {readingTheme ? (!posterOpen && ambientEffect!=='none' && <GameFrameOverlay anchor={rootRef} theme={readingTheme} interactive={false} layer={25}><div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" /></GameFrameOverlay>) : <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />}
       {posterOpen && (
         <div className={`rpg-poster ${readingTheme && posterArt ? 'rpg-poster-with-art' : ''}`} style={{ backgroundImage: posterArt ? `url(${posterArt})` : undefined }}>
           <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />

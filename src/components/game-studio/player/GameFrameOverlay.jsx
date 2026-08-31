@@ -1,10 +1,10 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 // Keep overlays out of the scrollable story, but anchored to the visible game frame.
-export default function GameFrameOverlay({ anchor, theme, children }) {
+export default function GameFrameOverlay({ anchor, theme, children, interactive = true, layer = 60 }) {
   const [bounds, setBounds] = useState(null);
-  useLayoutEffect(() => {
+  useEffect(() => {
     const element = anchor.current;
     if (!element) return;
     const measure = () => {
@@ -26,5 +26,5 @@ export default function GameFrameOverlay({ anchor, theme, children }) {
     };
   }, [anchor]);
   if (!bounds || !bounds.width || !bounds.height) return null;
-  return createPortal(<div data-reading-theme={theme.id} style={{ ...theme.vars, ...bounds, position:'fixed', background:'transparent', zIndex:60, overflow:'hidden', borderRadius:16 }}>{children}</div>, document.body);
+  return createPortal(<div data-reading-theme={theme.id} style={{ ...theme.vars, ...bounds, position:'fixed', background:'transparent', zIndex:layer, pointerEvents:interactive?'auto':'none', overflow:'hidden', borderRadius:16 }}>{children}</div>, document.body);
 }

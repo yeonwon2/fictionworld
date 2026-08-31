@@ -1,4 +1,4 @@
-import { READING_THEMES } from '@/lib/gameStudio/readingThemes';
+import { READING_THEMES, READING_EFFECTS, getReadingEffect } from '@/lib/gameStudio/readingThemes';
 import CinematicLab from '@/components/game-studio/experimental/CinematicLab';
 import React, { useEffect, useRef, useState } from "react";
 import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor, FlaskConical } from "lucide-react";
@@ -315,6 +315,12 @@ function GameEditor({ gameId, onBack }) {
                 {Object.values(READING_THEMES).map(t=><option key={t.id} value={t.id}>{t.art?'Có ảnh':'Không ảnh'} · {t.name}</option>)}
               </select>
             </label>
+            {READING_THEMES[gameData.meta.readingTheme]&&<label className="flex flex-wrap items-center justify-center gap-3 text-sm">Hiệu ứng nền
+              <select className="rounded-lg border p-2 bg-background" value={getReadingEffect(gameData.meta)} onChange={e=>handleChange({...gameData,meta:{...gameData.meta,readingEffect:e.target.value}})}>
+                {Object.entries(READING_EFFECTS).map(([id,label])=><option key={id} value={id}>{label}</option>)}
+              </select>
+              <span className="text-xs text-muted-foreground">Hiệu ứng nhẹ · Không kèm âm thanh · Tự tắt khi thiết bị bật giảm chuyển động</span>
+            </label>}
             <p className="text-center text-xs text-muted-foreground">Giao diện mới dùng thử · Không đổi luật chơi · Được lưu cùng game và áp dụng khi xuất HTML. Có thể chuyển lại giao diện cũ bất cứ lúc nào.</p>
             <div className="flex items-center justify-center gap-1.5">
               {[

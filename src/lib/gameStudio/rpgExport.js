@@ -1,4 +1,4 @@
-import { getReadingTheme, READING_THEMES, READING_THEME_CSS } from './readingThemes.js';
+import { getReadingTheme, getReadingEffect, READING_THEMES, READING_THEME_CSS } from './readingThemes.js';
 import { validateAutomaticEnding } from './automaticEnding.js';
 import { THEMES, PRESENTATION_ART, FONT_OPTIONS, BUTTON_SHAPES, PANEL_SHAPES } from './rpgThemes.js';
 
@@ -74,6 +74,7 @@ export async function prepareOfflineGame(gameData) {
 // Engine JS: NO backticks, NO ${} — uses string concatenation only.
 const ENGINE_JS = [
   '(function(){',
+  '  var getReadingEffect = ' + getReadingEffect.toString() + ';',
   "  function renderReadingJournal(){var logs=storyLogs().slice();var current=GAME.nodes[state.nodeId];if(current&&!current.automaticEnding)logs.push({text:current.text,speaker:current.speaker});return '<section class=\"rpg-menu-section\"><h3>Nhật ký hành trình</h3>'+logs.map(function(e){return '<article class=\"rpg-menu-history\"><b>'+esc(e.speaker||\"Dẫn truyện\")+'</b><p>'+esc(e.text||\"\")+'</p>'+(e.choiceText?'<p>Bạn đã chọn: '+esc(e.choiceText)+'</p>':\"\")+'</article>';}).join(\"\")+'</section>';}",
   '  var GAME = GAME_DATA;',
   '  var validateAutomaticEnding = ' + validateAutomaticEnding.toString() + ';',
@@ -98,7 +99,7 @@ const ENGINE_JS = [
   '    vars = (theme && theme.vars) || {};',
   '    ambientEffect = (theme && theme.effect) || "none";',
   '  }',
-  "  if(readingTheme){ root.removeAttribute(\"data-bg-pattern\");root.removeAttribute(\"data-panel-shape\");vars=readingTheme.vars; ambientEffect=\"none\"; document.body.setAttribute(\"data-reading-theme\",readingTheme.id); document.body.style.backgroundImage=readingTheme.pattern; }",
+  "  if(readingTheme){ root.removeAttribute(\"data-bg-pattern\");root.removeAttribute(\"data-panel-shape\");vars=readingTheme.vars; ambientEffect=getReadingEffect(meta); document.body.setAttribute(\"data-reading-theme\",readingTheme.id); document.body.style.backgroundImage=readingTheme.pattern; }",
   '  for (var vk in vars){ if (vars[vk]) root.style.setProperty(vk, vars[vk]); }',
   '  document.body.className = "rpg-" + presentation;',
   '',
@@ -318,7 +319,7 @@ const ENGINE_JS = [
   '',
   '  function render(){ clearTyping(); var node=GAME.nodes[state.nodeId]; if(!node){ state.nodeId="start_node"; node=GAME.nodes["start_node"]; } if(!node){ document.getElementById("game").innerHTML=\'<div class="rpg-error">Không có dữ liệu game.</div>\'; return; }',
   '    var dead=checkGameOver(state.stats); var container=document.getElementById("game");',
-  "    function effectLayer(){ if(readingTheme && readingTheme.art){ return '<div class=\"rpg-reading-backdrop\" style=\"background-image:url('+esc(asset(readingTheme.art))+')\"></div>'; } return ambientEffect===\"none\" ? \"\" : '<div class=\"rpg-effect rpg-effect-'+ambientEffect+'\"></div>'; }",
+  "    function effectLayer(){ var effect=ambientEffect===\"none\"?\"\":'<div class=\"rpg-effect rpg-effect-'+ambientEffect+'\" aria-hidden=\"true\"></div>'; if(readingTheme && readingTheme.art){return '<div class=\"rpg-reading-backdrop\" style=\"background-image:url('+esc(asset(readingTheme.art))+')\"></div>'+effect;}return effect;}",
   '    if(dead){ container.innerHTML=effectLayer()+renderStatusBar()+renderArchBar()+renderPalaceBar()+renderRebirthBar()+renderTabs()+renderGameOver(); bindStatusBar(); bindTabs(); triggerShake(); var r=document.getElementById("goRestart"); if(r) r.addEventListener("click", function(){ reset(); render(); }); return; }',
   '    if(node.automaticEnding){',
   '      try { validateAutomaticEnding(GAME.nodes,node); var eligible=node.choices.filter(function(c){return choiceStatus(c).ok;}); if(eligible.length!==1) throw new Error(eligible.length ? "Có nhiều kết thúc cùng đủ điều kiện. Tác giả cần sửa các khoảng điểm/điều kiện." : "Không có kết thúc phù hợp với điểm và sự kiện hiện tại. Tác giả cần bổ sung nhánh còn thiếu."); state.history.push(state.nodeId); state.nodeId=eligible[0].targetNodeId; save(); render(); }',

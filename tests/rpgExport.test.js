@@ -73,11 +73,11 @@ test('export refuses ambiguous, missing and invalid automatic endings instead of
 });
 test('export resolves a save positioned at the hidden router',()=>{const rt=exportRuntime(endingGame(10));rt.state.nodeId='gate';rt.render();assert.equal(rt.state.nodeId,'low');assert.match(rt.container.innerHTML,/Low ending/);});
 
-import { READING_THEMES, getReadingTheme } from '../src/lib/gameStudio/readingThemes.js';
+import { READING_THEMES, getReadingTheme, getReadingEffect } from '../src/lib/gameStudio/readingThemes.js';
 test('all reading themes preserve score routing and stay opt-in',()=>{
  assert.equal(getReadingTheme({}),null);assert.equal(getReadingTheme({readingTheme:'unknown'}),null);
  for(const id of Object.keys(READING_THEMES)){
-  const g=endingGame();g.meta.readingTheme=id;
+  const g=endingGame();g.meta.readingTheme=id;g.meta.readingEffect='fireflies';
   const container={innerHTML:'',classList:{add(){},remove(){}}};
   const sandbox={document:{documentElement:{style:{setProperty(){}},setAttribute(){},removeAttribute(){}},body:{style:{},setAttribute(){}},getElementById:id=>id==='game'?container:null,querySelectorAll:()=>[],querySelector:()=>null},localStorage:{setItem(){}},setTimeout(){},clearInterval(){},setInterval(){throw Error('Must not type a hidden ending');}};
   const before=JSON.stringify(g);const html=generateStandaloneHTML(g);
@@ -85,7 +85,7 @@ test('all reading themes preserve score routing and stay opt-in',()=>{
   const script=html.match(/<script>([\s\S]*)<\/script>/)[1].replace('load(); showPoster(); render();','globalThis.api={state:state,choose:choose};');
   vm.runInNewContext(script,sandbox);sandbox.api.choose(g.nodes.start_node,0);
   assert.equal(sandbox.api.state.stats.favor,80,id);assert.equal(sandbox.api.state.nodeId,'high',id);
-  assert.match(container.innerHTML,/High ending/);assert.doesNotMatch(container.innerHTML,/HIDDEN/);
+  assert.match(container.innerHTML,/High ending/);assert.match(container.innerHTML,/rpg-effect-fireflies/);assert.doesNotMatch(container.innerHTML,/HIDDEN/);
  }
 });
 
@@ -101,3 +101,5 @@ test('offline preparation embeds the selected reading-theme artwork without chan
  globalThis.FileReader=class {readAsDataURL(){this.result='data:image/jpeg;base64,TEST';this.onload();}};
  try{const g=endingGame();g.meta.readingTheme='cinema';const before=JSON.stringify(g);const result=await prepareOfflineGame(g);assert.deepEqual(urls,['http://localhost:5173/hero-transmigration.jpg']);assert.equal(result.meta.offlineAssets['/hero-transmigration.jpg'],'data:image/jpeg;base64,TEST');assert.equal(JSON.stringify(g),before);}finally{globalThis.fetch=oldFetch;globalThis.FileReader=oldReader;globalThis.window=oldWindow;}
 });
+
+test('reading effects default off and reject unknown values',()=>{assert.equal(getReadingEffect({}),'none');assert.equal(getReadingEffect({readingEffect:'unknown'}),'none');for(const effect of ['snow','rain','leaves','petals','fireflies','stars','fog'])assert.equal(getReadingEffect({readingEffect:effect}),effect);});
