@@ -1,3 +1,4 @@
+import BranchExchangeDialog from './BranchExchangeDialog';
 import ScoreBalanceDialog from './ScoreBalanceDialog';
 import GraphBlueprintDialog from './GraphBlueprintDialog';
 import useMapCanvas from './useMapCanvas';
@@ -84,6 +85,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   const [localConnect, setLocalConnect] = useState(null);
   const [blueprintOpen,setBlueprintOpen]=useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
+  const [branchExchange,setBranchExchange]=useState(null);
   const [gateCard, setGateCard] = useState(null);
   const [incomingTarget, setIncomingTarget] = useState(null);
   const [mergeSources, setMergeSources] = useState(null);
@@ -203,7 +205,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
     <div className="glass-card rounded-2xl p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Sơ Đồ Tư Duy</h2><p className="text-xs text-muted-foreground mt-1">{fullGraph.cards.filter((c) => c.kind === 'scene').length} cảnh truyện · {fullGraph.cards.filter((c) => c.kind === 'intro').length} dẫn truyện · {fullGraph.cards.filter((c) => c.kind === 'ending').length} kết thúc · {fullGraph.cards.filter((c) => c.kind === 'choice').length} lựa chọn · Không cắt bớt nhánh</p></div><Button onClick={rebuild} disabled={busy || !!graph.errors.length}>{busy ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Play size={15} className="mr-2" />}Tạo lại game từ sơ đồ</Button></div>
       <p className="text-xs text-muted-foreground">Đọc từ trái sang phải: dẫn truyện → cảnh → lựa chọn → đích. Bấm ô để tô sáng các đường nối; dùng thanh cuộn và thu phóng để xem toàn bộ. Bấm Lưu thay đổi trong ô sửa để cập nhật game. Tạo lại dùng chính sơ đồ này và bắt đầu lượt chơi mới.</p>
-      <div className="flex flex-wrap gap-2"><Button variant={!walk ? 'default' : 'outline'} onClick={() => { setWalk(null); setSelected(null); viewport.current?.scrollTo(0, 0); }}>Toàn bộ sơ đồ</Button><Button variant={walk ? 'default' : 'outline'} onClick={() => showWalk()}>Đi từng tuyến từ đầu</Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>setBranchExchange({})}>Xuất / nhập nhánh truyện</Button><Button variant={!walk ? 'default' : 'outline'} onClick={() => { setWalk(null); setSelected(null); viewport.current?.scrollTo(0, 0); }}>Toàn bộ sơ đồ</Button><Button variant={walk ? 'default' : 'outline'} onClick={() => showWalk()}>Đi từng tuyến từ đầu</Button></div>
       {walk && <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-3">
         <p className="text-sm font-semibold">Xem riêng một tuyến · Chọn bước tiếp theo</p>
         <p className="text-sm font-medium">Tuyến đã chọn: {routeCounts.scenes} cảnh truyện · {routeCounts.choices} lựa chọn · {routeCounts.intros} dẫn truyện · {routeCounts.endings} kết thúc</p>
@@ -276,6 +278,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
             {card.kind === 'choice' && <DropdownMenuItem onSelect={() => setGateCard(card)}>Điều kiện mở đáp án…</DropdownMenuItem>}
             {card.kind === 'choice' && <DropdownMenuItem onSelect={() => setConsequenceCard(card)}>Chèn hệ quả của đáp án này…</DropdownMenuItem>}
           </DropdownMenuContent></DropdownMenu>}
+          {card.kind==='choice' && <button className="text-xs text-primary text-left underline mb-1" onClick={()=>setBranchExchange({sceneId:card.sceneId,choiceIndex:card.choiceIndex})}>Xuất / nhập nhánh từ đáp án này</button>}
           {!walk && card.sceneId && <button className="text-xs text-primary text-left underline mb-1" onClick={() => showWalk(card.key)}>Xem tuyến từ đây</button>}
           {walk && !card.previewEdge && <button className="text-xs text-primary text-left underline mb-1" onClick={() => rewindWalk(Number(card.key.split(':')[1]))}>Chọn lại từ bước này</button>}
           {card.previewEdge && <button className="mb-2 rounded bg-primary text-primary-foreground px-3 py-2 text-xs font-semibold" onClick={(event) => { event.stopPropagation(); followWalk(card.previewEdge); }}>Chọn nhánh này →</button>}
@@ -285,6 +288,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       </div></div>
     </div>
     {canvasEdit.creation && <CanvasSceneDialog game={gameData} at={canvasEdit.creation} onApply={({game})=>setGameData(game)} onClose={()=>canvasEdit.setCreation(null)}/>}
+    {branchExchange && <BranchExchangeDialog game={gameData} initialRoot={branchExchange.sceneId?branchExchange:undefined} onApply={setGameData} onClose={()=>setBranchExchange(null)}/>}
     {balanceOpen && <ScoreBalanceDialog game={gameData} selectedKeys={authoring?.keys || []} onApply={setGameData} onClose={() => setBalanceOpen(false)}/>}
     {blueprintOpen && <GraphBlueprintDialog game={gameData} onClose={()=>setBlueprintOpen(false)} onApply={({game,firstId})=>{setGameData(game);if(firstId)setInsertedFocus(firstId);}}/>}
     {localConnect && gameData.nodes[localConnect.sourceId] && <MapConnectDialog request={localConnect} gameData={gameData} onApply={({ game, targetId }) => { setGameData(game); setInsertedFocus(targetId); }} onClose={() => setLocalConnect(null)} />}
