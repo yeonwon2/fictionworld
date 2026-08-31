@@ -23,7 +23,7 @@ const labels = {
   unlockSkill: 'Kỹ năng nhận được', completeQuestId: 'Nhiệm vụ hoàn thành', label: 'Nhãn lựa chọn',
 };
 const destinations = new Set(['workshopRole', 'workshopContinuation','targetNodeId', 'successTarget', 'failTarget', 'winTarget', 'loseTarget', 'fleeTarget']);
-const hidden = new Set(['automaticEnding','id', 'choices', 'isEnding']);
+const hidden = new Set(['workshopPosition','automaticEnding','id', 'choices', 'isEnding']);
 const controlClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 const hasContent = (value) => value !== null && value !== undefined && value !== '' && value !== false &&
   (Array.isArray(value) ? value.some(hasContent) : typeof value === 'object' ? Object.values(value).some(hasContent) : true);

@@ -9,7 +9,7 @@ export function choiceLabel(index) {
 export function sceneLabel(id, node) {
   if (id === 'start_node') return 'Dẫn truyện';
   if (node?.isEnding) return `Kết thúc · ${node.endingLabel || id}`;
-  if (node?.workshopRole === 'consequence' && node.workshopTitle) return node.workshopTitle;
+  if (node?.workshopTitle) return node.workshopTitle;
   return /^scene_\d+$/.test(id) ? `Cảnh ${id.slice(6)}` : id;
 }
 
@@ -75,7 +75,16 @@ export function buildMindMap(nodes = {}) {
     const depth = depths.get(card.key);
     const row = rows.get(depth) || 0;
     rows.set(depth, row + 1);
-    Object.assign(card, { x: 40 + depth * 410, y: 60 + row * 310, unreachable: !reachable.has(card.key) });
+    const position=(card.kind==='choice'?nodes[card.sceneId]?.choices?.[card.choiceIndex]:['intro','scene','ending'].includes(card.kind)?nodes[card.sceneId]:null)?.workshopPosition;
+    Object.assign(card, { x: Number.isFinite(position?.x)?Math.max(0,position.x):40 + depth * 410, y: Number.isFinite(position?.y)?Math.max(0,position.y):60 + row * 310, unreachable: !reachable.has(card.key) });
+  }
+  // Keep automatically placed/new cards clear of positions the author pinned.
+  const saved = card => (card.kind === 'choice' ? nodes[card.sceneId]?.choices?.[card.choiceIndex] : ['intro','scene','ending'].includes(card.kind) ? nodes[card.sceneId] : null)?.workshopPosition;
+  const placed = cards.filter(card => Number.isFinite(saved(card)?.x) && Number.isFinite(saved(card)?.y));
+  for (const card of cards.filter(card => !placed.includes(card))) {
+    let overlap;
+    while ((overlap = placed.find(other => card.x < other.x + 330 && card.x + 330 > other.x && card.y < other.y + 300 && card.y + 300 > other.y))) card.y = overlap.y + 310;
+    placed.push(card);
   }
   return { cards, edges, errors, width: Math.max(800, ...cards.map((c) => c.x + 370)), height: Math.max(420, ...cards.map((c) => c.y + 310)) };
 }

@@ -194,7 +194,7 @@ export function workshopPrompt(game, keys = null, instruction = '') {
 }
 export function unfinishedWorkshop(game) {
   if (!game.meta.aiWorkshop) return Object.values(game.nodes).filter((node) => node.workshopRole === 'consequence' && !node.text?.trim()).map((node) => `${node.workshopTitle || node.id}: chưa viết nội dung`);
-  return Object.values(game.nodes).flatMap((node) => [!node.text?.trim() ? `${node.id}: chưa viết nội dung` : null, ...(node.choices || []).map((c, i) => !c.text?.trim() ? `${node.id}, lựa chọn ${i + 1}: chưa viết nội dung` : null)].filter(Boolean));
+  return Object.values(game.nodes).filter(node => !node.automaticEnding).flatMap((node) => [!node.text?.trim() ? `${node.id}: chưa viết nội dung` : null, ...(node.choices || []).map((c, i) => !c.text?.trim() ? `${node.id}, lựa chọn ${i + 1}: chưa viết nội dung` : null)].filter(Boolean));
 }
 
 // Prefer writing a decision before the consequence it feeds, regardless of click order.

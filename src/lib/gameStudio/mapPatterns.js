@@ -28,6 +28,7 @@ export function pasteMapPattern(game, pattern, { count = 1, keepContent = false,
     pattern.ids.forEach((id) => {
       const node = structuredClone(pattern.nodes[id]);
       node.id = mapping[id];
+      delete node.workshopPosition; (node.choices||[]).forEach(c=>delete c.workshopPosition);
       if (!keepContent) {
         node.text = ''; node.speaker = ''; node.workshopHint = node.workshopRole === 'consequence' ? 'Viết hệ quả của đáp án dẫn vào cảnh này, rồi nối mạch tới cảnh tiếp theo.' : '';
         if (node.systemPopup) node.systemPopup.text = '';

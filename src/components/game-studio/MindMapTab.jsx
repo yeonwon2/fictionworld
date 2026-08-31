@@ -1,3 +1,7 @@
+import GraphBlueprintDialog from './GraphBlueprintDialog';
+import useMapCanvas from './useMapCanvas';
+import CanvasSceneDialog from './CanvasSceneDialog';
+import { resetCardPositions } from '@/lib/gameStudio/canvasEditing';
 import { validateAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Pencil, Play, ZoomIn, ZoomOut, Maximize2, Search, Loader2 } from 'lucide-react';
@@ -77,6 +81,7 @@ function AiAdvice({ card, gameData, onApply, onClose }) {
 export default function MindMapTab({ gameData, setGameData, onGenerated, authoring = null }) {
   const fullGraph = useMemo(() => buildMindMap(gameData.nodes), [gameData.nodes]);
   const [localConnect, setLocalConnect] = useState(null);
+  const [blueprintOpen,setBlueprintOpen]=useState(false);
   const [gateCard, setGateCard] = useState(null);
   const [incomingTarget, setIncomingTarget] = useState(null);
   const [mergeSources, setMergeSources] = useState(null);
@@ -88,12 +93,10 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   const [walk, setWalk] = useState(null);
   const [walkNotice, setWalkNotice] = useState('');
   const walkSource = useRef(gameData.nodes);
-  const graph = useMemo(() => walk ? walkGraph(fullGraph, walk, true) : fullGraph, [fullGraph, walk]);
   const routeCounts = walkCounts(fullGraph, walk || []);
   const lastWalkKey = walk?.at(-1);
   const walkExits = walk ? fullGraph.edges.filter((edge) => edge.from === lastWalkKey) : [];
   const fullByKey = useMemo(() => new Map(fullGraph.cards.map((card) => [card.key, card])), [fullGraph]);
-  const byKey = useMemo(() => new Map(graph.cards.map((c) => [c.key, c])), [graph]);
   const viewport = useRef(null);
   const walkControls = useRef(null);
   const focusRequest = useRef(null);
@@ -108,6 +111,14 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   const [aiCard, setAiCard] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const canvasEdit=useMapCanvas(gameData,setGameData,zoom,!walk&&!busy,setError);
+  const graph = useMemo(() => {
+    const base=walk?walkGraph(fullGraph,walk,true):fullGraph;
+    if(walk||canvasEdit.preview?.kind!=='move')return base;
+    const cards=base.cards.map(c=>c.key===canvasEdit.preview.key?{...c,x:canvasEdit.preview.x,y:canvasEdit.preview.y}:c);
+    return {...base,cards,width:Math.max(base.width,...cards.map(c=>c.x+370)),height:Math.max(base.height,...cards.map(c=>c.y+320))};
+  },[fullGraph,walk,canvasEdit.preview]);
+  const byKey=useMemo(()=>new Map(graph.cards.map(c=>[c.key,c])),[graph]);
   useEffect(() => { setQaSelection(null); }, [gameData.nodes, gameData.meta]);
   useEffect(() => {
     const card = focusRequest.current;
@@ -224,11 +235,14 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       })}</div> : <p className="text-sm text-muted-foreground">{fullByKey.get(lastWalkKey)?.kind === 'ending' ? 'Đã đến kết thúc. Quay lại để xem nhánh khác.' : 'Ô này không có đường đi tiếp. Kiểm tra liên kết hoặc quay lại chọn nhánh khác.'}</p>}
       <button className="text-sm text-primary underline disabled:opacity-50" disabled={walk.length < 2} onClick={() => rewindWalk(Math.max(0, walk.length - (fullByKey.get(walk.at(-2))?.kind === 'choice' ? 3 : 2)))}>Quay về bước trước</button>
     </div>}
+    <Button variant="outline" onClick={()=>setBlueprintOpen(true)}>Dựng sơ đồ / AI thiết kế theo yêu cầu</Button>
     <OutcomeControls game={gameData} onChange={setGameData} onFocus={setInsertedFocus} />
     {authoring?.toolbar && <div className="sticky top-2 z-20 rounded-xl border bg-background p-3 shadow-sm">{authoring.toolbar}</div>}
-    <div ref={viewport} className="relative overflow-auto rounded-2xl border bg-muted/30" style={{ height: '70vh', minHeight: 420, backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-      <div style={{ width: graph.width * zoom, height: graph.height * zoom }}><div style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'relative' }}>
+    {!walk && <div className="flex flex-wrap gap-2 items-center text-xs"><span>Kéo tiêu đề để di chuyển ô. Kéo chấm nối tới ô cảnh; thả ở chỗ trống để tạo cảnh. Nhấp đúp hoặc chuột phải trên nền để thêm tại đó.</span><Button size="sm" variant="outline" onClick={()=>setGameData(resetCardPositions(gameData))}>Sắp xếp lại vị trí</Button></div>}
+    <div ref={viewport} data-map-surface="true" onPointerMove={canvasEdit.move} onPointerUp={canvasEdit.finish} onPointerCancel={canvasEdit.cancel} onDoubleClick={canvasEdit.addHere} onContextMenu={canvasEdit.addHere} className="relative overflow-auto rounded-2xl border bg-muted/30" style={{ height: '70vh', minHeight: 420, backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+      <div style={{ width: graph.width * zoom, height: graph.height * zoom }}><div ref={canvasEdit.canvas} data-map-canvas="true" style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'relative' }}>
         <svg width={graph.width} height={graph.height} className="absolute inset-0 pointer-events-none" aria-hidden="true"><defs><marker id="mindmap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker></defs>
+          {canvasEdit.preview?.kind==='link' && <line x1={canvasEdit.preview.from.x} y1={canvasEdit.preview.from.y} x2={canvasEdit.preview.to.x} y2={canvasEdit.preview.to.y} stroke="#7c3aed" strokeWidth="3" strokeDasharray="5 4"/>}
           {graph.edges.map((edge, index) => {
             const from = byKey.get(edge.from), to = byKey.get(edge.to);
             const back = to.x <= from.x;
@@ -239,10 +253,11 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
             return <g key={index} style={{ color: edge.missing ? '#dc2626' : active ? '#7c3aed' : '#64748b', opacity: selected && !active ? 0.22 : 1 }}><path d={path} fill="none" stroke="currentColor" strokeWidth={active ? 3 : 1.5} strokeDasharray={back ? '6 4' : undefined} markerEnd="url(#mindmap-arrow)" /><text x={x1 + 8} y={y1 - 12} fontSize="11" fill="currentColor" paintOrder="stroke" stroke="hsl(var(--background))" strokeWidth="3">{edge.label}</text></g>;
           })}
         </svg>
-        {graph.cards.map((card) => <article key={card.key} ref={(element) => { if (element) cardElements.current.set(card.key, element); else cardElements.current.delete(card.key); }} data-selected={selected === card.key} tabIndex={0} aria-label={card.title} onFocus={() => setSelected(card.key)} onClick={() => setSelected(card.key)} style={{ position: 'absolute', left: card.x, top: card.y, width: 310, height: authoring ? 286 : 238 }} className={`rounded-xl border-2 p-3 shadow-sm flex flex-col ${colors[card.kind]} ${selected === card.key ? 'ring-4 ring-primary/25' : ''} ${card.previewEdge ? 'border-dashed' : ''}`}>
+        {graph.cards.map((card) => <article key={card.key} data-canvas-scene={['scene','intro','ending'].includes(card.kind)?card.sceneId:undefined} ref={(element) => { if (element) cardElements.current.set(card.key, element); else cardElements.current.delete(card.key); }} data-selected={selected === card.key} tabIndex={0} aria-label={card.title} onFocus={() => setSelected(card.key)} onClick={() => setSelected(card.key)} style={{ position: 'absolute', left: card.x, top: card.y, width: 310, height: authoring ? 286 : 238 }} className={`rounded-xl border-2 p-3 shadow-sm flex flex-col ${colors[card.kind]} ${selected === card.key ? 'ring-4 ring-primary/25' : ''} ${card.previewEdge ? 'border-dashed' : ''}`}>
           {authoring && card.sceneId && card.kind !== 'combat' && <div className="flex justify-between gap-1 items-center text-xs"><label className="flex items-center gap-1"><input type="checkbox" aria-label={`Chọn ô ${card.title}`} checked={authoring.keys.includes(card.canonicalKey || card.key)} onChange={() => authoring.toggle(card.canonicalKey || card.key)} />Chọn ô</label>{!gameData.nodes[card.sceneId]?.automaticEnding && <button className="text-primary underline" onClick={() => authoring.write(card.canonicalKey || card.key)}>AI viết ô</button>}{card.kind !== 'choice' && <button className="text-primary underline" onClick={() => authoring.structure(card.sceneId)}>Thiết kế</button>}{authoring.remove && <button className="text-red-600 underline disabled:opacity-40 disabled:no-underline" disabled={card.sceneId === 'start_node' && card.kind !== 'choice'} title={card.sceneId === 'start_node' && card.kind !== 'choice' ? 'Giữ ô dẫn truyện làm điểm bắt đầu game; có thể sửa nội dung của ô này.' : `Xóa ${card.title}`} onClick={(e) => { e.stopPropagation(); authoring.remove(card); }}>Xóa ô</button>}</div>}
           {card.previewEdge && <span className="text-[10px] text-primary font-semibold">NHÁNH CÓ THỂ ĐI TIẾP</span>}
-          <div className="font-semibold text-sm truncate" title={card.title}>{card.title}</div>
+          <div className={`font-semibold text-sm truncate ${!walk?'cursor-grab touch-none select-none':''}`} title={card.title} onPointerDown={e=>canvasEdit.begin(e,card)}>{card.title}</div>
+          {!walk && gameData.nodes[card.sceneId] && ['scene','intro','choice'].includes(card.kind) && (card.kind==='choice'?connectionPorts(gameData.nodes[card.sceneId],card.choiceIndex):gameData.nodes[card.sceneId].combat?connectionPorts(gameData.nodes[card.sceneId]).filter(p=>p.combat):!gameData.nodes[card.sceneId].choices?.length?[{key:'',label:'Đi tiếp'}]:[]).map((port,i)=><button key={port.key} aria-label={`Kéo nối ${card.title} · ${port.label}`} title={`Kéo để nối: ${port.label}`} style={{position:'absolute',right:-9,top:90+i*24,touchAction:'none'}} className="w-5 h-5 rounded-full border-2 border-white bg-violet-600 cursor-crosshair z-10" onPointerDown={e=>canvasEdit.begin(e,card,{sourceId:card.sceneId,choiceIndex:card.kind==='choice'?card.choiceIndex:null,portKeys:port.key?[port.key]:[]})}/>)}
           <div className="text-[10px] text-muted-foreground">{card.sceneId}{card.unreachable ? ' · Chưa nối từ dẫn truyện' : ''}{card.kind === 'ending' ? ` · ${gameData.nodes[card.sceneId].endingType || 'NORMAL_END'}` : ''}</div>
           <div className="flex-1 overflow-auto my-2 text-xs leading-relaxed whitespace-pre-wrap">{gameData.nodes[card.sceneId]?.automaticEnding && card.kind !== 'choice' ? 'Ô xử lý ẩn: tự xét điều kiện và chuyển thẳng tới ending. Người chơi không thấy chữ hoặc đáp án ở ô này.' : card.text || (authoring ? (card.kind === 'choice' ? 'Chưa viết lựa chọn' : gameData.nodes[card.sceneId]?.workshopHint || 'Chưa viết nội dung') : '')}{card.choice && <><ChoiceDetails choice={card.choice} />{connectionPorts(gameData.nodes[card.sceneId], card.choiceIndex).filter((p) => !p.target).map((p) => <p key={p.key} className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{p.dice ? (p.field === 'successTarget' ? 'Thành công: ' : 'Thất bại: ') : ''}Chưa nối · bấm Thêm để chọn cảnh</p>)}</>}{card.sceneId && card.kind !== 'combat' && <MindMapSystemPopup node={gameData.nodes[card.sceneId]} choiceIndex={card.choiceIndex} onSave={(popup) => updateNode(card.sceneId, card.kind === 'choice' ? { choices: gameData.nodes[card.sceneId].choices.map((choice, index) => index === card.choiceIndex ? { ...choice, systemPopup: popup } : choice) } : { systemPopup: popup })} />}
 
@@ -266,6 +281,8 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
         </article>)}
       </div></div>
     </div>
+    {canvasEdit.creation && <CanvasSceneDialog game={gameData} at={canvasEdit.creation} onApply={({game})=>setGameData(game)} onClose={()=>canvasEdit.setCreation(null)}/>}
+    {blueprintOpen && <GraphBlueprintDialog game={gameData} onClose={()=>setBlueprintOpen(false)} onApply={({game,firstId})=>{setGameData(game);if(firstId)setInsertedFocus(firstId);}}/>}
     {localConnect && gameData.nodes[localConnect.sourceId] && <MapConnectDialog request={localConnect} gameData={gameData} onApply={({ game, targetId }) => { setGameData(game); setInsertedFocus(targetId); }} onClose={() => setLocalConnect(null)} />}
     {incomingTarget && gameData.nodes[incomingTarget] && <ConnectIncomingDialog targetId={incomingTarget} gameData={gameData} onSave={(game) => { setGameData(game); setInsertedFocus(incomingTarget); }} onClose={() => setIncomingTarget(null)} />}
     {mergeSources && <ConnectIncomingDialog gameData={gameData} create initialIds={mergeSources} onSave={(game, id) => { setGameData(game); setInsertedFocus(id); }} onClose={() => setMergeSources(null)} />}

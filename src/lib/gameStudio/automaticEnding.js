@@ -1,5 +1,5 @@
 import { choiceAvailable } from './routeExplorer.js';
-const permitted = new Set(['text','targetNodeId','statRequirements','statRequirementsMax','requiresFlag','requiresFlagAbsent','requiresItem','requiresNpcAffinity','requiresNpcAffinityMax','statModifiers']);
+const permitted = new Set(['workshopPosition','text','targetNodeId','statRequirements','statRequirementsMax','requiresFlag','requiresFlagAbsent','requiresItem','requiresNpcAffinity','requiresNpcAffinityMax','statModifiers']);
 export function validateAutomaticEnding(nodes,node) {
  if(!node || node.isEnding || !node.choices?.length) throw new Error('Ô xét điểm phải có đường dẫn tới các kết thúc.');
  if(['combat','randomEvents','quest','systemPopup','grantItem','grantFlag'].some(k=>node[k])) throw new Error('Ô xét điểm tự động không được chứa chiến đấu, sự kiện hay hiệu ứng vào cảnh.');
