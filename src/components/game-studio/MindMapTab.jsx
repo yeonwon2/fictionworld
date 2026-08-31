@@ -1,3 +1,4 @@
+import ScoreBalanceDialog from './ScoreBalanceDialog';
 import GraphBlueprintDialog from './GraphBlueprintDialog';
 import useMapCanvas from './useMapCanvas';
 import CanvasSceneDialog from './CanvasSceneDialog';
@@ -82,6 +83,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   const fullGraph = useMemo(() => buildMindMap(gameData.nodes), [gameData.nodes]);
   const [localConnect, setLocalConnect] = useState(null);
   const [blueprintOpen,setBlueprintOpen]=useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
   const [gateCard, setGateCard] = useState(null);
   const [incomingTarget, setIncomingTarget] = useState(null);
   const [mergeSources, setMergeSources] = useState(null);
@@ -236,6 +238,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       <button className="text-sm text-primary underline disabled:opacity-50" disabled={walk.length < 2} onClick={() => rewindWalk(Math.max(0, walk.length - (fullByKey.get(walk.at(-2))?.kind === 'choice' ? 3 : 2)))}>Quay về bước trước</button>
     </div>}
     <Button variant="outline" onClick={()=>setBlueprintOpen(true)}>Dựng sơ đồ / AI thiết kế theo yêu cầu</Button>
+    <Button variant="outline" onClick={() => setBalanceOpen(true)}>Cân bằng điểm bằng AI</Button>
     <OutcomeControls game={gameData} onChange={setGameData} onFocus={setInsertedFocus} />
     {authoring?.toolbar && <div className="sticky top-2 z-20 rounded-xl border bg-background p-3 shadow-sm">{authoring.toolbar}</div>}
     {!walk && <div className="flex flex-wrap gap-2 items-center text-xs"><span>Kéo tiêu đề để di chuyển ô. Kéo chấm nối tới ô cảnh; thả ở chỗ trống để tạo cảnh. Nhấp đúp hoặc chuột phải trên nền để thêm tại đó.</span><Button size="sm" variant="outline" onClick={()=>setGameData(resetCardPositions(gameData))}>Sắp xếp lại vị trí</Button></div>}
@@ -282,6 +285,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       </div></div>
     </div>
     {canvasEdit.creation && <CanvasSceneDialog game={gameData} at={canvasEdit.creation} onApply={({game})=>setGameData(game)} onClose={()=>canvasEdit.setCreation(null)}/>}
+    {balanceOpen && <ScoreBalanceDialog game={gameData} selectedKeys={authoring?.keys || []} onApply={setGameData} onClose={() => setBalanceOpen(false)}/>}
     {blueprintOpen && <GraphBlueprintDialog game={gameData} onClose={()=>setBlueprintOpen(false)} onApply={({game,firstId})=>{setGameData(game);if(firstId)setInsertedFocus(firstId);}}/>}
     {localConnect && gameData.nodes[localConnect.sourceId] && <MapConnectDialog request={localConnect} gameData={gameData} onApply={({ game, targetId }) => { setGameData(game); setInsertedFocus(targetId); }} onClose={() => setLocalConnect(null)} />}
     {incomingTarget && gameData.nodes[incomingTarget] && <ConnectIncomingDialog targetId={incomingTarget} gameData={gameData} onSave={(game) => { setGameData(game); setInsertedFocus(incomingTarget); }} onClose={() => setIncomingTarget(null)} />}
