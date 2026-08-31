@@ -55,3 +55,20 @@ test("standalone stat chips stay above long scene content", () => {
   assert.match(html, /\.rpg-stats-compact\{position:relative;z-index:4;isolation:isolate;display:flex;flex:0 0 38px/);
   assert.match(html, /\.rpg-vn-frame\{position:relative;z-index:1/);
 });
+
+import vm from 'node:vm';
+function exportRuntime(game){
+ const container={innerHTML:'',classList:{add(){},remove(){}}};
+ const sandbox={document:{documentElement:{style:{setProperty(){}},setAttribute(){}},body:{},getElementById:id=>id==='game'?container:null,querySelectorAll:()=>[],querySelector:()=>null},localStorage:{setItem(){}},setTimeout(){},clearInterval(){},setInterval(){throw new Error('Hidden router attempted to type text');}};
+ const html=generateStandaloneHTML(game),script=html.match(/<script>([\s\S]*)<\/script>/)[1].replace('load(); showPoster(); render();','globalThis.api={state:state,render:render,choose:choose,visibleHistory:visibleHistory};');
+ vm.runInNewContext(script,sandbox);return {...sandbox.api,container};
+}
+function endingGame(score=79){return {meta:{poster:false,initialStats:{favor:score},statsConfig:[{key:'favor',label:'Thiện cảm'}]},nodes:{start_node:{text:'Final decision',choices:[{text:'Go',statModifiers:{favor:1},targetNodeId:'gate'}]},gate:{text:'HIDDEN GATE',automaticEnding:true,randomEvents:[],choices:[{text:'HIDDEN LOW',targetNodeId:'low',statRequirementsMax:{favor:79},statModifiers:{}},{text:'HIDDEN HIGH',targetNodeId:'high',statRequirements:{favor:80},statModifiers:{}}]},low:{isEnding:true,text:'Low ending'},high:{isEnding:true,text:'High ending'}}};}
+test('export routes directly to ending using post-choice score without rendering router or extra choices',()=>{
+ const g=endingGame(),rt=exportRuntime(g);rt.choose(g.nodes.start_node,0);
+ assert.equal(rt.state.nodeId,'high');assert.equal(rt.state.stats.favor,80);assert.match(rt.container.innerHTML,/High ending/);assert.doesNotMatch(rt.container.innerHTML,/HIDDEN/);assert.equal(rt.visibleHistory().length,1);
+});
+test('export refuses ambiguous, missing and invalid automatic endings instead of showing choices',()=>{
+ for(const kind of ['overlap','gap','effect']){const g=endingGame();if(kind==='overlap')g.nodes.gate.choices[0].statRequirementsMax.favor=100;if(kind==='gap')g.nodes.gate.choices[1].statRequirements.favor=100;if(kind==='effect')g.nodes.gate.choices[1].statModifiers.favor=10;const rt=exportRuntime(g);rt.choose(g.nodes.start_node,0);assert.equal(rt.state.nodeId,'gate');assert.match(rt.container.innerHTML,/role="alert"/);assert.doesNotMatch(rt.container.innerHTML,/HIDDEN/);assert.equal(rt.state.stats.favor,80);}
+});
+test('export resolves a save positioned at the hidden router',()=>{const rt=exportRuntime(endingGame(10));rt.state.nodeId='gate';rt.render();assert.equal(rt.state.nodeId,'low');assert.match(rt.container.innerHTML,/Low ending/);});

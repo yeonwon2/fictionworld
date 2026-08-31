@@ -1,11 +1,12 @@
 import { choiceAvailable } from './routeExplorer.js';
-const permitted = new Set(['workshopPosition','text','targetNodeId','statRequirements','statRequirementsMax','requiresFlag','requiresFlagAbsent','requiresItem','requiresNpcAffinity','requiresNpcAffinityMax','statModifiers']);
 export function validateAutomaticEnding(nodes,node) {
+ const permitted = new Set(['workshopPosition','text','targetNodeId','statRequirements','statRequirementsMax','requiresFlag','requiresFlagAbsent','requiresItem','requiresNpcAffinity','requiresNpcAffinityMax','statModifiers']);
+ const hasValue=v=>v!=null&&v!==''&&v!==false&&(typeof v!=='object'||Object.keys(v).length>0);
  if(!node || node.isEnding || !node.choices?.length) throw new Error('Ô xét điểm phải có đường dẫn tới các kết thúc.');
- if(['combat','randomEvents','quest','systemPopup','grantItem','grantFlag'].some(k=>node[k])) throw new Error('Ô xét điểm tự động không được chứa chiến đấu, sự kiện hay hiệu ứng vào cảnh.');
+ if(['combat','randomEvents','quest','systemPopup','grantItem','grantFlag','setFlags'].some(k=>hasValue(node[k]))) throw new Error('Ô xét điểm tự động không được chứa chiến đấu, sự kiện hay hiệu ứng vào cảnh.');
  for(const c of node.choices) {
   if(!nodes[c.targetNodeId]?.isEnding) throw new Error('Mọi đường của ô xét điểm tự động phải dẫn trực tiếp tới một ending có thật.');
-  if(Object.keys(c).some(k=>!permitted.has(k)&&c[k]!=null&&c[k]!==''&&c[k]!==false) || Object.values(c.statModifiers||{}).some(v=>v!==0)) throw new Error('Đáp án xét điểm chỉ được có điều kiện, không có thưởng/phạt, xúc xắc hoặc hiệu ứng khác.');
+  if(Object.keys(c).some(k=>!permitted.has(k)&&hasValue(c[k])) || Object.values(c.statModifiers||{}).some(v=>v!==0)) throw new Error('Đáp án xét điểm chỉ được có điều kiện, không có thưởng/phạt, xúc xắc hoặc hiệu ứng khác.');
  }
 }
 export function resolveAutomaticEnding(nodes,node,runtime) {
