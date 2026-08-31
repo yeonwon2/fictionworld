@@ -1,9 +1,11 @@
+import {patternDemos} from './patternDemos.js';
 import {scenes, demoStats} from './cinematicDemo.js';
 const stat=(key,label,initial)=>({key,label,initial});
 const choice=(text,modifiers,systemText='')=>({text,modifiers,systemText});
 const scene=(title,place,time,paragraphs,quote,choices)=>({title,place,time,paragraphs,quote,choices});
 const end=(label,title,text,quote,min)=>({label,title,paragraphs:[text],quote,min});
 export const genreDemos = {
+ ...patternDemos,
  cinema:{id:'cinema',label:'Điện ảnh · Tình cảm',title:'Chuyện dưới hiên hoa',description:'Hình và lời thoại, khoảng lặng và cảm xúc.',art:'/hero-transmigration.jpg',stats:demoStats.slice(0,2),scenes,score:'favor',endings:[
   end('Lời hẹn','Hẹn người khi hoa nở','Nàng nhận lại bức thư, ánh mắt đã bớt dè chừng. Trước khi bạn rời đi, nàng đặt một cánh hoa vào trang sách đang đọc.','Ngày mai, vẫn giờ này nhé.',35),
   end('Chưa nói thành lời','Trang sách khép lại','Nàng cất bức thư vào tay áo. Giữa hai người còn những điều chưa thể nói ra. Ngoài hiên, nắng đã tắt.','Hôm khác… ta sẽ kể người nghe.',-Infinity)]},

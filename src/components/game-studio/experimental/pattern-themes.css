@@ -1,0 +1,71 @@
+/* All ornaments are inline vectors or CSS. No image/font requests. */
+.cinema-lab.cl-pattern {--paper:#fcf8f0;--text:#313d43;--muted:#65615a;--line:#c7baaa;--accent:#795346;--cl-gold:var(--accent);--cl-ink:var(--paper);}
+.cl-pattern .cl-game {background:var(--paper);color:var(--text);}
+.cl-pattern .cl-top,.cl-pattern .cl-modal-card {background:var(--paper);color:var(--text);border-color:var(--line);}
+.cl-pattern .cl-top {backdrop-filter:none;}
+.cl-pattern .cl-wordmark span,.cl-pattern .cl-time,.cl-pattern .cl-prompt,.cl-pattern .cl-ending-totals small,.cl-pattern .cl-preview-label {color:var(--muted);}
+.cl-pattern .cl-content {width:100%;max-width:740px;margin:auto;padding:28px 48px 54px;}
+.cl-pattern .cl-content h1 {max-width:none;}
+.cl-pattern .cl-content h1,.cl-pattern .cl-ending h1,.cl-pattern .cl-prose {color:var(--text);}
+.cl-pattern .cl-prose {font-size:18px;line-height:2;}
+.cl-pattern .cl-prose blockquote,.cl-pattern .cl-menu-label,.cl-pattern .cl-journal-entry summary {color:var(--accent);border-color:var(--line);}
+.cl-pattern .cl-choices button,.cl-pattern .cl-menu-trigger,.cl-pattern .cl-menu-links button,.cl-pattern .cl-menu-back,.cl-pattern .cl-ending-actions button {color:var(--text);background:var(--paper);border-color:var(--line);}
+.cl-pattern .cl-choices button:hover,.cl-pattern .cl-menu-links button:hover {background:color-mix(in srgb,var(--accent) 12%,var(--paper));border-color:var(--accent);}
+.cl-pattern button:focus-visible,.cl-pattern input:focus-visible,.cl-pattern summary:focus-visible {outline-color:var(--accent);}
+.cl-pattern .cl-pattern-heading {display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:850px;margin:30px auto 0;padding:0 40px;color:var(--accent);font:10px/1.8 system-ui,sans-serif;letter-spacing:2px;}
+.cl-pattern .cl-pattern-mark {width:160px;height:48px;flex-shrink:0;}
+.cl-pattern .cl-pattern-heading small {white-space:nowrap;}
+.cl-pattern .cl-ending {background:var(--paper);margin:40px auto;border:1px solid var(--line);color:var(--text);}
+.cl-pattern .cl-ending-emblem {color:var(--accent);background:var(--paper);border-color:var(--line);}
+.cl-pattern .cl-ending-badge,.cl-pattern .cl-ending-totals {border-color:var(--line);}
+.cl-pattern .cl-notice {background:var(--paper);color:var(--text);border-color:var(--line);}
+.cl-pattern .cl-stat-row,.cl-pattern .cl-journal-entry {border-color:var(--line);}
+/* Modern correspondence: perforated margin, postmark, reply lines. */
+.cl-genre-letters .cl-game {background-image:radial-gradient(#7953461a .8px,transparent .8px);background-size:12px 12px;}
+.cl-genre-letters .cl-content {background:var(--paper);border-left:1px dashed var(--line);border-right:1px dashed var(--line);}
+.cl-genre-letters .cl-content h1 {font-family:system-ui,sans-serif;font-weight:650;letter-spacing:-1.5px;}
+.cl-genre-letters .cl-chapter {font-family:monospace;letter-spacing:0;}
+.cl-genre-letters .cl-choices button {border:0;border-bottom:1px solid var(--line);padding:18px 4px;font-family:system-ui,sans-serif;}
+.cl-genre-letters .cl-letter {border:1px solid var(--line);border-radius:50%;width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;}
+.cl-genre-letters .cl-ending {text-align:left;border:1px dashed var(--line);box-shadow:8px 8px 0 #c7baaa40;}
+.cl-genre-letters .cl-ending-emblem {margin-left:0;border:2px dotted var(--accent);transform:rotate(-9deg);}
+/* Jade manuscript: lattice border, double-rule page, vermilion seal. */
+.cinema-lab.cl-genre-jade {--paper:#edf0e5;--text:#243f38;--muted:#56685e;--line:#9aac97;--accent:#7d4036;}
+.cl-genre-jade .cl-game {background-image:repeating-linear-gradient(45deg,transparent 0 18px,#41655212 18px 19px),repeating-linear-gradient(-45deg,transparent 0 18px,#41655212 18px 19px);}
+.cl-genre-jade .cl-content {background:var(--paper);border:4px double var(--line);margin-top:22px;margin-bottom:40px;max-width:780px;}
+.cl-genre-jade .cl-content h1,.cl-genre-jade .cl-time {text-align:center;}
+.cl-genre-jade .cl-chapter {justify-content:center;}
+.cl-genre-jade .cl-prose blockquote {border-left:3px double var(--accent);padding:15px 24px;}
+.cl-genre-jade .cl-choices {grid-template-columns:1fr 1fr;gap:14px;}
+.cl-genre-jade .cl-prompt {grid-column:1/-1;}
+.cl-genre-jade .cl-choices button {border:3px double var(--line);}
+.cl-genre-jade .cl-ending {border:6px double var(--line);outline:1px solid var(--line);outline-offset:6px;}
+.cl-genre-jade .cl-ending-emblem {border:2px solid var(--accent);border-radius:3px;transform:rotate(-5deg);}
+/* Orbital telemetry: coordinate grid and orbit rings behind an opaque reading pane. */
+.cinema-lab.cl-genre-orbit {--paper:#0e1d2b;--text:#e2eff6;--muted:#a8c1d0;--line:#416879;--accent:#8de2e2;}
+.cl-genre-orbit .cl-game {background-image:linear-gradient(#41687926 1px,transparent 1px),linear-gradient(90deg,#41687926 1px,transparent 1px),radial-gradient(ellipse at 85% 30%,transparent 26%,#41687955 26.1%,transparent 26.3%,transparent 33%,#41687955 33.1%,transparent 33.3%);background-size:40px 40px,40px 40px,100% 850px;}
+.cl-genre-orbit .cl-content {background:var(--paper);border-left:3px solid var(--accent);margin-top:26px;margin-bottom:40px;}
+.cl-genre-orbit .cl-content h1,.cl-genre-orbit .cl-ending h1 {font-family:system-ui,sans-serif;font-weight:500;}
+.cl-genre-orbit .cl-prose {font-family:system-ui,sans-serif;font-size:17px;}
+.cl-genre-orbit .cl-choices button {border-left:3px solid var(--accent);font-family:system-ui,sans-serif;}
+.cl-genre-orbit .cl-letter {font-family:monospace;font-size:14px;}
+.cl-genre-orbit .cl-ending {border-top:4px solid var(--accent);text-align:left;box-shadow:12px 12px 0 #41687922;}
+.cl-genre-orbit .cl-ending-emblem {margin-left:0;border-radius:0;border:0;}
+/* Deco stage: fan-shaped geometry along the edges, arch over the closing scene. */
+.cinema-lab.cl-genre-nocturne {--paper:#251d2b;--text:#f2e5d4;--muted:#c7b5b3;--line:#8d7257;--accent:#e3bf83;}
+.cl-genre-nocturne .cl-game {background-image:repeating-conic-gradient(from 0deg at 0% 50%,transparent 0deg 12deg,#e3bf8310 12deg 12.5deg,transparent 12.5deg 24deg),repeating-conic-gradient(from 0deg at 100% 50%,transparent 0deg 12deg,#e3bf8310 12deg 12.5deg,transparent 12.5deg 24deg);}
+.cl-genre-nocturne .cl-content {background:var(--paper);border-left:1px solid var(--line);border-right:1px solid var(--line);margin-top:22px;margin-bottom:40px;}
+.cl-genre-nocturne .cl-content h1,.cl-genre-nocturne .cl-time {text-align:center;}
+.cl-genre-nocturne .cl-chapter {justify-content:center;}
+.cl-genre-nocturne .cl-choices button {border:1px solid var(--line);box-shadow:inset 0 0 0 4px var(--paper),inset 0 0 0 5px #8d725740; padding:20px;}
+.cl-genre-nocturne .cl-ending {border:4px double var(--line);border-radius:180px 180px 0 0;padding-top:75px;}
+.cl-genre-nocturne .cl-ending-emblem {border-radius:50% 50% 0 0;}
+@container(max-width:760px){
+ .cl-pattern .cl-pattern-heading {padding:0 22px;gap:12px;flex-wrap:wrap;margin-top:22px;font-size:9px;}
+ .cl-pattern .cl-pattern-mark {width:100px;height:35px;}
+ .cl-pattern .cl-content {width:calc(100% - 32px);padding:28px 22px;margin-top:20px;}
+ .cl-pattern .cl-content h1 {font-size:30px;}
+ .cl-pattern .cl-prose {font-size:17px;}
+ .cl-genre-jade .cl-choices {grid-template-columns:1fr;}
+ .cl-genre-nocturne .cl-ending {border-radius:90px 90px 0 0;padding-top:48px;}
+}

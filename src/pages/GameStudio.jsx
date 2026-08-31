@@ -1,3 +1,4 @@
+import { READING_THEMES } from '@/lib/gameStudio/readingThemes';
 import CinematicLab from '@/components/game-studio/experimental/CinematicLab';
 import React, { useEffect, useRef, useState } from "react";
 import { Swords, Gamepad2, Wrench, Share2, Plus, ArrowLeft, Trash2, Loader2, Palette, Bot, Heart, Crown, ChevronDown, Coins, NotebookText, GitBranch, Smartphone, Tablet, Monitor, FlaskConical } from "lucide-react";
@@ -308,6 +309,13 @@ function GameEditor({ gameId, onBack }) {
         {isWorkshopActive && gameData.meta.sourceScriptOutdated && <p className="max-w-2xl mx-auto mb-4 rounded-xl border border-amber-400 bg-amber-500/10 p-3 text-sm">Sơ đồ đã có chỉnh sửa mới hơn kịch bản gốc. Sản xuất lại từ văn bản sẽ thay thế các sửa đổi đó. Để giữ bản đã sửa, dùng “Tạo lại game từ sơ đồ” trong tab Sơ Đồ Tư Duy.</p>}
         {tab === "play" && (
           <div className="space-y-3">
+            <label className="flex flex-wrap items-center justify-center gap-3 text-sm">Giao diện chơi
+              <select className="rounded-lg border p-2 bg-background max-w-full" value={gameData.meta.readingTheme||''} onChange={e=>handleChange({...gameData,meta:{...gameData.meta,readingTheme:e.target.value||undefined}})}>
+                <option value="">Giao diện cũ · Giữ nguyên</option>
+                {Object.values(READING_THEMES).map(t=><option key={t.id} value={t.id}>{t.art?'Có ảnh':'Không ảnh'} · {t.name}</option>)}
+              </select>
+            </label>
+            <p className="text-center text-xs text-muted-foreground">Giao diện mới dùng thử · Không đổi luật chơi · Được lưu cùng game và áp dụng khi xuất HTML. Có thể chuyển lại giao diện cũ bất cứ lúc nào.</p>
             <div className="flex items-center justify-center gap-1.5">
               {[
                 { id: "phone", label: "Điện thoại", icon: Smartphone },

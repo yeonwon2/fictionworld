@@ -1,4 +1,6 @@
+import { createPortal } from 'react-dom';
 import { resolveAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
+import { getReadingTheme, READING_THEME_CSS } from '@/lib/gameStudio/readingThemes';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Sparkles, Heart, Droplet, Coins, Star, Brain, Flame, Book, Circle, Zap, Gem, Package, ScrollText, Gift, Skull, GitBranch, Dices, Lock, User, History, LogOut, RotateCcw, ArrowLeft, ChevronDown, Crown, Maximize2, Minimize2, Save, ArrowDown } from 'lucide-react';
@@ -24,8 +26,9 @@ function storyLogBase(runtime, nodes) {
 export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null }) {
   const meta = gameData.meta;
   const presentation = meta.presentation || 'dialogue';
-  const playbackLayout = meta.playbackLayout || 'timeline';
-  const heroineArt = PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
+  const readingTheme = getReadingTheme(meta);
+  const playbackLayout = readingTheme ? 'focus' : meta.playbackLayout || 'timeline';
+  const heroineArt = readingTheme ? readingTheme.art : PRESENTATION_ART[presentation] || PRESENTATION_ART.dialogue;
   const posterArt = meta.posterImage || meta.playerAvatar || heroineArt;
   const posterTag = GAME_PRESENTATIONS[presentation]?.name || '';
   const archetype = meta.archetype || 'none';
@@ -165,6 +168,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
   const startTypewriter = useCallback((text) => {
     if (typingRef.current) clearInterval(typingRef.current);
     fullTextRef.current = text || '';
+    if(readingTheme){setTyped(fullTextRef.current);setTypingDone(true);return;}
     setTyped('');
     setTypingDone(false);
     let i = 0;
@@ -177,7 +181,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
         setTypingDone(true);
       }
     }, 18);
-  }, []);
+  }, [readingTheme]);
 
   const pushEvent = useCallback((icon, text) => {
     const id = Date.now() + Math.random();
@@ -507,7 +511,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
   // tự tô nền theo theme, nếu không chữ màu sáng (dành cho nền tối) sẽ lộ trên nền
   // trang bên ngoài. Dùng backgroundColor (không phải shorthand background) để
   // không đè mất --rpg-bg-image (theme gradient) hay data-bg-pattern đặt qua CSS.
-  const rootStyle = { ...themeStyle, backgroundColor: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
+  const rootStyle = { ...themeStyle, ...(readingTheme?.vars||{}), backgroundColor: 'var(--rpg-bg)', color: 'var(--rpg-text)' };
   const endingMeta = ENDING_TYPES[node?.endingType];
   const showInventoryTab = archetype === 'mystery' || archetype === 'litrpg' || archetype === 'rebirth' || hasItemMechanic;
   const showQuestTab = archetype === 'litrpg';
@@ -519,15 +523,20 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
   const visitedCount = new Set([...rt.history, rt.nodeId].filter((id) => id !== 'start_node' && !gameData.nodes[id]?.automaticEnding && !gameData.nodes[id]?.isEnding)).size;
   const storyProgress = Math.min(100, Math.round((visitedCount / playableNodeCount) * 100));
   const isCustomTheme = meta.theme === 'custom';
-  const ambientEffect = isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
+  const ambientEffect = readingTheme ? 'none' : isCustomTheme ? (meta.customTheme?.effect || 'none') : (theme.effect || 'none');
   const compactStats = [...statsConfig].sort((a, b) => Number(Boolean(b.isVital)) - Number(Boolean(a.isVital)));
 
+  useEffect(()=>{if(readingTheme)rootRef.current?.scrollTo({top:0,behavior:'instant'});},[rt.nodeId,readingTheme]);
+  useEffect(()=>{if(readingTheme){if(typingRef.current)clearInterval(typingRef.current);setTyped(fullTextRef.current);setTypingDone(true);}},[readingTheme]);
+  const readingOverlay=element=>readingTheme?createPortal(<div data-reading-theme={readingTheme.id} style={readingTheme.vars}>{element}</div>,document.body):element;
   return (
-    <div ref={rootRef} style={rootStyle} data-presentation={presentation} data-bg-pattern={isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+    <div ref={rootRef} style={rootStyle} data-reading-theme={readingTheme?.id} data-presentation={presentation} data-bg-pattern={!readingTheme && isCustomTheme ? (meta.customTheme?.bgPattern || 'plain') : undefined} data-panel-shape={!readingTheme && isCustomTheme ? (meta.customTheme?.panelShape || 'panel') : undefined} className={`rpg-root rpg-${presentation} rounded-2xl overflow-hidden flex flex-col min-h-[600px] relative${shake ? ' animate-shake' : ''}`}>
+      {readingTheme&&<style>{READING_THEME_CSS}</style>}
+      {readingTheme?.art&&<div className="rpg-reading-backdrop" style={{backgroundImage:`url(${readingTheme.art})`}}/>}
       {routeProgress && <div role="status" className="relative z-10 p-3 text-sm border-b" style={{ background: 'var(--rpg-panel)', color: 'var(--rpg-text)' }}><strong>Chạy thử riêng tuyến · Không lưu tiến trình</strong><p>{routeProgress.message}</p>{routeProgress.state === 'playing' && routeProgress.step.choiceIndex !== null && !choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).ok && <p className="text-amber-500">Tuyến bị chặn: {choiceStatus(gameData.nodes[rt.nodeId]?.choices?.[routeProgress.step.choiceIndex]).reason}</p>}</div>}
       <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
       {posterOpen && (
-        <div className="rpg-poster" style={{ backgroundImage: `url(${posterArt})` }}>
+        <div className="rpg-poster" style={{ backgroundImage: posterArt ? `url(${posterArt})` : undefined }}>
           <div className={`rpg-effect rpg-effect-${ambientEffect}`} aria-hidden="true" />
           <div className="rpg-poster-shade" />
           <div className="rpg-poster-inner">
@@ -544,13 +553,13 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
           </div>
         </div>
       )}
-      <div className="relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
+      <div className="rpg-reading-body relative z-10 flex flex-col flex-1 p-3 sm:p-4 gap-3" style={{ background: 'transparent' }}>
         {/* Thanh trên cùng — nút thoát, avatar, tên game + lượt, điểm hệ thống, menu */}
         <div className="rpg-topbar">
-          {onExit && (
+          {onExit && !readingTheme && (
             <button className="rpg-topbar-btn" onClick={onExit} title="Quay lại"><ArrowLeft size={16} /></button>
           )}
-          <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-topbar-avatar" />
+          {!readingTheme&&<img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="rpg-topbar-avatar" />}
           <div className="rpg-topbar-info">
             <div className="rpg-topbar-title">{meta.title || 'Trò Chơi'}</div>
             <div className="rpg-topbar-subtitle"><span className="rpg-topbar-player">{meta.player_name || 'Người Chơi'} · </span><span className="rpg-topbar-turn">Lượt {turn}</span></div>
@@ -646,7 +655,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
 
         {/* Game Over */}
         {screen === 'gameover' && (
-          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
+          <div className="rpg-ending flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
             <div className="inline-flex items-center gap-2 text-2xl font-bold px-5 py-2 rounded-full" style={{ background: '#ef4444', color: '#fff' }}><Skull size={22} /> {meta.gameOverTitle || 'GAME OVER'}</div>
             <p className="text-base" style={{ color: 'var(--rpg-text)' }}>{meta.gameOverText || 'Bạn đã gục ngã. Số phận đã khép lại quá sớm...'}</p>
             <div className="rounded-lg border p-3 text-sm text-left w-full" style={{ color: 'var(--rpg-text)' }}>
@@ -663,9 +672,10 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
 
         {/* Ending */}
         {screen === 'ending' && node && (
-          <div className="flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
+          <div className="rpg-ending flex flex-col items-center gap-4 rounded-2xl p-8 m-auto max-w-md text-center" style={{ background: 'color-mix(in srgb, var(--rpg-panel) 80%, transparent)' }}>
             <div className="text-xl font-bold px-5 py-2 rounded-full" style={{ background: endingMeta?.color || '#888', color: '#fff' }}>{endingMeta?.icon} {endingMeta?.label || 'Kết Thúc'}</div>
-            <p className="text-base leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{node.text}</p>
+            {readingTheme && node.title && <h2 className="rpg-reading-ending-title">{node.title}</h2>}
+            <p className="rpg-ending-text text-base leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--rpg-text)' }}>{node.text}</p>
             <Summary statsConfig={statsConfig} rt={{...rt,history:visibleHistory}} />
             <Button onClick={reset} style={{ background: 'var(--rpg-accent2)', color: '#fff' }}><RotateCcw size={15} className="mr-1.5" />Chơi lại từ đầu</Button>
           </div>
@@ -678,8 +688,8 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
       )}
 
       {/* System Popup modal */}
-      {systemPopup && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => dismissSystemPopup()}>
+      {systemPopup && readingOverlay(
+        <div className={readingTheme?"fixed inset-0 z-50 flex items-center justify-center p-4":"absolute inset-0 z-30 flex items-center justify-center p-4"} style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => dismissSystemPopup()}>
           <div className="max-w-sm w-full rounded-xl p-5 text-center relative" style={{ background: 'var(--rpg-panel)', boxShadow: '0 0 24px color-mix(in srgb, var(--rpg-accent2) 30%, transparent)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-2 mb-2">
               <Sparkles size={18} style={{ color: 'var(--rpg-accent)' }} />
@@ -693,7 +703,7 @@ export default function GamePlayer({ gameData, gameKey, onExit, routeTest = null
       )}
 
       {/* Bottom sheet — nhân vật / chỉ số / túi đồ / nhiệm vụ / quan hệ / lịch sử */}
-      {sheetOpen && (
+      {sheetOpen && readingOverlay(
         <GameMenuSheet
           onClose={() => setSheetOpen(false)}
           meta={meta}
@@ -926,7 +936,7 @@ function Summary({ statsConfig, rt }) {
 
 function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, showInventoryTab, showQuestTab, mysterySlots, onReset, onExit }) {
   const affinityEntries = Object.entries(rt.npcAffinity || {});
-  const historyEntries = [...rt.history].slice(-20).reverse().map((id) => {
+  const historyEntries = getReadingTheme(meta) ? [...storyLogBase(rt,gameData.nodes), ...(gameData.nodes[rt.nodeId]?.automaticEnding?[]:[{nodeId:rt.nodeId,...gameData.nodes[rt.nodeId]}])].filter(e=>!gameData.nodes[e.nodeId]?.automaticEnding).map((e,i)=>({id:e.nodeId||String(i),speaker:e.speaker||'Dẫn truyện',text:e.text||'',choiceText:e.choiceText})) : [...rt.history].slice(-20).reverse().map((id) => {
     const n = gameData.nodes[id];
     if (!n) return null;
     return { id, speaker: n.speaker && n.speaker.trim() ? n.speaker : 'Dẫn truyện', text: (n.text || '').slice(0, 140) };
@@ -938,11 +948,12 @@ function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, sh
       <div className="rpg-sheet">
         <div className="rpg-sheet-handle" />
         <div className="rpg-sheet-body scrollbar-thin">
+          {getReadingTheme(meta)&&<button className="rpg-sheet-item" onClick={onClose}><X size={16}/> Đóng menu</button>}
           {meta.player_bio && (
             <div className="rpg-sheet-section">
               <div className="rpg-sheet-section-title"><User size={13} /> Nhân vật</div>
               <div className="flex items-start gap-3">
-                <img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                {(meta.playerAvatar||!getReadingTheme(meta))&&<img src={meta.playerAvatar || dicebearAvatar(meta.player_name)} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />}
                 <div>
                   <div className="font-semibold text-sm" style={{ color: 'var(--rpg-text)' }}>{meta.player_name || 'Người Chơi'}</div>
                   <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--rpg-muted)' }}>{meta.player_bio}</p>
@@ -1037,7 +1048,8 @@ function GameMenuSheet({ onClose, meta, rt, gameData, statsConfig, archetype, sh
                 {historyEntries.map((h, i) => (
                   <div key={h.id + i} className="text-xs">
                     <div className="font-semibold" style={{ color: 'var(--rpg-accent2)' }}>{h.speaker}</div>
-                    <p style={{ color: 'var(--rpg-muted)' }}>{h.text}{h.text.length >= 140 ? '…' : ''}</p>
+                    <p style={{ color: 'var(--rpg-muted)' }}>{h.text}{!getReadingTheme(meta)&&h.text.length >= 140 ? '…' : ''}</p>
+                    {h.choiceText&&<p>Bạn đã chọn: {h.choiceText}</p>}
                   </div>
                 ))}
               </div>

@@ -142,3 +142,5 @@
 .cl-genre-system .cl-ending-failure {border-color:#bd6965;background:#251a20f2;}
 .cl-genre-system .cl-ending-failure .cl-ending-emblem {color:#efa29b;border-color:#bd6965;background:#45252a;}
 .cl-genre-system .cl-ending-failure .cl-ending-eyebrow,.cl-genre-system .cl-ending-failure .cl-ending-badge {color:#efa29b;border-color:#bd6965;}
+
+.cinema-lab .cl-audio-panel{display:grid;gap:16px}.cinema-lab .cl-audio-panel label{display:grid;gap:8px}.cinema-lab .cl-audio-panel input[type=range]{width:100%;accent-color:var(--cl-gold,#d7b078)}.cinema-lab .cl-audio-panel>button{padding:12px;border:1px solid currentColor;border-radius:8px}.cinema-lab .cl-audio-panel button:disabled{opacity:.45;cursor:not-allowed}

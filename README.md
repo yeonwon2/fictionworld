@@ -192,3 +192,19 @@ Chỉ cần giữ **MÃ NHÁNH** ở đầu kịch bản. Lúc xuất, mã nhậ
 Parser không tự sửa đích sai, không bỏ cảnh/lựa chọn và không nối ngầm theo thứ tự. Chặn mã cảnh/đáp án trùng, đích thiếu, cảnh không tới được, điều kiện tự xét kết thúc sai cấu trúc, chỉ số chưa khai báo và dòng hiệu ứng không hiểu. Hỗ trợ lời truyện, đáp án nhiều dòng, điểm min/max/delta dùng chỉ số hiện có, cờ/vật phẩm, hảo cảm NPC, ảnh cảnh, thông báo hệ thống, kinh nghiệm/điểm hệ thống, kỹ năng, hoàn thành nhiệm vụ và kết thúc tự động. Các cơ chế ngoài phạm vi serializer (ví dụ chiến đấu, xúc xắc, nhiệm vụ mới hoặc sự kiện ngẫu nhiên) chặn xuất thay vì âm thầm mất dữ liệu. Cần QA và chơi thử sau khi thay nhánh để kiểm tra khả năng đạt điểm, cờ và tính hợp lý câu chuyện.
 
 Các hàm nhập nội dung định dạng JSON/FW-TEXT trước đây vẫn được giữ ở tầng thư viện cho tương thích, nhưng cửa sổ mặc định hiện dùng chế độ thay toàn bộ nhánh. Bản cũ cần xuất lại để lấy MÃ NHÁNH mới.
+
+### Âm thanh trong giao diện thử nghiệm
+
+Bước 4: vào **Giao diện thử nghiệm → Menu game → Âm thanh** để bật/tắt và chỉnh riêng âm lượng nền/hiệu ứng. Sáu thể loại có bảng âm sắc khác nhau, với tín hiệu chọn đáp án, hệ thống và kết thúc tốt/buồn. Đây là âm thanh tổng hợp bằng Web Audio để duyệt cảm giác, chưa phải nhạc/thu âm hoàn thiện; không tải nhạc ngoài hay gọi AI. Mặc định tắt, chỉ tạo AudioContext sau thao tác bật của người dùng. Chuyển thể loại giữ thiết lập âm lượng và thay nền; ẩn tab dừng tiếng, hiện lại tiếp tục nếu đã bật; thoát khu thử nghiệm dừng và đóng tài nguyên âm thanh. Nếu hệ điều hành tạm dừng âm thanh, tắt rồi bật lại để thử. Không áp vào theme/game thật hoặc HTML xuất.
+
+### Theme hoạ tiết không dùng ảnh (thử nghiệm)
+
+Trong **Giao diện thử nghiệm → Bộ giao diện**, bốn lựa chọn bắt đầu bằng **Không ảnh**: Thư gửi ngày mai (hiện đại), Ngọc giản (cổ trang), Quỹ đạo (viễn tưởng), Dạ khúc (đô thị huyền bí). Các mẫu dùng CSS và SVG nội tuyến, font hệ thống; không dựng lớp ảnh nền hoặc tải tài nguyên trang trí từ mạng. Mỗi mẫu có truyện ngắn, chỉ số mẫu, hai kết thúc, menu nhật ký và âm thanh thử nghiệm. Có thể dán văn bản dài để kiểm tra khung đọc, chuyển khung điện thoại/máy tính và xem trước hồi kết. Chưa đăng ký vào bộ theme sản xuất hoặc trình xuất HTML; không thay đổi game đã lưu.
+
+### Dùng giao diện mới với game thật
+
+Trong game đang mở, vào **Trải Nghiệm Game → Giao diện chơi** để chọn 10 giao diện mới (4 mẫu không ảnh, 6 mẫu có ảnh). Cũng có thể chọn ở phần cấu hình **Giao diện mới · Dùng thử với game thật**. Lựa chọn được lưu trong `meta.readingTheme`, độc lập với `presentation`, `archetype`, `theme`, điểm và graph. Chọn **Giao diện cũ · Giữ nguyên** để quay lại; không phải tạo lại kịch bản.
+
+Bộ trình bày dùng chung `readingThemes.js` giữa GamePlayer và HTML xuất: khung đọc đầy đủ, menu ở đầu, nhật ký toàn bộ cảnh/lựa chọn, khung kết thúc theo mẫu; dữ liệu lấy từ game thật. Không chạy dữ liệu demo hoặc thay luật hệ thống/cung đấu/làm giàu. Các bảng cơ chế thật vẫn hiện khi game có dùng. Giao diện mới dùng font hệ thống, CSS nội tuyến trong file xuất; ảnh nền của mẫu có ảnh được `prepareOfflineGame` đóng gói cùng các ảnh người dùng gắn vào game. Nếu ảnh tải thất bại, ExportCenter báo cảnh báo; bản đọc vẫn có nền màu và chữ. Mẫu không ảnh không tự thêm ảnh mặc định, nhưng vẫn giữ ảnh người dùng gắn vào cảnh/nhân vật. Cần xuất lại file để nhận giao diện mới; các file đã tải trước đây không tự cập nhật.
+
+Âm thanh nền tổng hợp vẫn chỉ nằm ở Giao diện thử nghiệm; đợt tích hợp này giữ nguyên âm thanh của player hiện tại. Bố cục thật điều chỉnh theo dữ liệu/cơ chế của game, không giữ các tên nhiệm vụ, địa điểm và chỉ số minh hoạ trong prototype.

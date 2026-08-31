@@ -59,7 +59,7 @@ test("standalone stat chips stay above long scene content", () => {
 import vm from 'node:vm';
 function exportRuntime(game){
  const container={innerHTML:'',classList:{add(){},remove(){}}};
- const sandbox={document:{documentElement:{style:{setProperty(){}},setAttribute(){}},body:{},getElementById:id=>id==='game'?container:null,querySelectorAll:()=>[],querySelector:()=>null},localStorage:{setItem(){}},setTimeout(){},clearInterval(){},setInterval(){throw new Error('Hidden router attempted to type text');}};
+ const sandbox={document:{documentElement:{style:{setProperty(){}},setAttribute(){},removeAttribute(){}},body:{},getElementById:id=>id==='game'?container:null,querySelectorAll:()=>[],querySelector:()=>null},localStorage:{setItem(){}},setTimeout(){},clearInterval(){},setInterval(){throw new Error('Hidden router attempted to type text');}};
  const html=generateStandaloneHTML(game),script=html.match(/<script>([\s\S]*)<\/script>/)[1].replace('load(); showPoster(); render();','globalThis.api={state:state,render:render,choose:choose,visibleHistory:visibleHistory};');
  vm.runInNewContext(script,sandbox);return {...sandbox.api,container};
 }
@@ -72,3 +72,32 @@ test('export refuses ambiguous, missing and invalid automatic endings instead of
  for(const kind of ['overlap','gap','effect']){const g=endingGame();if(kind==='overlap')g.nodes.gate.choices[0].statRequirementsMax.favor=100;if(kind==='gap')g.nodes.gate.choices[1].statRequirements.favor=100;if(kind==='effect')g.nodes.gate.choices[1].statModifiers.favor=10;const rt=exportRuntime(g);rt.choose(g.nodes.start_node,0);assert.equal(rt.state.nodeId,'gate');assert.match(rt.container.innerHTML,/role="alert"/);assert.doesNotMatch(rt.container.innerHTML,/HIDDEN/);assert.equal(rt.state.stats.favor,80);}
 });
 test('export resolves a save positioned at the hidden router',()=>{const rt=exportRuntime(endingGame(10));rt.state.nodeId='gate';rt.render();assert.equal(rt.state.nodeId,'low');assert.match(rt.container.innerHTML,/Low ending/);});
+
+import { READING_THEMES, getReadingTheme } from '../src/lib/gameStudio/readingThemes.js';
+test('all reading themes preserve score routing and stay opt-in',()=>{
+ assert.equal(getReadingTheme({}),null);assert.equal(getReadingTheme({readingTheme:'unknown'}),null);
+ for(const id of Object.keys(READING_THEMES)){
+  const g=endingGame();g.meta.readingTheme=id;
+  const container={innerHTML:'',classList:{add(){},remove(){}}};
+  const sandbox={document:{documentElement:{style:{setProperty(){}},setAttribute(){},removeAttribute(){}},body:{style:{},setAttribute(){}},getElementById:id=>id==='game'?container:null,querySelectorAll:()=>[],querySelector:()=>null},localStorage:{setItem(){}},setTimeout(){},clearInterval(){},setInterval(){throw Error('Must not type a hidden ending');}};
+  const before=JSON.stringify(g);const html=generateStandaloneHTML(g);
+  assert.equal(JSON.stringify(g),before);assert.doesNotMatch(html,/<link[^>]+fonts.googleapis/);
+  const script=html.match(/<script>([\s\S]*)<\/script>/)[1].replace('load(); showPoster(); render();','globalThis.api={state:state,choose:choose};');
+  vm.runInNewContext(script,sandbox);sandbox.api.choose(g.nodes.start_node,0);
+  assert.equal(sandbox.api.state.stats.favor,80,id);assert.equal(sandbox.api.state.nodeId,'high',id);
+  assert.match(container.innerHTML,/High ending/);assert.doesNotMatch(container.innerHTML,/HIDDEN/);
+ }
+});
+
+import { prepareOfflineGame } from '../src/lib/gameStudio/rpgExport.js';
+test('offline preparation skips template image downloads for no-image themes', async()=>{
+ const old=globalThis.fetch;let requests=0;globalThis.fetch=async()=>{requests++;throw Error('Network unavailable');};
+ try{for(const id of ['letters','jade','orbit','nocturne']){const g=endingGame();g.meta.readingTheme=id;const before=JSON.stringify(g);const result=await prepareOfflineGame(g);assert.equal(result.meta.defaultArt,'');assert.deepEqual(result.meta.offlineAssetFailures,[]);assert.equal(JSON.stringify(g),before);}assert.equal(requests,0);}finally{globalThis.fetch=old;}
+});
+test('offline preparation embeds the selected reading-theme artwork without changing source data',async()=>{
+ const oldFetch=globalThis.fetch,oldReader=globalThis.FileReader,oldWindow=globalThis.window;const urls=[];
+ globalThis.window={location:{origin:'http://localhost:5173'}};
+ globalThis.fetch=async url=>{urls.push(url);return {ok:true,blob:async()=>({type:'image/jpeg'})};};
+ globalThis.FileReader=class {readAsDataURL(){this.result='data:image/jpeg;base64,TEST';this.onload();}};
+ try{const g=endingGame();g.meta.readingTheme='cinema';const before=JSON.stringify(g);const result=await prepareOfflineGame(g);assert.deepEqual(urls,['http://localhost:5173/hero-transmigration.jpg']);assert.equal(result.meta.offlineAssets['/hero-transmigration.jpg'],'data:image/jpeg;base64,TEST');assert.equal(JSON.stringify(g),before);}finally{globalThis.fetch=oldFetch;globalThis.FileReader=oldReader;globalThis.window=oldWindow;}
+});

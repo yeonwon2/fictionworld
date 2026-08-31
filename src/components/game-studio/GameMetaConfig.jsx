@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
 import { Plus, Trash2, Image as ImageIcon, Palette } from 'lucide-react';
 import { GENRES, ARCHETYPES, GAME_PRESENTATIONS, PRESENTATION_ART, PRESET_AVATARS, THEMES, statsArrayToObject, applyArchetypeStats } from '@/lib/gameStudio/rpgThemes';
+import { READING_THEMES } from '@/lib/gameStudio/readingThemes';
 import FileUrlInput from '@/components/FileUrlInput';
 import { listThemes } from '@/lib/worldcrud';
 
@@ -122,7 +123,7 @@ export default function GameMetaConfig({ gameData, setGameData }) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Theme (giao diện & cách chơi)</Label>
+          <Label className="text-xs">Phong cách & luật chơi hiện có</Label>
           <Select value={meta.presentation || 'dialogue'} onValueChange={onPresentationChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -130,6 +131,15 @@ export default function GameMetaConfig({ gameData, setGameData }) {
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="space-y-2 rounded-xl border p-4">
+        <Label htmlFor="reading-theme">Giao diện mới · Dùng thử với game thật</Label>
+        <select id="reading-theme" className="w-full border rounded-lg p-3 bg-background" value={meta.readingTheme||''} onChange={e=>updateMeta({readingTheme:e.target.value||undefined})}>
+          <option value="">Giữ giao diện cũ</option>
+          {Object.values(READING_THEMES).map(t=><option key={t.id} value={t.id}>{t.art?'Có ảnh':'Không ảnh'} · {t.name}</option>)}
+        </select>
+        <p className="text-xs text-muted-foreground">Chỉ đổi cách trình bày, không đổi điểm, luật chơi hay kịch bản. Giao diện mới có bảng màu và font riêng; bảng màu bên dưới được giữ lại cho giao diện cũ. Chuyển sang Trải Nghiệm Game để thử. Bản xuất HTML cũng dùng giao diện đã chọn.</p>
+        <p className="text-xs text-muted-foreground">Các mẫu không ảnh không tự thêm hình nền. Ảnh do bạn gắn riêng vào cảnh hoặc nhân vật vẫn được giữ. Âm thanh tổng hợp hiện vẫn ở khu thử nghiệm.</p>
       </div>
       <div className="theme-preview-strip" style={{ backgroundImage: `url(${PRESENTATION_ART[meta.presentation || 'dialogue']})` }}>
         <div><b>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.name}</b><span>{GAME_PRESENTATIONS[meta.presentation || 'dialogue']?.description}</span></div>
