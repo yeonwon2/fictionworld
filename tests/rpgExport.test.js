@@ -1,6 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { READING_THEME_CSS } from '../src/lib/gameStudio/readingThemes.js';
 import { generateStandaloneHTML } from "../src/lib/gameStudio/rpgExport.js";
+
+test('export history uses one label and shell prevents document scroll and header shrink', () => {
+  const html = generateStandaloneHTML({meta:{title:'Scroll',readingTheme:'inkwash',statsConfig:[]},nodes:{start_node:{text:'Test',choices:[]}}});
+  assert.match(html, /<b>Xem lại nội dung đã chơi<\/b>/);
+  assert.doesNotMatch(html, /cảnh trước<\/b>/);
+  assert.match(html, /html,body\{[^}]*overflow:hidden;overscroll-behavior:none/);
+  assert.match(html, /#game\{[^}]*height:100%;overflow-y:auto;overscroll-behavior-y:contain/);
+  assert.match(html, /#game>\*\{flex-shrink:0/);
+  assert.match(READING_THEME_CSS, /\.rpg-topbar\{[^}]*flex:0 0 auto;[^}]*min-height:81px;height:81px;max-height:81px/);
+});
+
+test('export resets its scroll on scene change but not rerendering the same scene', () => {
+  const runtime=exportRuntime({meta:{statsConfig:[]},nodes:{start_node:{id:'start_node',text:'First',isEnding:true,choices:[]},end:{id:'end',text:'End',isEnding:true,choices:[]}}});
+  runtime.render(); runtime.container.scrollTop=300; runtime.render();
+  assert.equal(runtime.container.scrollTop,300);
+  runtime.state.nodeId='end'; runtime.render();
+  assert.equal(runtime.container.scrollTop,0);
+});
 
 test("standalone game menu puts exit directly below restart", () => {
   const html = generateStandaloneHTML({

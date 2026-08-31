@@ -791,7 +791,7 @@ export function VNScenePanel({ node, typed, typingDone, skipTyping, choiceStatus
       {historyCollapsed && (
         <button type="button" className="rpg-history-summary" onClick={() => setHistoryOpen(true)}>
           <History size={15} />
-          <span><b>{pastEntries.length} cảnh trước</b><small>Xem lại nội dung đã chơi</small></span>
+          <span><b>Xem lại nội dung đã chơi</b></span>
           <ChevronDown size={14} />
         </button>
       )}

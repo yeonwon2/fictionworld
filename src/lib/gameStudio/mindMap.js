@@ -94,7 +94,9 @@ export function gameFromMindMap(game) {
   if (pending.length) throw new Error(`Cần viết xong ${pending.length} ô trước khi tạo game:\n${pending.join('\n')}`);
   const graph = buildMindMap(game.nodes);
   if (graph.errors.length) throw new Error(graph.errors.join('\n'));
-  if (game.meta.aiWorkshop && !game.meta.aiWorkshop.setupApproved) throw new Error('Hãy duyệt bối cảnh và bộ điểm trong Xưởng Kịch Bản Sơ Đồ AI trước khi tạo game.');
+  // Blueprint imports also keep the scene counter here; that alone is not an AI setup.
+  const workshop = game.meta.aiWorkshop;
+  if (workshop && !workshop.setupApproved && (workshop.type || workshop.setupApproved === false)) throw new Error('Hãy duyệt bối cảnh và bộ điểm trong Xưởng Kịch Bản Sơ Đồ AI trước khi tạo game.');
   // Preserve every gameplay field; in particular don't reparse sourceScript.
   const result = JSON.parse(JSON.stringify(game));
   result.meta.mindMapRevision = (result.meta.mindMapRevision || 0) + 1;

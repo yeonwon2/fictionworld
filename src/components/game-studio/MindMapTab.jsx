@@ -1,4 +1,5 @@
 import BranchExchangeDialog from './BranchExchangeDialog';
+import './studio-controls.css';
 import ScoreBalanceDialog from './ScoreBalanceDialog';
 import GraphBlueprintDialog from './GraphBlueprintDialog';
 import useMapCanvas from './useMapCanvas';
@@ -6,7 +7,7 @@ import CanvasSceneDialog from './CanvasSceneDialog';
 import { resetCardPositions } from '@/lib/gameStudio/canvasEditing';
 import { validateAutomaticEnding } from '@/lib/gameStudio/automaticEnding';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Pencil, Play, ZoomIn, ZoomOut, Maximize2, Search, Loader2 } from 'lucide-react';
+import { Bot, Pencil, Play, ZoomIn, ZoomOut, Maximize2, Search, Loader2, Wand2, CheckCircle2, Settings2, GitBranch, Map as MapIcon, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -106,6 +107,7 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   const focusRequest = useRef(null);
   const cardElements = useRef(new Map());
   const [qaOpen, setQaOpen] = useState(false);
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
   const [qaSelection, setQaSelection] = useState(null);
   const [zoom, setZoom] = useState(0.8);
   const [query, setQuery] = useState('');
@@ -202,10 +204,21 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
   if (routeSession) return <div className="space-y-3"><div className="rounded-xl border p-3 flex flex-wrap gap-3 items-center"><Button variant="outline" onClick={() => setRouteSession(null)}>← Quay lại sơ đồ và tuyến đã chọn</Button><Button variant="outline" onClick={() => setRouteSession({ ...routeSession, run: routeSession.run + 1 })}>Chạy lại tuyến từ đầu</Button><p className="text-xs text-muted-foreground">Bản thử độc lập: giữ nguyên toàn bộ luật, điểm, cờ, vật phẩm và thông báo. Chỉ cho chọn các lựa chọn thuộc tuyến; không sửa game gốc.</p></div><GamePlayer key={routeSession.run} gameData={routeSession.game} gameKey={null} onExit={() => setRouteSession(null)} routeTest={routeSession.route} /></div>;
   const matches = query.trim() ? graph.cards.filter((c) => `${c.title} ${c.text}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) : [];
   return <fieldset disabled={busy} className="space-y-3 min-w-0">
-    <div className="glass-card rounded-2xl p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Sơ Đồ Tư Duy</h2><p className="text-xs text-muted-foreground mt-1">{fullGraph.cards.filter((c) => c.kind === 'scene').length} cảnh truyện · {fullGraph.cards.filter((c) => c.kind === 'intro').length} dẫn truyện · {fullGraph.cards.filter((c) => c.kind === 'ending').length} kết thúc · {fullGraph.cards.filter((c) => c.kind === 'choice').length} lựa chọn · Không cắt bớt nhánh</p></div><Button onClick={rebuild} disabled={busy || !!graph.errors.length}>{busy ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Play size={15} className="mr-2" />}Tạo lại game từ sơ đồ</Button></div>
-      <p className="text-xs text-muted-foreground">Đọc từ trái sang phải: dẫn truyện → cảnh → lựa chọn → đích. Bấm ô để tô sáng các đường nối; dùng thanh cuộn và thu phóng để xem toàn bộ. Bấm Lưu thay đổi trong ô sửa để cập nhật game. Tạo lại dùng chính sơ đồ này và bắt đầu lượt chơi mới.</p>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>setBranchExchange({})}>Xuất / nhập nhánh truyện</Button><Button variant={!walk ? 'default' : 'outline'} onClick={() => { setWalk(null); setSelected(null); viewport.current?.scrollTo(0, 0); }}>Toàn bộ sơ đồ</Button><Button variant={walk ? 'default' : 'outline'} onClick={() => showWalk()}>Đi từng tuyến từ đầu</Button></div>
+    <div className="studio-map-header space-y-3">
+      <div><h2 className="font-semibold">Sơ Đồ Tư Duy</h2><p className="text-xs text-muted-foreground mt-1">{fullGraph.cards.filter((c) => c.kind === 'scene').length} cảnh · {fullGraph.cards.filter((c) => c.kind === 'intro').length} dẫn truyện · {fullGraph.cards.filter((c) => c.kind === 'ending').length} kết thúc · {fullGraph.cards.filter((c) => c.kind === 'choice').length} lựa chọn</p></div>
+      <div className="studio-toolbar" role="group" aria-label="Công cụ sơ đồ">
+        <Button className="studio-primary" onClick={()=>setBlueprintOpen(true)}><Wand2 size={15}/>Dựng sơ đồ</Button>
+        <Button variant={!walk?'secondary':'outline'} aria-pressed={!walk} onClick={()=>{setWalk(null);setSelected(null);viewport.current?.scrollTo(0,0);}}><MapIcon size={15}/>Toàn bộ</Button>
+        <Button variant={walk?'secondary':'outline'} aria-pressed={!!walk} onClick={()=>showWalk()}><GitBranch size={15}/>Đi từng tuyến</Button>
+        <Button variant={qaOpen?'secondary':'outline'} aria-expanded={qaOpen} onClick={()=>setQaOpen(!qaOpen)}><CheckCircle2 size={15}/>Kiểm tra QA</Button>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline"><Settings2 size={15}/>Công cụ<ChevronDown size={13}/></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={()=>setBranchExchange({})}>Xuất / nhập nhánh truyện</DropdownMenuItem>
+          <DropdownMenuItem onSelect={()=>setBalanceOpen(true)}>Cân bằng điểm bằng AI</DropdownMenuItem>
+          <DropdownMenuItem onSelect={()=>setOutcomeOpen(v=>!v)}>Điểm số & kết thúc</DropdownMenuItem>
+          <DropdownMenuItem disabled={!!walk} onSelect={()=>setGameData(resetCardPositions(gameData))}>Sắp xếp lại vị trí</DropdownMenuItem>
+        </DropdownMenuContent></DropdownMenu>
+        <Button variant="outline" onClick={rebuild} disabled={busy||!!graph.errors.length} title="Tạo lại game từ sơ đồ và bắt đầu lượt chơi mới">{busy?<Loader2 size={15} className="animate-spin"/>:<Play size={15}/>}Tạo game</Button>
+      </div>
       {walk && <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-3">
         <p className="text-sm font-semibold">Xem riêng một tuyến · Chọn bước tiếp theo</p>
         <p className="text-sm font-medium">Tuyến đã chọn: {routeCounts.scenes} cảnh truyện · {routeCounts.choices} lựa chọn · {routeCounts.intros} dẫn truyện · {routeCounts.endings} kết thúc</p>
@@ -217,14 +230,14 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
         {!!walkExits.length && <p className="text-xs text-muted-foreground">Các lựa chọn tiếp theo hiện thành ô nối bên phải và nút Đi tiếp ngay phía trên sơ đồ.</p>}
         {!walkExits.length && <p role="status" className="text-sm">{fullByKey.get(lastWalkKey)?.kind === 'ending' ? 'Đã tới kết thúc tuyến.' : fullByKey.get(lastWalkKey)?.kind === 'combat' ? 'Tuyến dừng ở kết quả thua trận.' : 'Tuyến dừng tại đây: chưa có đường đi tiếp. Bạn có thể sửa ô này hoặc quay lại.'}</p>}
       </div>}
-      <div className="flex flex-wrap gap-2 items-center"><Button size="icon" variant="outline" aria-label="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.15, z - 0.1))}><ZoomOut size={16} /></Button><span className="text-xs w-12 text-center">{Math.round(zoom * 100)}%</span><Button size="icon" variant="outline" aria-label="Phóng to" onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}><ZoomIn size={16} /></Button><Button variant="outline" size="sm" onClick={() => { setZoom(Math.min(1, (viewport.current.clientWidth - 20) / graph.width, (viewport.current.clientHeight - 20) / graph.height)); viewport.current.scrollTo(0, 0); }}><Maximize2 size={14} className="mr-1" />Toàn cảnh</Button><Search size={15} /><Input aria-label="Tìm cảnh hoặc lựa chọn" className="max-w-xs" placeholder="Tìm cảnh, lựa chọn, nội dung…" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <div className="studio-toolbar" role="group" aria-label="Tìm kiếm và thu phóng"><Search size={15} className="shrink-0 text-muted-foreground"/><Input aria-label="Tìm cảnh hoặc lựa chọn" className="studio-search" placeholder="Tìm cảnh, lựa chọn…" value={query} onChange={e=>setQuery(e.target.value)}/><Button className="studio-icon" size="icon" variant="outline" aria-label="Thu nhỏ" onClick={()=>setZoom(z=>Math.max(.15,z-.1))}><ZoomOut size={16}/></Button><span className="studio-zoom">{Math.round(zoom*100)}%</span><Button className="studio-icon" size="icon" variant="outline" aria-label="Phóng to" onClick={()=>setZoom(z=>Math.min(1.5,z+.1))}><ZoomIn size={16}/></Button><Button variant="outline" onClick={()=>{setZoom(Math.min(1,(viewport.current.clientWidth-20)/graph.width,(viewport.current.clientHeight-20)/graph.height));viewport.current.scrollTo(0,0);}}><Maximize2 size={15}/>Toàn cảnh</Button></div>
       {query && <div className="flex gap-2 flex-wrap max-h-32 overflow-auto text-xs">{matches.length ? matches.map((card) => <button key={card.key} className="border rounded px-2 py-1 hover:bg-accent" onClick={() => focus(card)}>{card.title}</button>) : 'Không tìm thấy.'}</div>}
       {gameData.meta.sourceScriptOutdated && <p className="text-xs text-amber-700 dark:text-amber-400">Sơ đồ đã được sửa. Kịch bản văn bản gốc chưa bao gồm các sửa đổi này; nhập lại bản gốc sẽ ghi đè sơ đồ.</p>}
       {!!graph.errors.length && <details className="text-sm text-red-600"><summary className="cursor-pointer">Cần sửa {graph.errors.length} lỗi liên kết trước khi tạo lại game</summary><ul className="list-disc pl-5 max-h-40 overflow-auto">{graph.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></details>}
-      <p className="text-[11px] text-muted-foreground">Xanh lam: dẫn truyện · Tím: cảnh · Vàng: lựa chọn · Xanh lá: kết thúc · Đỏ: đích thiếu · Nét đứt: quay lại / nối ngang. Sơ đồ thể hiện cấu trúc; dùng Kiểm Tra Toàn Diện để kiểm tra điều kiện chơi.</p>
+      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Hướng dẫn & chú thích sơ đồ</summary><p className="mt-2">Đọc từ trái sang phải: dẫn truyện → cảnh → lựa chọn → đích. Kéo tiêu đề để đổi vị trí; kéo chấm nối để đổi đường đi. Nhấp đúp nền để thêm cảnh. Tạo game dùng sơ đồ hiện tại và bắt đầu lượt chơi mới.</p><p className="mt-2">Lam: dẫn truyện · Tím: cảnh · Vàng: lựa chọn · Xanh lá: kết thúc · Đỏ: đích thiếu · Nét đứt: quay lại. Dùng QA để kiểm tra điều kiện chơi.</p></details>
       {error && <p role="alert" className="text-sm text-red-600 whitespace-pre-line">{error}</p>}
     </div>
-    <div className="rounded-2xl border bg-card">
+    <div hidden={!qaOpen} className="rounded-2xl border bg-card">
       <button type="button" className="w-full px-4 py-3 text-left font-semibold text-sm" aria-expanded={qaOpen} onClick={() => setQaOpen(!qaOpen)}>{qaOpen ? '▾' : '▸'} QA kịch bản · Kiểm tra và bấm lỗi để xem ô</button>
       <div hidden={!qaOpen} className="max-h-[60vh] overflow-y-auto p-2"><GameTestReportTab gameData={gameData} setGameData={(data) => setGameData({ ...data, meta: { ...data.meta, sourceScriptOutdated: !!data.meta.sourceScript } })} onLocateFinding={locateFinding} /></div>
     </div>
@@ -239,11 +252,8 @@ export default function MindMapTab({ gameData, setGameData, onGenerated, authori
       })}</div> : <p className="text-sm text-muted-foreground">{fullByKey.get(lastWalkKey)?.kind === 'ending' ? 'Đã đến kết thúc. Quay lại để xem nhánh khác.' : 'Ô này không có đường đi tiếp. Kiểm tra liên kết hoặc quay lại chọn nhánh khác.'}</p>}
       <button className="text-sm text-primary underline disabled:opacity-50" disabled={walk.length < 2} onClick={() => rewindWalk(Math.max(0, walk.length - (fullByKey.get(walk.at(-2))?.kind === 'choice' ? 3 : 2)))}>Quay về bước trước</button>
     </div>}
-    <Button variant="outline" onClick={()=>setBlueprintOpen(true)}>Dựng sơ đồ / AI thiết kế theo yêu cầu</Button>
-    <Button variant="outline" onClick={() => setBalanceOpen(true)}>Cân bằng điểm bằng AI</Button>
-    <OutcomeControls game={gameData} onChange={setGameData} onFocus={setInsertedFocus} />
-    {authoring?.toolbar && <div className="sticky top-2 z-20 rounded-xl border bg-background p-3 shadow-sm">{authoring.toolbar}</div>}
-    {!walk && <div className="flex flex-wrap gap-2 items-center text-xs"><span>Kéo tiêu đề để di chuyển ô. Kéo chấm nối tới ô cảnh; thả ở chỗ trống để tạo cảnh. Nhấp đúp hoặc chuột phải trên nền để thêm tại đó.</span><Button size="sm" variant="outline" onClick={()=>setGameData(resetCardPositions(gameData))}>Sắp xếp lại vị trí</Button></div>}
+    {outcomeOpen&&<OutcomeControls initiallyOpen game={gameData} onChange={setGameData} onFocus={setInsertedFocus}/>}
+    {authoring?.toolbar&&<div className="studio-selection">{authoring.toolbar}</div>}
     <div ref={viewport} data-map-surface="true" onPointerMove={canvasEdit.move} onPointerUp={canvasEdit.finish} onPointerCancel={canvasEdit.cancel} onDoubleClick={canvasEdit.addHere} onContextMenu={canvasEdit.addHere} className="relative overflow-auto rounded-2xl border bg-muted/30" style={{ height: '70vh', minHeight: 420, backgroundImage: 'radial-gradient(hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
       <div style={{ width: graph.width * zoom, height: graph.height * zoom }}><div ref={canvasEdit.canvas} data-map-canvas="true" style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})`, transformOrigin: 'top left', position: 'relative' }}>
         <svg width={graph.width} height={graph.height} className="absolute inset-0 pointer-events-none" aria-hidden="true"><defs><marker id="mindmap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker></defs>

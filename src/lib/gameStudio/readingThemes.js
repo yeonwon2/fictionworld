@@ -120,7 +120,7 @@ export const READING_THEME_CSS=`
 [data-reading-theme] .rpg-system-card>button:not(:last-child),[data-reading-theme] .rpg-sys-btn{background:var(--rpg-accent);color:var(--rpg-bg)!important;min-height:44px;}
 [data-reading-theme] .rpg-sys-overlay{box-sizing:border-box;padding:12px;}
 [data-reading-theme] .rpg-effect{pointer-events:none;opacity:.55;z-index:25;}
-/* The exported game scrolls the document; keep particles in the visible viewport. */
+/* The exported game scrolls inside its shell; keep particles in the viewport. */
 body[data-reading-theme] #game>.rpg-effect{position:fixed;}
 [data-reading-theme] .rpg-poster .rpg-effect{z-index:1;}
 [data-reading-theme] .rpg-poster-inner{z-index:2;}
@@ -130,10 +130,10 @@ body[data-reading-theme] #game>.rpg-effect{position:fixed;}
 @media(prefers-reduced-motion:reduce){[data-reading-theme] .rpg-effect{display:none;}}
 /* Scoped opt-in styles, shared verbatim by live player and standalone export. */
 [data-reading-theme]{font-family:var(--rpg-font);background-color:var(--rpg-bg);color:var(--rpg-text);}
-.rpg-root[data-reading-theme]{height:min(850px,90dvh);min-height:480px;overflow:auto!important;isolation:isolate;}
+.rpg-root[data-reading-theme]{height:min(850px,90svh);min-height:min(480px,90svh);overflow:auto!important;overscroll-behavior-y:contain;scrollbar-gutter:stable;isolation:isolate;}
 [data-reading-theme] .rpg-reading-backdrop{position:absolute;inset:0;min-height:100%;z-index:-1;pointer-events:none;background-size:cover;background-position:center top;opacity:.18;}
 [data-reading-theme] .rpg-reading-body{padding:0!important;gap:20px!important;}
-[data-reading-theme] .rpg-topbar{position:sticky;top:0;z-index:20;background:var(--rpg-bg);border-radius:0;border-bottom:1px solid var(--rpg-border);padding:18px 24px;backdrop-filter:none;}
+[data-reading-theme] .rpg-topbar{position:sticky;top:0;z-index:20;flex:0 0 auto;box-sizing:border-box;min-height:81px;height:81px;max-height:81px;background:var(--rpg-bg);border-radius:0;border-bottom:1px solid var(--rpg-border);padding:18px 24px;backdrop-filter:none;}
 [data-reading-theme] .rpg-topbar-title,[data-reading-theme] .rpg-playername{color:var(--rpg-accent);font-family:var(--rpg-font);letter-spacing:1.5px;}
 [data-reading-theme] .rpg-topbar-avatar,[data-reading-theme] .rpg-topbar>.rpg-avatar,[data-reading-theme] .rpg-topbar-points,[data-reading-theme] .rpg-stats-compact,[data-reading-theme] .rpg-fullscreen-btn,[data-reading-theme] .rpg-save-state{display:none;}
 [data-reading-theme] .rpg-topbar-btn{color:var(--rpg-text);background:var(--rpg-panel);border:1px solid var(--rpg-border);border-radius:6px;min-width:44px;min-height:44px;}

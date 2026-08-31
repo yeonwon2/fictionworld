@@ -7,6 +7,34 @@ const base = () => ({meta:{statsConfig:[{key:'favor',label:'Thiện cảm'}],sou
  effect:{workshopRole:'consequence',choices:[{text:'Tiếp tục',statModifiers:{favor:0}}]},
  router:{automaticEnding:true,choices:[{text:'HE',targetNodeId:'end',statRequirements:{favor:80}}]},end:{isEnding:true,text:'Kết thúc',choices:[]},
 }});
+test('compact context excludes unrelated prose and artwork while keeping global gates and local consequences',()=>{
+ const game=base();game.meta.posterImage='SECRET_ART';game.meta.aiWorkshop={idea:'Shared context',bible:'Character bible',nextSceneNumber:90};
+ game.nodes.unrelated={text:'UNRELATED_PROSE'.repeat(1000),bgImage:'SECRET_ART',choices:[{text:'Unrelated line',targetNodeId:'end',statModifiers:{favor:9},statRequirements:{favor:50}}]};
+ const prompt=balancePrompt(game,scoreCandidates(game,'favor',['scene:scene_1']),'favor','Review');
+ assert.ok(!prompt.includes('SECRET_ART'));assert.ok(!prompt.includes('UNRELATED_PROSE'));assert.ok(!prompt.includes('Unrelated line'));
+ for(const text of ['Shared context','Character bible','Một cuộc tranh luận','Thử vận may','"favor":50','"favor":80','"favor":9'])assert.ok(prompt.includes(text),text);
+});
+test('one-call cap retains successful rows; continuation processes only remaining rows',async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
+ const candidates=Array.from({length:85},(_,i)=>({...scoreCandidates(base(),'favor')[0],id:String(i)}));let requests=0;
+ const request=async batch=>{requests++;return {proposals:batch.map(c=>({id:c.id,value:1,reason:'Test'}))};};
+ const first=await collectScoreProposals(candidates,[],request,()=>{},()=>true,{maxCalls:1,batchSize:40});
+ assert.equal(requests,1);assert.equal(first.accepted.length,40);assert.equal(first.calls,1);
+ const second=await collectScoreProposals(candidates,first.accepted,async batch=>{assert.ok(batch.every(c=>Number(c.id)>=40));return request(batch);},()=>{},()=>true,{maxCalls:2,batchSize:40});
+ assert.equal(second.calls,2);assert.equal(second.accepted.length,85);assert.equal(requests,3);
+});
+test('failed, empty and cancelled batches cannot exceed the budget or erase prior work',async()=>{
+ const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
+ const candidates=scoreCandidates(base(),'favor');let requests=0;
+ const empty=await collectScoreProposals(candidates,[],async()=>{requests++;return {proposals:[]};},()=>{},()=>true,{maxCalls:1});
+ assert.equal(requests,1);assert.equal(empty.calls,1);
+ const saved=[{...candidates[0],value:1,reason:'Saved'}];
+ const failed=await collectScoreProposals(candidates,saved,async()=>{throw Error('quota');});
+ assert.deepEqual(failed.accepted,saved);assert.equal(failed.calls,1);assert.equal(failed.error,'quota');
+ const cancelled=await collectScoreProposals(candidates,saved,async()=>{throw Error('must not call');},()=>{},()=>false);
+ assert.deepEqual(cancelled.accepted,saved);assert.equal(cancelled.calls,0);
+ await assert.rejects(()=>collectScoreProposals(candidates,[],async()=>({}),()=>{},()=>true,{maxCalls:3}),/Ngân sách/);
+});
 test('approved score edits preserve unapproved rows, prose, links, other stats and gates',()=>{
  const game=base(),before=structuredClone(game),cs=scoreCandidates(game,'favor');
  const {rows}=readScoreProposals({proposals:cs.map(c=>({id:c.id,value:-5,reason:'Hành động làm mất lòng tin',targetNodeId:'evil',text:'evil'}))},cs);
@@ -71,7 +99,7 @@ test('resume after provider failure retains earlier proposals and never rechecks
 test('empty responses have a bounded retry budget',async()=>{
  const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');let calls=0;
  const result=await collectScoreProposals(scoreCandidates(base(),'favor'),[],async()=>{calls++;return {proposals:[]};});
- assert.equal(calls,6);assert.equal(result.accepted.length,0);
+ assert.equal(calls,2);assert.equal(result.accepted.length,0);
 });
 test('one invalid or duplicate AI row cannot discard the valid rows from its batch',async()=>{
  const {collectScoreProposals}=await import('../src/lib/gameStudio/scoreBalance.js');
