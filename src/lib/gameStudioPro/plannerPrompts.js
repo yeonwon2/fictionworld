@@ -137,6 +137,7 @@ ${compactGamePlanSummary(gamePlan)}
 
 # TẬP CẦN LẬP KẾ HOẠCH
 Tên/tóm tắt gợi ý: "${targetSeed?.title || ""}" — ${targetSeed?.summary || "(chưa có, tự đặt phù hợp mạch truyện)"}
+${targetSeed?.planningConstraints?.targetSceneCount ? `Quy mô người dùng yêu cầu: khoảng ${targetSeed.planningConstraints.targetSceneCount} cảnh có ý nghĩa; tổng approximateSceneCount của các giai đoạn phải bám sát con số này.${targetSeed.planningConstraints.desiredChoicesPerDecision ? ` Cảnh quyết định có ${targetSeed.planningConstraints.desiredChoicesPerDecision} lựa chọn có ý nghĩa.` : ""}\nRàng buộc gốc: ${targetSeed.planningConstraints.sourceIdea || ""}` : ""}
 ${neighborLines.length ? `\n# TẬP LÂN CẬN (chỉ để giữ mạch truyện liền mạch, KHÔNG lập kế hoạch cho các tập này)\n${neighborLines.join("\n")}` : ""}
 
 # YÊU CẦU

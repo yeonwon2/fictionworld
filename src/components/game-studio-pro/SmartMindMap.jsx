@@ -27,11 +27,12 @@ import {
   removeEnding,
 } from "@/lib/gameStudioPro/blueprintModel";
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
-import { generateEpisodeBlueprint, regenerateScene } from "@/lib/gameStudioPro/blueprintAI";
+import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
 import { syncRegistryToAllEpisodes, applyEpisodeBlueprint } from "@/lib/gameStudioPro/globalStateModel";
 import SceneIntentEditor from "./SceneIntentEditor";
 import ExternalAiBridgeModal from "./ExternalAiBridgeModal";
+import { derivePlanningConstraints } from "@/lib/gameStudioPro/planningConstraints";
 
 const ROLE_STYLES = {
   [SCENE_ROLES.STORY]: "border-sky-400/50 bg-sky-500/10",
@@ -197,12 +198,13 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     onChange(syncRegistryToAllEpisodes(storyBlueprint, nextRegistry));
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(forceRefresh = false) {
     if (!episode) return;
+    const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
     setGenerating(true);
     try {
-      const next = await generateEpisodeBlueprint(episode, gamePlan, blueprint);
-      setPending({ blueprint: next, isRegenerate: !!blueprint });
+      const next = await generateEpisodeBlueprint(generationEpisode, gamePlan, blueprint, { forceRefresh });
+      setPending({ blueprint: next, isRegenerate: !!blueprint, scale: getBlueprintScaleStatus(next, generationEpisode), targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false });
     } catch (e) {
       toast({ variant: "destructive", title: "Không dựng được sơ đồ", description: e.message });
     } finally {
@@ -211,9 +213,23 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   }
 
   function applyPending() {
+    if (pending.scale?.underGenerated && !pending.allowUnderGenerated) return;
     setEpisodeBlueprint(pending.blueprint);
     setPending(null);
     toast({ title: "Đã áp dụng sơ đồ" });
+  }
+
+  async function handleContinueMissing() {
+    const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
+    setGenerating(true);
+    try {
+      const next = await continueEpisodeBlueprint(generationEpisode, gamePlan, pending.blueprint);
+      setPending((value) => ({ ...value, blueprint: next, scale: getBlueprintScaleStatus(next, generationEpisode), allowUnderGenerated: false }));
+    } catch (e) {
+      toast({ variant: "destructive", title: "Chưa thể tiếp tục", description: e.message });
+    } finally {
+      setGenerating(false);
+    }
   }
 
   async function handleRegenerateScene(sceneId, instructionText) {
@@ -276,7 +292,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Thêm cảnh
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={handleGenerate} disabled={generating || !episode}>
+            <Button size="sm" variant="outline" onClick={() => handleGenerate(false)} disabled={generating || !episode}>
               {generating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
               {blueprint ? "Dựng lại sơ đồ tập" : "Dựng sơ đồ tập"}
             </Button>
@@ -302,13 +318,21 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
 
       {pending && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold">Xem trước sơ đồ AI vừa dựng ({pending.blueprint.scenes.length} cảnh, {pending.blueprint.endings.length} kết thúc) — chưa áp dụng</span>
-            <div className="flex gap-2">
+          <div className="flex min-w-0 flex-col justify-between gap-2 sm:flex-row sm:items-center">
+            <span className="min-w-0 break-words text-sm font-semibold">Xem trước sơ đồ AI vừa dựng ({pending.scale?.meaningfulSceneCount ?? pending.blueprint.scenes.length} cảnh có ý nghĩa, {pending.blueprint.endings.length} kết thúc) — chưa áp dụng</span>
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => setPending(null)}>Huỷ</Button>
-              <Button size="sm" onClick={applyPending}>Áp dụng</Button>
+              {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={handleContinueMissing} disabled={generating}>Tiếp tục phần còn thiếu</Button>}
+              {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={() => handleGenerate(true)} disabled={generating}>Thử tạo lại</Button>}
+              <Button size="sm" onClick={applyPending} disabled={pending.scale?.underGenerated && !pending.allowUnderGenerated}>Áp dụng</Button>
             </div>
           </div>
+          {pending.scale?.underGenerated && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p>Kế hoạch yêu cầu khoảng {pending.targetSceneCount} cảnh nhưng AI mới dựng {pending.scale.meaningfulSceneCount} cảnh.</p>
+              <button type="button" className="mt-2 text-xs text-muted-foreground underline" onClick={() => setPending((value) => ({ ...value, allowUnderGenerated: true }))}>Nâng cao: vẫn áp dụng bản thiếu</button>
+            </div>
+          )}
           <div className="max-h-56 overflow-y-auto space-y-1 text-xs">
             {pending.blueprint.scenes.map((s) => (
               <p key={s.id} className="text-muted-foreground">
@@ -324,7 +348,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground text-sm space-y-2">
           <p>Tập này chưa có sơ đồ cảnh.</p>
           <p>Dựng từ kế hoạch bằng AI, nhập kịch bản từ AI bên ngoài, hoặc bắt đầu thủ công.</p>
-          <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={handleGenerate}><Sparkles className="w-3.5 h-3.5 mr-1.5" />Dựng từ kế hoạch</Button><Button size="sm" variant="outline" onClick={() => setAiBridgeOpen(true)}><Bot className="w-3.5 h-3.5 mr-1.5" />Nhập từ AI bên ngoài</Button><Button size="sm" variant="ghost" onClick={() => setEpisodeBlueprint(newSceneBlueprint(episode))}><Plus className="w-3.5 h-3.5 mr-1.5" />Bắt đầu thủ công</Button></div>
+          <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => handleGenerate(false)}><Sparkles className="w-3.5 h-3.5 mr-1.5" />Dựng từ kế hoạch</Button><Button size="sm" variant="outline" onClick={() => setAiBridgeOpen(true)}><Bot className="w-3.5 h-3.5 mr-1.5" />Nhập từ AI bên ngoài</Button><Button size="sm" variant="ghost" onClick={() => setEpisodeBlueprint(newSceneBlueprint(episode))}><Plus className="w-3.5 h-3.5 mr-1.5" />Bắt đầu thủ công</Button></div>
         </div>
       )}
 

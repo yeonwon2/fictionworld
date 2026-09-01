@@ -19,3 +19,13 @@ for(const provider of ['gemini','custom']){
   await assert.rejects(aiCall('test',{...options,onRequest:()=>{throw new Error('Stopped');}}),/Stopped/);assert.equal(fetched,1);
  });
 }
+
+test('identical concurrent calls dedupe and cache avoids another provider call',async t=>{
+ const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});memory.clear();
+ const profile=saveAIProfile({name:'Dedupe',provider:'gemini',key:'test-only',model:'test-model'});activateAIProfile(profile.id);
+ let fetched=0;globalThis.fetch=async()=>{fetched++;await new Promise(resolve=>setTimeout(resolve,10));return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:'{"ok":true}'}]}}]})};};
+ const options={jsonSchema:{type:'object'},maxAttempts:1};
+ const [a,b]=await Promise.all([aiCall('dedupe-unique',options),aiCall('dedupe-unique',options)]);
+ assert.deepEqual(a,b);assert.equal(fetched,1);
+ await aiCall('dedupe-unique',options);assert.equal(fetched,1);
+});

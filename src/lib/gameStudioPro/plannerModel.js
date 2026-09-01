@@ -47,6 +47,7 @@ export function newStoryBlueprint(idea, settings = {}) {
   return {
     status: PLANNER_STATUS.DRAFT,
     idea: idea || "",
+    planningConstraints: null,
     settings: {
       genre: settings.genre || "",
       gameLength: settings.gameLength === "long" ? "long" : "short",
@@ -83,6 +84,7 @@ export function newBlankEpisode(order) {
     possibleFailure: "",
     transitionToNextEpisode: "",
     planningIntents: [],
+    planningConstraints: null,
     locked: false,
   };
 }

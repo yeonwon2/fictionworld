@@ -8,7 +8,8 @@
 // các lựa chọn trỏ tới nhau TRONG CÙNG 1 phản hồi; blueprintAI.js mới đổi các
 // ref này thành ID hệ thống thật (xem normalizeAIScenes ở đó).
 import { compactGamePlanSummary, compactEpisodeSummary } from "./plannerPrompts.js";
-import { SCENE_ROLES, SCENE_ROLE_LABELS, MAX_DECISION_CHOICES } from "./blueprintModel.js";
+import { SCENE_ROLES, SCENE_ROLE_LABELS, MAX_DECISION_CHOICES, MAX_SCENES_PER_EPISODE } from "./blueprintModel.js";
+import { resolveEpisodeConstraints } from "./planningConstraints.js";
 
 const ROLE_GUIDE = Object.entries(SCENE_ROLE_LABELS)
   .map(([key, label]) => `  - "${key}" (${label})`)
@@ -47,14 +48,14 @@ ${stages || "(chưa có giai đoạn nào — tự chia hợp lý theo tóm tắ
 ${intents || "(không có ghi chú đặc biệt nào)"}`;
 }
 
-function sceneShapeInstructions(maxScenes) {
+function sceneShapeInstructions(maxScenes, constraints = null) {
   return `# CÁCH MÔ TẢ 1 CẢNH (Scene Blueprint — CHỈ CẤU TRÚC, KHÔNG viết lời thoại đầy đủ)
 Mỗi cảnh gồm:
 - ref: nhãn CỤC BỘ do bạn đặt (vd "s1", "s2", "side_a"), duy nhất trong phản hồi này. Đây KHÔNG phải ID thật — hệ thống sẽ tự đổi ID sau.
 - title: tên ngắn gọn của cảnh.
 - role: PHẢI là một trong các loại sau:
 ${ROLE_GUIDE}
-- intent: Ý ĐỒ CẢNH — mô tả bằng văn xuôi tự nhiên (2-6 câu) chuyện gì xảy ra ở cảnh này, ai nói gì với ai, tại sao — đây là phần QUAN TRỌNG NHẤT, người dùng sẽ đọc và sửa lại bằng ngôn ngữ tự nhiên.
+- intent: Ý ĐỒ CẢNH súc tích (1-2 câu), đủ hiểu topology nhưng KHÔNG viết văn cảnh dài.
 - choices: mảng lựa chọn. Cảnh loại "decision" cần 2-${MAX_DECISION_CHOICES} lựa chọn (nếu ghi chú đặc biệt yêu cầu đúng 1 số lượng thì PHẢI theo đúng số đó). Cảnh loại "story"/"consequence"/"condition"/"convergence" thường chỉ cần 1 lựa chọn "đi tiếp" (hoặc để trống nếu không có lối đi tiếp — hiếm khi xảy ra). Cảnh loại "ending" KHÔNG có choices (để mảng rỗng).
   Mỗi lựa chọn gồm: text (lời lựa chọn, có thể để trống nếu chỉ là "đi tiếp"), target (ref của cảnh/kết thúc mà lựa chọn này dẫn tới — PHẢI khớp đúng 1 ref đã khai báo), targetKind ("scene" hoặc "ending"), gateIntent (ghi chú ĐIỀU KIỆN bằng văn bản tự nhiên nếu lựa chọn này CHỈ nên xuất hiện/khả dụng khi có điều kiện gì đó, ví dụ "chỉ mở nếu trước đó đã giúp Tiểu Lan" — để trống nếu không có điều kiện gì).
 - Nếu 1 lựa chọn dẫn tới cái chết/thất bại ngay lập tức: cho targetKind="ending", trỏ tới 1 kết thúc phù hợp (tone="death").
@@ -63,20 +64,39 @@ ${ROLE_GUIDE}
 Mỗi kết thúc gồm: ref (nhãn cục bộ), title, text (mô tả ngắn), tone ("death" nếu là kết thúc xấu/chết, "neutral" nếu bình thường, "good" nếu tốt).
 
 # GIỚI HẠN
-- Tối đa ${maxScenes} cảnh cho MỘT lượt tạo — nếu Episode Plan gợi ý nhiều cảnh hơn, hãy GỘP các sự kiện nhỏ lại, KHÔNG cố liệt kê đủ.
+- Trần an toàn là ${maxScenes} cảnh. Không tự thu nhỏ hoặc gộp mất quy mô người dùng yêu cầu.
+${constraints ? `- Mục tiêu: khoảng ${constraints.targetSceneCount} cảnh có ý nghĩa (không tính kết thúc và các nút nối kỹ thuật), phạm vi chấp nhận ${constraints.minimumSceneCount}-${constraints.maximumSceneCount}.${constraints.desiredChoicesPerDecision ? ` Cảnh quyết định phải có ${constraints.desiredChoicesPerDecision} lựa chọn có ý nghĩa.` : ""}${constraints.sourceIdea ? `\n- Ràng buộc gốc của người dùng (phải giữ cả mốc thời gian, ngưỡng điểm và yêu cầu kết thúc): ${constraints.sourceIdea}` : ""}` : ""}
 - PHẢI có đúng 1 cảnh có isStart=true — đó là cảnh người chơi bắt đầu tập.
 - Mọi target PHẢI khớp đúng 1 ref có thật trong phản hồi (của scenes hoặc endings) — không được để trống hoặc trỏ ra ngoài.
 - Đây là LẬP SƠ ĐỒ (structure), CHƯA phải viết lời thoại/văn cảnh đầy đủ — intent súc tích, không cần văn hoa.`;
 }
 
 export function buildEpisodeBlueprintPrompt(gamePlan, episode) {
-  const softCap = 24;
+  const constraints = resolveEpisodeConstraints(episode);
   return `Bạn là NHÀ THIẾT KẾ GAME. Từ Kế hoạch Tập bên dưới, hãy DỰNG SƠ ĐỒ CẢNH (Scene Blueprint) cho MỘT TẬP — xác định các cảnh sẽ đi qua và cách chúng nối với nhau (topology), CHƯA viết lời thoại đầy đủ.
 
 ${episodeContextBlock(gamePlan, episode)}
 
-${sceneShapeInstructions(softCap)}
+${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, constraints)}
 
+Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
+}
+
+export function buildBlueprintContinuationPrompt(gamePlan, episode, blueprint, missingCount) {
+  const existing = (blueprint.scenes || []).map((scene) => `- ${scene.id} [${scene.role}] ${scene.title}`).join("\n");
+  const endings = (blueprint.endings || []).map((ending) => `- ${ending.id}: ${ending.title}`).join("\n");
+  return `Bạn là NHÀ THIẾT KẾ GAME. Hãy TIẾP TỤC phần sơ đồ còn thiếu, chỉ THÊM nội dung mới và không viết lại cảnh đã có.
+
+${episodeContextBlock(gamePlan, episode)}
+
+# ĐÃ CÓ (có thể dùng đúng ref làm target, tuyệt đối không khai báo lại)
+${existing}
+# KẾT THÚC ĐÃ CÓ
+${endings || "(chưa có)"}
+
+# PHẦN CÒN THIẾU
+Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết. Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
+${sceneShapeInstructions(MAX_SCENES_PER_EPISODE)}
 Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }
 

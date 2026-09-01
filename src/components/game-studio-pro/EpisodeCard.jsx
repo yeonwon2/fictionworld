@@ -153,9 +153,12 @@ export default function EpisodeCard({
 
   return (
     <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground shrink-0">Tập {episode.order}</span>
-        <Input className="flex-1" value={episode.title} onChange={(e) => patch({ title: e.target.value })} />
+        <Input className="min-w-0 max-w-full flex-1" value={episode.title} onChange={(e) => patch({ title: e.target.value })} />
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1">
         {onSetStartEpisode && (
           <button
             type="button"
@@ -184,6 +187,7 @@ export default function EpisodeCard({
         <button type="button" onClick={onRemove} className="p-1.5 rounded text-muted-foreground hover:text-destructive transition" title="Xoá tập">
           <Trash2 className="w-4 h-4" />
         </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">

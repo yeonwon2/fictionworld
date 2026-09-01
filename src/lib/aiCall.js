@@ -23,6 +23,7 @@ const CACHE_STORAGE = "fiction_ai_response_cache_v1";
 const USAGE_STORAGE = "fiction_ai_daily_usage_v1";
 const PROFILES_STORAGE = "fiction_ai_profiles_v1";
 const ACTIVE_PROFILE_STORAGE = "fiction_ai_active_profile_v1";
+const inFlightRequests = new Map();
 
 const PROVIDER_STORAGE = "fiction_ai_provider";
 const CUSTOM_PROVIDER_ID_STORAGE = "fiction_ai_custom_provider_id";
@@ -354,7 +355,7 @@ export async function testGeminiConnection(key, model) {
  * @param {string} prompt
  * @param {{ jsonSchema?: Record<string, any>, useCache?: boolean, forceRefresh?: boolean, maxAttempts?: number, onRequest?: () => void }} [options]
  */
-export async function aiCall(prompt, { jsonSchema, useCache = true, forceRefresh = false, maxAttempts = 2, onRequest = () => {} } = {}) {
+async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh = false, maxAttempts = 2, onRequest = () => {} } = {}) {
   if (![1, 2].includes(maxAttempts)) throw new Error('Số lần thử AI phải là 1 hoặc 2.');
   if (!hasCustomKey()) {
     throw new Error(
@@ -392,4 +393,13 @@ export async function aiCall(prompt, { jsonSchema, useCache = true, forceRefresh
       throw new Error(`${firstError.message}${suffix}. AI đã thử trả lại JSON lần hai nhưng vẫn chưa hoàn chỉnh.`);
     }
   }
+}
+
+export async function aiCall(prompt, options = {}) {
+  const { jsonSchema, useCache = true, maxAttempts = 2 } = options;
+  const key = `${cacheKeyFor(prompt, jsonSchema)}|${useCache}|${maxAttempts}`;
+  if (inFlightRequests.has(key)) return inFlightRequests.get(key);
+  const request = executeAICall(prompt, options).finally(() => inFlightRequests.delete(key));
+  inFlightRequests.set(key, request);
+  return request;
 }

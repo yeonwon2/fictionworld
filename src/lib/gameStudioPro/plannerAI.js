@@ -19,6 +19,9 @@ import {
   EPISODE_PLAN_SCHEMA,
 } from "./plannerPrompts.js";
 import { MAX_EPISODES, PLANNER_STATUS, makePlannerId, newStoryBlueprint, newBlankEpisode } from "./plannerModel.js";
+import { derivePlanningConstraints } from "./planningConstraints.js";
+
+const REQUEST_SAVER_OPTIONS = { maxAttempts: 1 };
 
 function safeString(v) {
   return typeof v === "string" ? v.trim() : "";
@@ -201,24 +204,27 @@ function compactNeighbor(episode) {
 
 // ---------- Điều phối gọi AI (bất đồng bộ) ----------
 export async function generateGamePlanWithEpisodes(idea, settings, { onProgress } = {}) {
+  const planningConstraints = derivePlanningConstraints(idea);
   const desiredCount = desiredEpisodeCount(settings, 0);
   onProgress?.({ stage: "gameplan" });
-  const raw = await aiCall(buildGamePlanPrompt(idea, settings, [], desiredCount), { jsonSchema: GAME_PLAN_SCHEMA });
+  const raw = await aiCall(buildGamePlanPrompt(idea, settings, [], desiredCount), { jsonSchema: GAME_PLAN_SCHEMA, ...REQUEST_SAVER_OPTIONS });
   const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
 
   const episodes = [];
   for (let i = 0; i < episodeSummaries.length; i++) {
     onProgress?.({ stage: "episode", index: i, total: episodeSummaries.length, title: episodeSummaries[i].title });
     const neighbors = { prev: compactNeighbor(episodes[i - 1]), next: episodeSummaries[i + 1] || null };
-    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, episodeSummaries[i], neighbors), {
+    const episodeSeed = { ...episodeSummaries[i], planningConstraints };
+    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, episodeSeed, neighbors), {
       jsonSchema: EPISODE_PLAN_SCHEMA,
+      ...REQUEST_SAVER_OPTIONS,
     });
     const epValidated = validateAIEpisodePlanResponse(epRaw);
-    episodes.push({ id: makePlannerId("ep"), order: i + 1, locked: false, ...epValidated });
+    episodes.push({ id: makePlannerId("ep"), order: i + 1, locked: false, ...epValidated, planningConstraints });
   }
 
   return {
-    ...newStoryBlueprint(idea, settings),
+    ...newStoryBlueprint(idea, settings), planningConstraints,
     gamePlan,
     episodes,
     status: PLANNER_STATUS.PLANNED,
@@ -226,6 +232,7 @@ export async function generateGamePlanWithEpisodes(idea, settings, { onProgress 
 }
 
 export async function regenerateFullPlan(storyBlueprint, idea, settings, { onProgress } = {}) {
+  const planningConstraints = derivePlanningConstraints(idea);
   const lockedEpisodes = (storyBlueprint.episodes || []).filter((e) => e.locked);
   const nonLockedCount = (storyBlueprint.episodes || []).filter((e) => !e.locked).length;
   const desiredCount = desiredEpisodeCount(settings, nonLockedCount);
@@ -233,6 +240,7 @@ export async function regenerateFullPlan(storyBlueprint, idea, settings, { onPro
   onProgress?.({ stage: "gameplan" });
   const raw = await aiCall(buildGamePlanPrompt(idea, settings, lockedEpisodes, desiredCount), {
     jsonSchema: GAME_PLAN_SCHEMA,
+    ...REQUEST_SAVER_OPTIONS,
   });
   const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
 
@@ -241,14 +249,15 @@ export async function regenerateFullPlan(storyBlueprint, idea, settings, { onPro
     onProgress?.({ stage: "episode", index: i, total: episodeSummaries.length, title: episodeSummaries[i].title });
     const prev = newEpisodes[i - 1] ? compactNeighbor(newEpisodes[i - 1]) : compactNeighbor(lockedEpisodes[lockedEpisodes.length - 1]);
     const next = episodeSummaries[i + 1] || null;
-    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, episodeSummaries[i], { prev, next }), {
+    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, { ...episodeSummaries[i], planningConstraints }, { prev, next }), {
       jsonSchema: EPISODE_PLAN_SCHEMA,
+      ...REQUEST_SAVER_OPTIONS,
     });
     const epValidated = validateAIEpisodePlanResponse(epRaw);
-    newEpisodes.push({ id: makePlannerId("ep"), locked: false, ...epValidated });
+    newEpisodes.push({ id: makePlannerId("ep"), locked: false, ...epValidated, planningConstraints });
   }
 
-  return mergeGamePlanRegeneration(storyBlueprint, idea, settings, gamePlan, newEpisodes);
+  return { ...mergeGamePlanRegeneration(storyBlueprint, idea, settings, gamePlan, newEpisodes), planningConstraints };
 }
 
 export async function regenerateOneEpisode(storyBlueprint, episodeId, { onProgress } = {}) {
@@ -262,6 +271,7 @@ export async function regenerateOneEpisode(storyBlueprint, episodeId, { onProgre
   const neighbors = { prev: compactNeighbor(episodes[idx - 1]), next: compactNeighbor(episodes[idx + 1]) };
   const raw = await aiCall(buildEpisodePlanPrompt(storyBlueprint.gamePlan, target, neighbors), {
     jsonSchema: EPISODE_PLAN_SCHEMA,
+    ...REQUEST_SAVER_OPTIONS,
   });
   const validated = validateAIEpisodePlanResponse(raw);
   const newEpisode = { ...target, ...validated };

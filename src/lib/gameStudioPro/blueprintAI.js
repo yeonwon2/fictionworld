@@ -16,6 +16,7 @@ import {
   buildEpisodeBlueprintPrompt,
   EPISODE_BLUEPRINT_SCHEMA,
   buildSceneRedesignPrompt,
+  buildBlueprintContinuationPrompt,
   SCENE_REDESIGN_SCHEMA,
 } from "./blueprintPrompts.js";
 import {
@@ -26,11 +27,11 @@ import {
   makeEndingId,
   newSceneBlueprint,
 } from "./blueprintModel.js";
+import { resolveEpisodeConstraints, assessBlueprintScale } from "./planningConstraints.js";
 
-// Trần mềm cho 1 lượt gọi AI — nhỏ hơn MAX_SCENES_PER_EPISODE (giới hạn cấu
-// trúc cứng) để chắc chắn nằm trong ngân sách token của aiCall (8192 khi có
-// jsonSchema), giống lý do MAX_EPISODES ở plannerModel.js.
-export const AI_GENERATION_SCENE_CAP = 24;
+// Dùng đúng trần cấu trúc thật; prompt topology được giữ súc tích để không
+// phải âm thầm thu nhỏ yêu cầu của người dùng theo một trần mềm khác.
+export const AI_GENERATION_SCENE_CAP = MAX_SCENES_PER_EPISODE;
 
 function safeString(v) {
   return typeof v === "string" ? v.trim() : "";
@@ -203,8 +204,8 @@ export function emptyBlueprintBase(episode, existingBlueprint = null) {
 }
 
 // Dựng sơ đồ tập LẦN ĐẦU (hoặc tạo lại toàn bộ, giữ nguyên các cảnh đã khoá).
-export async function generateEpisodeBlueprint(episode, gamePlan, existingBlueprint = null) {
-  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA });
+export async function generateEpisodeBlueprint(episode, gamePlan, existingBlueprint = null, { forceRefresh = false } = {}) {
+  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA, maxAttempts: 1, forceRefresh });
   const lockedScenes = (existingBlueprint?.scenes || []).filter((s) => s.locked);
   const rejectSceneRefs = new Set(lockedScenes.map((s) => s.id));
   const normalized = normalizeAIBlueprintResponse(raw, episode.id, { rejectSceneRefs });
@@ -216,6 +217,27 @@ export async function generateEpisodeBlueprint(episode, gamePlan, existingBluepr
   const replaceIds = new Set((existingBlueprint.scenes || []).filter((s) => !s.locked).map((s) => s.id));
   const startWasLocked = lockedScenes.some((s) => s.id === existingBlueprint.startSceneId);
   return applyNormalizedBlueprint(existingBlueprint, normalized, { replaceIds, replaceStartScene: !startWasLocked });
+}
+
+export function getBlueprintScaleStatus(blueprint, episode) {
+  return assessBlueprintScale(blueprint, resolveEpisodeConstraints(episode));
+}
+
+export async function continueEpisodeBlueprint(episode, gamePlan, partialBlueprint) {
+  const constraints = resolveEpisodeConstraints(episode);
+  const status = assessBlueprintScale(partialBlueprint, constraints);
+  const missingCount = Math.max(1, constraints.targetSceneCount - status.meaningfulSceneCount);
+  const raw = await aiCall(buildBlueprintContinuationPrompt(gamePlan, episode, partialBlueprint, missingCount), {
+    jsonSchema: EPISODE_BLUEPRINT_SCHEMA,
+    maxAttempts: 1,
+  });
+  const rejectSceneRefs = new Set((partialBlueprint.scenes || []).map((scene) => scene.id));
+  const rejectEndingRefs = new Set((partialBlueprint.endings || []).map((ending) => ending.id));
+  const capacity = MAX_SCENES_PER_EPISODE - (partialBlueprint.scenes || []).length;
+  if (capacity <= 0) throw new Error(`Tập đã đạt trần an toàn ${MAX_SCENES_PER_EPISODE} cảnh. Hãy chỉnh kế hoạch hoặc sơ đồ hiện tại trước khi tiếp tục.`);
+  const limitedRaw = { ...raw, scenes: safeArray(raw?.scenes).slice(0, capacity) };
+  const normalized = normalizeAIBlueprintResponse(limitedRaw, episode.id, { rejectSceneRefs, rejectEndingRefs });
+  return applyNormalizedBlueprint(partialBlueprint, normalized, { replaceIds: new Set(), replaceStartScene: false });
 }
 
 // "AI thiết kế lại cảnh" — CHỈ sửa 1 cảnh (targetSceneId) + cảnh mới nó cần.
