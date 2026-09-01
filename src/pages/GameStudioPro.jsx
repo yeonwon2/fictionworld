@@ -377,6 +377,7 @@ function ProGameEditor({ gameId, onBack }) {
           ) : (
             <PlannerIntro
               storyBlueprint={proDoc.storyBlueprint}
+              onChange={(storyBlueprint) => updateField({ storyBlueprint })}
               onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
               onSkip={() => setMode("edit")}
               proDoc={proDoc}

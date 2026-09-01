@@ -21,19 +21,32 @@ Nhân vật chính bắt đầu là cung nữ mới nhập cung...
 Tôi muốn có sủng ái, uy tín, chức vị...
 Có những lựa chọn sai có thể chết ngay...`;
 
-export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proDoc, onProDocChange }) {
-  const [idea, setIdea] = useState(storyBlueprint?.idea || "");
-  const [gameLength, setGameLength] = useState(storyBlueprint?.settings?.gameLength || "long");
+export default function PlannerIntro({ storyBlueprint, onChange, onGenerated, onSkip, proDoc, onProDocChange }) {
+  // Ý tưởng/tuỳ chọn đọc/ghi THẲNG vào storyBlueprint (qua onChange) thay vì
+  // state cục bộ — trước đây chỉ được ghi vào proDoc SAU KHI "Lập kế hoạch
+  // với AI" chạy xong, nên gõ/dán ý tưởng dài rồi thoát ra (chưa kịp bấm lập
+  // kế hoạch) làm mất trắng, không được autosave như mọi ô nhập liệu khác
+  // trong Xưởng Game Pro (xem markDirty() ở GameStudioPro.jsx).
+  const idea = storyBlueprint?.idea || "";
+  const settings = storyBlueprint?.settings || {};
+  const gameLength = settings.gameLength || "long";
+  const genre = settings.genre || "";
+  const estimatedEpisodes = settings.estimatedEpisodes || "";
+  const episodeLength = settings.episodeLength || "";
+  const style = settings.style || "";
+  const branchiness = settings.branchiness || "";
   const [showOptions, setShowOptions] = useState(false);
-  const [templateId, setTemplateId] = useState(storyBlueprint?.settings?.templateId || proDoc?.templateId || TEMPLATE_IDS.BLANK);
-  const [genre, setGenre] = useState(storyBlueprint?.settings?.genre || "");
-  const [estimatedEpisodes, setEstimatedEpisodes] = useState(storyBlueprint?.settings?.estimatedEpisodes || "");
-  const [episodeLength, setEpisodeLength] = useState(storyBlueprint?.settings?.episodeLength || "");
-  const [style, setStyle] = useState(storyBlueprint?.settings?.style || "");
-  const [branchiness, setBranchiness] = useState(storyBlueprint?.settings?.branchiness || "");
+  const [templateId, setTemplateId] = useState(settings.templateId || proDoc?.templateId || TEMPLATE_IDS.BLANK);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const { toast } = useToast();
+
+  function patch(fields) {
+    onChange({ ...(storyBlueprint || {}), ...fields });
+  }
+  function patchSettings(fields) {
+    patch({ settings: { ...settings, ...fields } });
+  }
 
   // PRO 6 (mục 22): áp template ĐỘC LẬP với việc có gọi AI lập kế hoạch hay
   // không — template chỉ seed registry/mechanics (globalState/mechanics),
@@ -49,7 +62,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
       toast({ variant: "destructive", title: "Chưa có ý tưởng", description: "Hãy mô tả game bạn muốn làm trước đã." });
       return;
     }
-    const settings = {
+    const genSettings = {
       genre: genre.trim(),
       gameLength,
       estimatedEpisodes: estimatedEpisodes ? Number(estimatedEpisodes) : null,
@@ -62,7 +75,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
     setGenerating(true);
     setProgress("Đang lập Kế hoạch Game...");
     try {
-      const blueprint = await generateGamePlanWithEpisodes(idea, settings, {
+      const blueprint = await generateGamePlanWithEpisodes(idea, genSettings, {
         onProgress: (p) => {
           if (p.stage === "gameplan") setProgress("Đang lập Kế hoạch Game...");
           else setProgress(`Đang lập kế hoạch Tập ${p.index + 1}/${p.total}: ${p.title || ""}`);
@@ -96,7 +109,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
           rows={8}
           placeholder={IDEA_PLACEHOLDER}
           value={idea}
-          onChange={(e) => setIdea(e.target.value)}
+          onChange={(e) => patch({ idea: e.target.value })}
           disabled={generating}
         />
         <p className="text-[11px] text-muted-foreground">
@@ -110,7 +123,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
           <Button
             type="button"
             variant={gameLength === "short" ? "default" : "outline"}
-            onClick={() => setGameLength("short")}
+            onClick={() => patchSettings({ gameLength: "short" })}
             disabled={generating}
           >
             Game ngắn
@@ -118,7 +131,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
           <Button
             type="button"
             variant={gameLength === "long" ? "default" : "outline"}
-            onClick={() => setGameLength("long")}
+            onClick={() => patchSettings({ gameLength: "long" })}
             disabled={generating}
           >
             Game dài nhiều tập
@@ -135,7 +148,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
           <CollapsibleContent className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Thể loại</Label>
-              <Input value={genre} onChange={(e) => setGenre(e.target.value)} disabled={generating} placeholder="VD: hậu cung, tu tiên..." />
+              <Input value={genre} onChange={(e) => patchSettings({ genre: e.target.value })} disabled={generating} placeholder="VD: hậu cung, tu tiên..." />
             </div>
             {gameLength === "long" && (
               <div className="space-y-1.5">
@@ -144,7 +157,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
                   type="number"
                   min="1"
                   value={estimatedEpisodes}
-                  onChange={(e) => setEstimatedEpisodes(e.target.value)}
+                  onChange={(e) => patchSettings({ estimatedEpisodes: e.target.value })}
                   disabled={generating}
                   placeholder="VD: 8"
                 />
@@ -152,15 +165,15 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
             )}
             <div className="space-y-1.5">
               <Label className="text-xs">Độ dài mỗi tập</Label>
-              <Input value={episodeLength} onChange={(e) => setEpisodeLength(e.target.value)} disabled={generating} placeholder="VD: vừa phải" />
+              <Input value={episodeLength} onChange={(e) => patchSettings({ episodeLength: e.target.value })} disabled={generating} placeholder="VD: vừa phải" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Phong cách</Label>
-              <Input value={style} onChange={(e) => setStyle(e.target.value)} disabled={generating} placeholder="VD: kịch tính, nhẹ nhàng..." />
+              <Input value={style} onChange={(e) => patchSettings({ style: e.target.value })} disabled={generating} placeholder="VD: kịch tính, nhẹ nhàng..." />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Mức độ phân nhánh</Label>
-              <Input value={branchiness} onChange={(e) => setBranchiness(e.target.value)} disabled={generating} placeholder="VD: nhiều nhánh rẽ" />
+              <Input value={branchiness} onChange={(e) => patchSettings({ branchiness: e.target.value })} disabled={generating} placeholder="VD: nhiều nhánh rẽ" />
             </div>
           </CollapsibleContent>
         </Collapsible>
