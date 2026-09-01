@@ -9,8 +9,7 @@ import { ensureGlobalState, episodeTransitionSummary } from "./globalStateModel.
 import { validateSceneBlueprint } from "./blueprintValidator.js";
 import { compileProCampaign } from "./proCompiler.js";
 import { graphReachable } from "../gameStudio/routeExplorer.js";
-import { ensureMechanicsState, MECHANIC_IDS } from "./mechanicsModel.js";
-import { findEntityByIdAnyKind, ENTITY_KINDS } from "./entityRegistry.js";
+import { validateProConfiguration } from "./configurationValidator.js";
 
 function checkDuplicateEntityIds(registry) {
   const seen = new Set();
@@ -52,88 +51,6 @@ function findEpisodeCycles(adjacency, startId) {
 // runtime thật vì currency/rank/quest hoặc SUPPORTED-qua-stat-thường (không
 // cần thêm gì) hoặc AUTHORING_ONLY/DEFERRED_RUNTIME (không có gì để kiểm tra
 // ở runtime).
-function checkMechanics(proDoc) {
-  const errors = [];
-  const warnings = [];
-  const mechanics = ensureMechanicsState(proDoc.mechanics);
-  const registry = proDoc.globalState.registry;
-
-  for (const currency of mechanics.configs.currency) {
-    const entity = findEntityByIdAnyKind(registry, currency.entityId);
-    if (!entity) {
-      errors.push(`Cơ chế Tiền tệ trỏ tới chỉ số không tồn tại/đã bị xoá (id: ${currency.entityId}).`);
-    } else if (entity.kind !== ENTITY_KINDS.STAT) {
-      errors.push(`Cơ chế Tiền tệ trỏ tới "${entity.displayName}" nhưng đây không phải một chỉ số.`);
-    } else if (!currency.allowNegative) {
-      warnings.push(`"${entity.displayName}" được đánh dấu không cho âm, nhưng runtime hiện KHÔNG tự động chặn âm — hãy tự thêm điều kiện chặn ở các lựa chọn có thể trừ.`);
-    }
-  }
-
-  for (const rank of mechanics.configs.rank) {
-    const entity = findEntityByIdAnyKind(registry, rank.entityId);
-    if (!entity) {
-      errors.push(`Cơ chế Cấp bậc "${rank.label}" trỏ tới chỉ số không tồn tại/đã bị xoá (id: ${rank.entityId}).`);
-    } else if (entity.kind !== ENTITY_KINDS.STAT) {
-      errors.push(`Cơ chế Cấp bậc "${rank.label}" trỏ tới "${entity.displayName}" nhưng đây không phải một chỉ số.`);
-    }
-    if (rank.levels.length === 0) {
-      warnings.push(`Cơ chế Cấp bậc "${rank.label}" chưa có mốc cấp bậc nào.`);
-      continue;
-    }
-    const thresholds = rank.levels.map((lv) => lv.threshold);
-    if (new Set(thresholds).size !== thresholds.length) {
-      errors.push(`Cơ chế Cấp bậc "${rank.label}" có 2 mốc trùng ngưỡng.`);
-    }
-    const sorted = [...thresholds].sort((a, b) => a - b);
-    if (thresholds.some((t, i) => t !== sorted[i])) {
-      warnings.push(`Cơ chế Cấp bậc "${rank.label}" có các mốc chưa được sắp xếp tăng dần theo ngưỡng.`);
-    }
-  }
-
-  if (mechanics.enabled.includes(MECHANIC_IDS.VITAL_STAT)) {
-    const hasVital = (registry.stats || []).some((e) => e.kind === ENTITY_KINDS.STAT && e.isVital);
-    if (!hasVital) warnings.push('Cơ chế "Chỉ số sinh tử" đã bật nhưng chưa có chỉ số nào được đánh dấu là chỉ số sinh tử.');
-  }
-
-  if (mechanics.enabled.includes(MECHANIC_IDS.QUEST) && mechanics.configs.quest.length > 0) {
-    warnings.push('Cơ chế "Nhiệm vụ" chỉ là ghi chú tác giả — game CHƯA tự thực thi/theo dõi nhiệm vụ này khi chơi.');
-  }
-
-  return { errors, warnings };
-}
-
-// PRO 6: kiểm tra hình dạng globalState.milestones — AUTHORING_ONLY (xem
-// newEmptyGlobalState() trong globalStateModel.js), compiler KHÔNG đọc trường
-// này nên không có gì để kiểm tra ở mức runtime, chỉ kiểm tra cấu hình có hợp
-// lệ để tác giả tự tái hiện thủ công hay không.
-function checkMilestones(proDoc) {
-  const errors = [];
-  const warnings = [];
-  const registry = proDoc.globalState.registry;
-  for (const m of proDoc.globalState.milestones || []) {
-    const entity = findEntityByIdAnyKind(registry, m.statEntityId);
-    if (!entity) {
-      errors.push(`Milestone trỏ tới chỉ số không tồn tại/đã bị xoá (id: ${m.statEntityId}).`);
-      continue;
-    }
-    if (entity.kind !== ENTITY_KINDS.STAT) {
-      errors.push(`Milestone trỏ tới "${entity.displayName}" nhưng đây không phải một chỉ số.`);
-    }
-    if (m.thresholds.length === 0) {
-      warnings.push(`Milestone theo "${entity.displayName}" chưa có mốc nào.`);
-      continue;
-    }
-    const ats = m.thresholds.map((t) => t.at);
-    if (new Set(ats).size !== ats.length) {
-      errors.push(`Milestone theo "${entity.displayName}" có 2 mốc trùng ngưỡng.`);
-    }
-    if (m.thresholds.some((t) => !Number.isFinite(t.at) || !Number.isFinite(t.bonus))) {
-      errors.push(`Milestone theo "${entity.displayName}" có mốc với ngưỡng/thưởng không phải số hợp lệ.`);
-    }
-  }
-  return { errors, warnings };
-}
-
 export function validateCampaign(proDocRaw) {
   const errors = [];
   const warnings = [];
@@ -153,13 +70,9 @@ export function validateCampaign(proDocRaw) {
     errors.push(`Trùng id entity trong registry toàn game: ${dupIds.join(", ")}.`);
   }
 
-  const mechanicsResult = checkMechanics(proDoc);
-  errors.push(...mechanicsResult.errors);
-  warnings.push(...mechanicsResult.warnings);
-
-  const milestonesResult = checkMilestones(proDoc);
-  errors.push(...milestonesResult.errors);
-  warnings.push(...milestonesResult.warnings);
+  for (const finding of validateProConfiguration(proDoc)) {
+    (finding.severity === "error" ? errors : warnings).push(finding.message);
+  }
 
   for (const ep of episodes) {
     if (!ep.sceneBlueprint?.scenes?.length) {

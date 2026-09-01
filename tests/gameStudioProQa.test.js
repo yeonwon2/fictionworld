@@ -9,6 +9,108 @@ import { brokenProQaFixture, cleanProQaFixture } from "./fixtures/proQaFixtures.
 
 const codes = (result) => new Set(result.issues.map((i) => i.code));
 
+function statFeasibilityDoc({ repeatable }) {
+  const stat = { id: "rep", kind: "stat", displayName: "Uy tín", default: 0, isVital: false };
+  const registry = { stats: [stat], relationships: [], flags: [], items: [] };
+  const rules = (conditions = [], effects = []) => ({ conditions, effects });
+  const gain = { id: "gain", text: "+10", targetType: "scene", targetId: "b", rules: rules([], [{ type: "stat_change", entityId: stat.id, amount: repeatable ? 10 : 20 }]), conditionalOutcomes: [] };
+  const backOrForward = { id: "back", text: repeatable ? "Lặp lại" : "Đi tiếp", targetType: "scene", targetId: repeatable ? "a" : "gate", rules: rules(), conditionalOutcomes: [] };
+  const toGate = { id: "to_gate", text: "Tới cổng", targetType: "scene", targetId: "gate", rules: rules(), conditionalOutcomes: [] };
+  const gated = { id: "gated", text: "Kết thúc", targetType: "ending", targetId: "end", rules: rules([{ type: "stat_compare", entityId: stat.id, operator: ">=", value: 100 }]), conditionalOutcomes: [] };
+  const scenes = [
+    { id: "a", title: "A", role: "story", choices: [gain] },
+    { id: "b", title: "B", role: "decision", choices: repeatable ? [backOrForward, toGate] : [backOrForward] },
+    { id: "gate", title: "Cổng", role: "condition", choices: [gated] },
+  ];
+  return { title: "Stat bounds", storyBlueprint: { episodes: [{ id: "ep", order: 1, title: "Tập", stages: [], planningIntents: [], sceneBlueprint: { startSceneId: "a", scenes, endings: [{ id: "end", title: "Hết", tone: "good" }], registry } }] }, globalState: { startEpisodeId: "ep", registry, milestones: [] } };
+}
+
+test("repeatable reachable stat gain must not false-block a high gate", () => {
+  const result = runProQa(statFeasibilityDoc({ repeatable: true }));
+  assert.equal(codes(result).has("STAT_REQUIREMENT_IMPOSSIBLE"), false);
+});
+
+test("non-repeatable stat gain keeps a finite conservative upper bound", () => {
+  const result = runProQa(statFeasibilityDoc({ repeatable: false }));
+  assert.equal(codes(result).has("STAT_REQUIREMENT_IMPOSSIBLE"), true);
+});
+
+test("repeatable gain through an episode transition cycle fails open", () => {
+  const doc = statFeasibilityDoc({ repeatable: false });
+  const ep1 = doc.storyBlueprint.episodes[0];
+  ep1.sceneBlueprint.scenes[2].choices[0].targetType = "episode";
+  ep1.sceneBlueprint.scenes[2].choices[0].targetId = "ep2";
+  ep1.sceneBlueprint.endings = [];
+  const ep2 = { id: "ep2", order: 2, title: "Tập lặp", stages: [], planningIntents: [], sceneBlueprint: { startSceneId: "ep2_start", registry: doc.globalState.registry, endings: [{ id: "end", title: "Hết", tone: "good" }], scenes: [{ id: "ep2_start", title: "Quay lại", role: "decision", choices: [
+    { id: "again", text: "Lặp campaign", targetType: "episode", targetId: "ep", rules: { conditions: [], effects: [] }, conditionalOutcomes: [] },
+    { id: "finish", text: "Đòi 100", targetType: "ending", targetId: "end", rules: { conditions: [{ type: "stat_compare", entityId: "rep", operator: ">=", value: 100 }], effects: [] }, conditionalOutcomes: [] },
+  ] }] } };
+  doc.storyBlueprint.episodes.push(ep2);
+  assert.equal(codes(runProQa(doc)).has("STAT_REQUIREMENT_IMPOSSIBLE"), false);
+});
+
+function configurationDoc() {
+  const doc = cleanProQaFixture();
+  // Relationships share registry.stats storage but retain kind=relationship.
+  doc.globalState.registry.stats.push({ id: "rel", kind: "relationship", displayName: "Thiện cảm", npc: "NPC", default: 0 });
+  for (const ep of doc.storyBlueprint.episodes) ep.sceneBlueprint.registry = doc.globalState.registry;
+  return doc;
+}
+
+test("rank pointing to a non-stat has structured wrong-kind ERROR", () => {
+  const doc = configurationDoc();
+  doc.mechanics.configs.rank = [
+    { id: "r1", label: "Quan hệ", entityId: "rel", levels: [{ threshold: 0 }] },
+    { id: "r2", label: "Cờ", entityId: "flag_saved", levels: [{ threshold: 0 }] },
+    { id: "r3", label: "Vật phẩm", entityId: "item_scarf", levels: [{ threshold: 0 }] },
+  ];
+  const issues = runProQa(doc).issues.filter((item) => item.code === "RANK_ENTITY_WRONG_KIND");
+  assert.equal(issues.length, 3);
+  assert.ok(issues.every((issue) => issue.severity === "error"));
+});
+
+test("currency pointing to a non-stat has structured wrong-kind ERROR", () => {
+  const doc = configurationDoc();
+  doc.mechanics.configs.currency = [{ id: "c", entityId: "rel", allowNegative: true }];
+  const issue = runProQa(doc).issues.find((item) => item.code === "CURRENCY_ENTITY_WRONG_KIND");
+  assert.equal(issue?.severity, "error");
+});
+
+test("duplicate rank thresholds have a structured ERROR", () => {
+  const doc = configurationDoc();
+  doc.mechanics.configs.rank = [{ id: "r", label: "Trùng", entityId: "stat_rep", levels: [{ threshold: 10 }, { threshold: 10 }] }];
+  assert.equal(runProQa(doc).issues.find((item) => item.code === "RANK_DUPLICATE_THRESHOLD")?.severity, "error");
+});
+
+test("out-of-order rank thresholds have a structured WARNING", () => {
+  const doc = configurationDoc();
+  doc.mechanics.configs.rank = [{ id: "r", label: "Lệch", entityId: "stat_rep", levels: [{ threshold: 20 }, { threshold: 10 }] }];
+  assert.equal(runProQa(doc).issues.find((item) => item.code === "RANK_THRESHOLD_ORDER_WARNING")?.severity, "warning");
+});
+
+test("vital mechanic and broken milestones expose stable structured codes", () => {
+  const doc = configurationDoc();
+  doc.mechanics.enabled = ["vitalStat"];
+  doc.globalState.milestones = [
+    { id: "missing", statEntityId: "deleted", thresholds: [{ at: 1, bonus: 1 }] },
+    { id: "wrong", statEntityId: "rel", thresholds: [{ at: 5, bonus: 1 }, { at: 5, bonus: Number.NaN }] },
+  ];
+  const result = runProQa(doc); const found = codes(result);
+  for (const code of ["VITAL_MECHANIC_WITHOUT_VITAL_STAT", "MILESTONE_ENTITY_MISSING", "MILESTONE_ENTITY_WRONG_KIND", "MILESTONE_DUPLICATE_THRESHOLD", "MILESTONE_VALUE_INVALID"]) assert.ok(found.has(code), `missing ${code}`);
+});
+
+test("instant_failure intent is not satisfied by a death ending only available later", () => {
+  const doc = cleanProQaFixture(); const ep = doc.storyBlueprint.episodes[0]; const bp = ep.sceneBlueprint;
+  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
+  deathChoice.targetType = "scene"; deathChoice.targetId = "late_death";
+  bp.scenes.push({ id: "late_death", title: "Cuối tuyến dài", role: "story", choices: [{ id: "die_late", text: "Chết", targetType: "ending", targetId: "death", rules: { conditions: [], effects: [] }, conditionalOutcomes: [] }] });
+  assert.ok(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"));
+});
+
+test("direct start choice to a reachable death ending satisfies instant_failure", () => {
+  assert.equal(codes(runProQa(cleanProQaFixture())).has("PLANNER_INSTANT_FAILURE_MISSING"), false);
+});
+
 test("PRO 7 graph engine reports reachability, incoming/outgoing and missing targets", () => {
   const bp = brokenProQaFixture().storyBlueprint.episodes[0].sceneBlueprint;
   const graph = analyzeBlueprintGraph(bp);

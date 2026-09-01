@@ -2,11 +2,11 @@
 import { analyzeBlueprintGraph } from "./qaGraphAnalyzer.js";
 import { SCENE_ROLES } from "./blueprintModel.js";
 import { ensureGlobalState } from "./globalStateModel.js";
-import { ensureMechanicsState } from "./mechanicsModel.js";
 import { findEntityByIdAnyKind, ENTITY_KINDS } from "./entityRegistry.js";
 import { CONDITION_TYPES, EFFECT_TYPES } from "./ruleModel.js";
 import { validateChoiceRules } from "./ruleValidator.js";
 import { compileProCampaign } from "./proCompiler.js";
+import { validateProConfiguration } from "./configurationValidator.js";
 
 export const QA_SEVERITIES = { ERROR: "error", WARNING: "warning", INFO: "info" };
 
@@ -30,6 +30,27 @@ function allEffects(choice) {
 }
 function normalizedText(value) { return String(value || "").trim().toLocaleLowerCase("vi").replace(/\s+/g, " "); }
 
+// Tarjan over the tiny episode graph. Kept generic and linear so feasibility
+// can fail open on repeatable cross-episode gains without path simulation.
+function cyclicVertices(adjacency) {
+  let nextIndex = 0;
+  const indices = new Map(), low = new Map(), stack = [], onStack = new Set(), cyclic = new Set();
+  function visit(id) {
+    indices.set(id, nextIndex); low.set(id, nextIndex); nextIndex += 1; stack.push(id); onStack.add(id);
+    for (const target of adjacency.get(id) || []) {
+      if (!adjacency.has(target)) continue;
+      if (!indices.has(target)) { visit(target); low.set(id, Math.min(low.get(id), low.get(target))); }
+      else if (onStack.has(target)) low.set(id, Math.min(low.get(id), indices.get(target)));
+    }
+    if (low.get(id) !== indices.get(id)) return;
+    const component = []; let member;
+    do { member = stack.pop(); onStack.delete(member); component.push(member); } while (member !== id);
+    if (component.length > 1 || (adjacency.get(component[0]) || new Set()).has(component[0])) for (const item of component) cyclic.add(item);
+  }
+  for (const id of adjacency.keys()) if (!indices.has(id)) visit(id);
+  return cyclic;
+}
+
 export function runProQa(rawDoc) {
   const doc = ensureGlobalState(rawDoc || {});
   const episodes = Array.isArray(doc.storyBlueprint?.episodes) ? doc.storyBlueprint.episodes : [];
@@ -39,6 +60,8 @@ export function runProQa(rawDoc) {
   const entityUse = new Map();
   const possibleFlagGrants = new Set(), possibleItemGrants = new Set();
   const statPositive = new Map();
+  const positiveGainSources = new Map();
+  const graphByEpisode = new Map();
   const episodeIds = new Set(episodes.map((e) => e?.id).filter(Boolean));
   const orderById = new Map(episodes.map((e, i) => [e?.id, Number.isFinite(e?.order) ? e.order : i + 1]));
   const episodeAdj = new Map(episodes.map((e) => [e?.id, new Set()]));
@@ -65,6 +88,7 @@ export function runProQa(rawDoc) {
       continue;
     }
     const graph = analyzeBlueprintGraph(bp);
+    graphByEpisode.set(episode.id, graph);
     const sceneName = (id) => graph.byId.get(id)?.title || id || "cảnh chưa đặt tên";
     if (!bp.startSceneId || !graph.byId.has(bp.startSceneId)) add("error", "MISSING_START_SCENE", "episode", epCtx, { title: `Tập “${episode.title}” chưa có cảnh bắt đầu`, message: "Không tìm thấy cảnh mở đầu hợp lệ.", whyItMatters: "Người chơi không thể bắt đầu tập.", suggestedFix: "Chọn một cảnh hiện có làm cảnh bắt đầu." });
     for (const id of graph.duplicateSceneIds) add("error", "DUPLICATE_SCENE_ID", "scene", { ...epCtx, sceneId: id }, { title: "Hai cảnh dùng cùng mã", message: `Mã cảnh “${id}” xuất hiện nhiều lần trong tập “${episode.title}”.`, whyItMatters: "Đường nối có thể trỏ nhầm cảnh và compiler có thể ghi đè dữ liệu.", suggestedFix: "Tạo mã riêng cho từng cảnh." });
@@ -112,7 +136,11 @@ export function runProQa(rawDoc) {
           if (eff?.type === EFFECT_TYPES.GRANT_ITEM) { possibleItemGrants.add(eff.entityId); useEntity(eff.entityId, "item_grant"); }
           if (eff?.type === EFFECT_TYPES.REMOVE_ITEM) useEntity(eff.entityId, "item_remove");
           if (eff?.type === EFFECT_TYPES.STAT_CHANGE && Number.isFinite(eff.amount)) {
-            if (eff.amount >= 0) statPositive.set(eff.entityId, (statPositive.get(eff.entityId) || 0) + eff.amount);
+            if (eff.amount > 0) {
+              statPositive.set(eff.entityId, (statPositive.get(eff.entityId) || 0) + eff.amount);
+              if (!positiveGainSources.has(eff.entityId)) positiveGainSources.set(eff.entityId, []);
+              positiveGainSources.get(eff.entityId).push({ episodeId: episode.id, sceneId: scene.id });
+            }
           }
         }
       }
@@ -139,11 +167,16 @@ export function runProQa(rawDoc) {
     if (expected > 0 && Math.abs(bp.scenes.length - expected) > Math.max(3, Math.ceil(expected * 0.4))) add("warning", "SCENE_COUNT_MISMATCH", "episode", epCtx, { title: "Số cảnh lệch nhiều so với kế hoạch", message: `Kế hoạch dự kiến khoảng ${expected} cảnh nhưng sơ đồ hiện có ${bp.scenes.length}.`, whyItMatters: "Nhịp độ hoặc phạm vi tập có thể đã lệch khỏi kế hoạch.", suggestedFix: "Cập nhật kế hoạch hoặc bổ sung/rút gọn cảnh." });
     const intentTypes = new Set((episode.planningIntents || []).map((i) => i?.type));
     const roleHas = (role) => [...graph.byId.values()].some((s) => s.role === role);
-    const hasDeath = (bp.endings || []).some((e) => e?.tone === "death");
+    const deathEndingIds = new Set((bp.endings || []).filter((ending) => ending?.tone === "death").map((ending) => ending.id));
+    const startScene = graph.byId.get(bp.startSceneId);
+    const hasImmediateDeath = (startScene?.choices || []).some((choice) =>
+      (choice?.targetType === "ending" && deathEndingIds.has(choice.targetId)) ||
+      (choice?.conditionalOutcomes || []).some((branch) => branch?.targetType === "ending" && deathEndingIds.has(branch.targetId))
+    );
     const hasGate = [...graph.byId.values()].some((s) => (s.choices || []).some((c) => allConditions(c).some((list) => list.length)));
     const hasItemGate = [...graph.byId.values()].some((s) => (s.choices || []).some((c) => allConditions(c).some((list) => list.some((x) => x?.type === CONDITION_TYPES.ITEM_PRESENT))));
     const intentChecks = [
-      ["instant_failure", hasDeath, "PLANNER_INSTANT_FAILURE_MISSING", "Kế hoạch có thất bại tức thì nhưng graph chưa có kết thúc chết."],
+      ["instant_failure", hasImmediateDeath, "PLANNER_INSTANT_FAILURE_MISSING", "Kế hoạch có thất bại tức thì nhưng cảnh bắt đầu chưa có lựa chọn/kết quả dẫn trực tiếp tới kết thúc chết."],
       ["side_branch", roleHas(SCENE_ROLES.SIDE), "PLANNER_SIDE_BRANCH_MISSING", "Kế hoạch có nhánh phụ nhưng graph chưa có cảnh Nhánh phụ."],
       ["convergence", roleHas(SCENE_ROLES.CONVERGENCE), "PLANNER_CONVERGENCE_MISSING", "Kế hoạch có hội tụ nhưng graph chưa có cảnh Hội tụ."],
       ["relationship_or_flag_gate", hasGate, "PLANNER_GATE_MISSING", "Kế hoạch có cổng điều kiện nhưng graph chưa có luật điều kiện."],
@@ -153,9 +186,21 @@ export function runProQa(rawDoc) {
     for (const [intent, ok, code, message] of intentChecks) if (intentTypes.has(intent) && !ok) add("warning", code, "episode", epCtx, { title: "Sơ đồ chưa khớp ghi chú kế hoạch", message, whyItMatters: "Một ý đồ đã duyệt chưa được thể hiện trong cấu trúc thật.", suggestedFix: "Bổ sung cảnh/luật tương ứng hoặc cập nhật ghi chú kế hoạch." });
   }
 
-  // Conservative feasibility: all positive modifiers are summed even if they
-  // are mutually exclusive. Therefore an impossible result is certain, while
-  // a feasible result is only "possibly feasible" and produces no issue.
+  const startEpisodeId = requestedStart && episodeIds.has(requestedStart) ? requestedStart : [...episodes].sort((a, b) => (a.order || 0) - (b.order || 0))[0]?.id;
+  const reachableEpisodes = new Set(startEpisodeId ? [startEpisodeId] : []), queue = startEpisodeId ? [startEpisodeId] : [];
+  for (let i = 0; i < queue.length; i += 1) for (const next of episodeAdj.get(queue[i]) || []) if (episodeIds.has(next) && !reachableEpisodes.has(next)) { reachableEpisodes.add(next); queue.push(next); }
+  const cyclicEpisodeIds = cyclicVertices(episodeAdj);
+  const unboundedStats = new Set();
+  for (const [entityId, sources] of positiveGainSources) for (const source of sources) {
+    const graph = graphByEpisode.get(source.episodeId);
+    if (!reachableEpisodes.has(source.episodeId) || !graph?.reachableSceneIds.has(source.sceneId)) continue;
+    const onSceneCycle = graph.cycles.some((cycle) => cycle.sceneIds.includes(source.sceneId));
+    if (onSceneCycle || cyclicEpisodeIds.has(source.episodeId)) unboundedStats.add(entityId);
+  }
+
+  // Conservative feasibility: acyclic positive modifiers are summed even if
+  // mutually exclusive (an over-estimate). Any reachable repeatable gain makes
+  // the upper bound unknown/unbounded, so QA must fail open rather than block.
   for (const episode of episodes) for (const scene of episode?.sceneBlueprint?.scenes || []) for (const choice of scene?.choices || []) {
     for (const conditions of allConditions(choice)) for (const cond of conditions) {
       const entity = findEntityByIdAnyKind(registry, cond?.entityId);
@@ -164,7 +209,7 @@ export function runProQa(rawDoc) {
       if (cond?.type === CONDITION_TYPES.ITEM_PRESENT && !possibleItemGrants.has(cond.entityId)) add("warning", "ITEM_NEVER_GRANTED", "rule", ctx, { title: `Vật phẩm “${entity?.displayName || cond.entityId}” không bao giờ nhận được`, message: `Lựa chọn ở cảnh “${scene.title || scene.id}” yêu cầu vật phẩm này nhưng toàn campaign không có nơi trao nó.`, whyItMatters: "Lựa chọn có thể luôn bị khoá.", suggestedFix: "Trao vật phẩm ở một đường đi trước đó, hoặc bỏ điều kiện." });
       if (cond?.type === CONDITION_TYPES.STAT_COMPARE && entity && (entity.kind === ENTITY_KINDS.STAT || entity.kind === ENTITY_KINDS.RELATIONSHIP) && [">", ">=", "=="].includes(cond.operator)) {
         const initial = Number.isFinite(entity.default) ? entity.default : null;
-        const max = initial === null ? null : initial + (statPositive.get(entity.id) || 0);
+        const max = initial === null || unboundedStats.has(entity.id) ? null : initial + (statPositive.get(entity.id) || 0);
         const needed = cond.operator === ">" ? cond.value + 1 : cond.value;
         if (max !== null && Number.isFinite(needed) && max < needed) add("error", "STAT_REQUIREMENT_IMPOSSIBLE", "rule", ctx, { title: `Điều kiện “${entity.displayName}” không thể đạt`, message: `Campaign bắt đầu ở ${initial} và tổng mọi mức cộng dương chỉ lên tối đa ${max}, nhưng lựa chọn yêu cầu ${cond.operator} ${cond.value}.`, whyItMatters: "Lựa chọn chắc chắn luôn bị khoá theo các modifier hiện có.", suggestedFix: "Giảm ngưỡng, tăng giá trị khởi đầu hoặc thêm hệ quả tăng chỉ số trước đó." });
       }
@@ -181,14 +226,20 @@ export function runProQa(rawDoc) {
     if (stat.isVital && !Number.isFinite(stat.deathThreshold)) add("error", "VITAL_STAT_CONFIG_INVALID", "entity", { entityId: stat.id }, { title: `Ngưỡng sinh tử của “${stat.displayName}” không hợp lệ`, message: "Chỉ số được đánh dấu sinh tử nhưng thiếu ngưỡng số.", whyItMatters: "Game-over có thể chạy sai.", suggestedFix: "Đặt death threshold hợp lệ hoặc tắt chỉ số sinh tử." });
   }
 
-  const mechanics = ensureMechanicsState(doc.mechanics);
-  for (const rank of mechanics.configs.rank) if (!findEntityByIdAnyKind(registry, rank.entityId)) add("error", "RANK_ENTITY_MISSING", "entity", { entityId: rank.entityId }, { title: "Cấu hình cấp bậc trỏ tới chỉ số đã xoá", message: `Cấp bậc “${rank.label || "chưa đặt tên"}” không còn chỉ số nguồn.`, whyItMatters: "Cấu hình không thể được hiểu hoặc kiểm tra.", suggestedFix: "Chọn lại chỉ số cho cấp bậc hoặc xoá cấu hình lỗi." });
-  for (const currency of mechanics.configs.currency) if (!findEntityByIdAnyKind(registry, currency.entityId)) add("error", "CURRENCY_ENTITY_MISSING", "entity", { entityId: currency.entityId }, { title: "Cấu hình tiền tệ trỏ tới chỉ số đã xoá", message: "Một cấu hình tiền tệ không còn chỉ số nguồn.", whyItMatters: "Cấu hình tiền tệ bị hỏng.", suggestedFix: "Chọn lại chỉ số tiền tệ hoặc xoá cấu hình lỗi." });
-  for (const quest of mechanics.configs.quest) add("info", "QUEST_AUTHORING_ONLY", "entity", { entityId: quest?.id || null }, { title: `Nhiệm vụ “${quest?.title || quest?.label || "chưa đặt tên"}” chỉ là ghi chú`, message: "Runtime hiện chưa theo dõi nhiệm vụ tự động.", whyItMatters: "Đây không phải lỗi, nhưng cần tự thể hiện tiến trình bằng cờ/cảnh.", suggestedFix: "Dùng cờ và luật nếu nhiệm vụ cần ảnh hưởng gameplay." });
+  const configTitles = {
+    RANK_ENTITY_MISSING: "Cấp bậc trỏ tới chỉ số đã xoá", RANK_ENTITY_WRONG_KIND: "Cấp bậc trỏ sai loại thực thể",
+    CURRENCY_ENTITY_MISSING: "Tiền tệ trỏ tới chỉ số đã xoá", CURRENCY_ENTITY_WRONG_KIND: "Tiền tệ trỏ sai loại thực thể",
+    RANK_DUPLICATE_THRESHOLD: "Cấp bậc có mốc trùng nhau", RANK_THRESHOLD_ORDER_WARNING: "Mốc cấp bậc chưa đúng thứ tự",
+    VITAL_MECHANIC_WITHOUT_VITAL_STAT: "Đã bật sinh tử nhưng chưa có chỉ số sinh tử",
+    MILESTONE_ENTITY_MISSING: "Milestone trỏ tới chỉ số đã xoá", MILESTONE_ENTITY_WRONG_KIND: "Milestone trỏ sai loại thực thể",
+    MILESTONE_DUPLICATE_THRESHOLD: "Milestone có mốc trùng nhau", MILESTONE_VALUE_INVALID: "Giá trị milestone không hợp lệ",
+  };
+  for (const finding of validateProConfiguration(doc)) add(finding.severity, finding.code, "entity", { entityId: finding.entityId }, {
+    title: configTitles[finding.code] || "Cấu hình gameplay cần kiểm tra", message: finding.message,
+    whyItMatters: finding.severity === "error" ? "Cấu hình này không thể được biên dịch hoặc kiểm tra đáng tin cậy." : "Cấu hình vẫn lưu được nhưng có thể không hoạt động như mong đợi.",
+    suggestedFix: "Mở phần Cơ chế/Trạng thái toàn game và sửa cấu hình được nêu."
+  });
 
-  const startEpisodeId = requestedStart && episodeIds.has(requestedStart) ? requestedStart : [...episodes].sort((a, b) => (a.order || 0) - (b.order || 0))[0]?.id;
-  const reachableEpisodes = new Set(startEpisodeId ? [startEpisodeId] : []), queue = startEpisodeId ? [startEpisodeId] : [];
-  for (let i = 0; i < queue.length; i += 1) for (const next of episodeAdj.get(queue[i]) || []) if (episodeIds.has(next) && !reachableEpisodes.has(next)) { reachableEpisodes.add(next); queue.push(next); }
   for (const ep of episodes) if (ep?.sceneBlueprint?.scenes?.length && !reachableEpisodes.has(ep.id)) add("warning", "UNREACHABLE_EPISODE", "episode", { episodeId: ep.id }, { title: `Tập “${ep.title}” không thể đi tới`, message: "Không có chuỗi chuyển tập từ tập bắt đầu tới tập này.", whyItMatters: "Toàn bộ nội dung tập sẽ không xuất hiện khi chơi campaign.", suggestedFix: "Thêm chuyển tập từ một tập reachable." });
   const ordered = [...episodes].sort((a, b) => (a.order || 0) - (b.order || 0));
   const last = ordered[ordered.length - 1];
