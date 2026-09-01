@@ -29,7 +29,7 @@ import {
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
 import { generateEpisodeBlueprint, regenerateScene } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
-import { syncRegistryToAllEpisodes } from "@/lib/gameStudioPro/globalStateModel";
+import { syncRegistryToAllEpisodes, applyEpisodeBlueprint } from "@/lib/gameStudioPro/globalStateModel";
 import SceneIntentEditor from "./SceneIntentEditor";
 import ExternalAiBridgeModal from "./ExternalAiBridgeModal";
 
@@ -172,11 +172,16 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   );
   const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
+  // HOTFIX PRO 5: funnel DUY NHẤT ghi blueprint vào 1 episode — MỌI nơi gọi
+  // (applyPending/handleRegenerateScene/handleAddScene/handleDeleteScene/"Tạo
+  // sơ đồ trống"/EndingsPanel/SceneIntentEditor/ExternalAiBridgeModal đều gọi
+  // qua đây) tự động được ép registry của blueprint về đúng canonical
+  // globalState.registry — không caller nào tự nhớ sync (globalStateModel.js
+  // #applyEpisodeBlueprint).
   function setEpisodeBlueprint(nextBlueprint) {
-    onChange({
-      ...storyBlueprint,
-      episodes: storyBlueprint.episodes.map((e) => (e.id === episode.id ? { ...e, sceneBlueprint: nextBlueprint } : e)),
-    });
+    const result = applyEpisodeBlueprint(storyBlueprint, globalState, episode.id, nextBlueprint);
+    onGlobalStateChange(result.globalState);
+    onChange(result.storyBlueprint);
   }
 
   // PRO 5: registry CANONICAL sống ở globalState (globalStateModel.js) —

@@ -453,3 +453,33 @@ export function compileProCampaign(proDocRaw) {
 
   return { meta, nodes, warnings };
 }
+
+// ---------- HOTFIX PRO 5 (FIX 2): quyết định compiler + fail-closed ----------
+// Tách khỏi GameStudioPro.jsx (nơi dùng nó) để: (a) có thể unit-test bằng
+// node:test (GameStudioPro.jsx là .jsx, không import được thẳng vào node:test
+// thuần), (b) đúng tinh thần "compiler" — quyết định compile bằng gì thuộc về
+// module compiler, không phải UI.
+//
+// hasCampaignContent(): CHỈ dựa trên việc đã có ít nhất 1 tập có sơ đồ cảnh
+// hay chưa. Game Pro cũ (PRO 0–4, chưa từng chạm Kế hoạch/Sơ đồ) không có
+// storyBlueprint.episodes[].sceneBlueprint nào nên vẫn compile bằng
+// compileProGame() như trước — không đổi hành vi (mục 9/10 LUẬT BẢO TOÀN KIẾN
+// TRÚC).
+//
+// compileProDocument(): FAIL-CLOSED — nếu ĐÃ có campaign content nhưng
+// compileProCampaign() throw, trả về `compiled: null` thay vì âm thầm rơi về
+// compileProGame(). Một campaign lỗi KHÔNG ĐƯỢC biến thành game demo PRO 0
+// trong lúc Play/Export/Save — nơi gọi (GameStudioPro.jsx) phải tự xử lý
+// `campaignError`, không được coi `compiled` luôn tồn tại.
+export function hasCampaignContent(proDoc) {
+  return (proDoc?.storyBlueprint?.episodes || []).some((e) => e.sceneBlueprint?.scenes?.length);
+}
+
+export function compileProDocument(proDoc) {
+  if (!hasCampaignContent(proDoc)) return { compiled: compileProGame(proDoc), campaignError: null };
+  try {
+    return { compiled: compileProCampaign(proDoc), campaignError: null };
+  } catch (e) {
+    return { compiled: null, campaignError: e.message };
+  }
+}

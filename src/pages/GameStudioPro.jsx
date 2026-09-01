@@ -17,7 +17,7 @@
 // scene/node graph thật, nên compileProGame() ở tab "Soạn"/"Chơi
 // thử"/"Xuất bản" hoàn toàn không đọc tới nó. Mind map Pro, Scene Intent,
 // Natural-Language-to-Rule, import kịch bản ngoài... vẫn CHƯA làm.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Rocket, Plus, ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,33 +27,12 @@ import { useToast } from "@/components/ui/use-toast";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import { newEmptyProGame } from "@/lib/gameStudioPro/proModel";
-import { compileProGame, compileProCampaign } from "@/lib/gameStudioPro/proCompiler";
+import { compileProGame, compileProDocument } from "@/lib/gameStudioPro/proCompiler";
 import { ensureGlobalState } from "@/lib/gameStudioPro/globalStateModel";
 import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
 import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
 import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
-
-// PRO 5: quyết định biên dịch bằng campaign (compileProCampaign) hay bằng
-// khung PRO 0 tối giản (compileProGame) — CHỈ dựa trên việc đã có ít nhất 1
-// tập có sơ đồ cảnh hay chưa. Game Pro cũ (PRO 0–4, chưa từng chạm Kế
-// hoạch/Sơ đồ) không có storyBlueprint.episodes[].sceneBlueprint nào nên vẫn
-// đi đúng đường compileProGame() như trước — không đổi hành vi (mục 9/10 LUẬT
-// BẢO TOÀN KIẾN TRÚC). Nếu campaign biên dịch lỗi (vd tập bắt đầu chưa có sơ
-// đồ), rơi về compileProGame() để "Chơi thử"/"Xuất bản"/"Lưu" không bao giờ
-// crash — validateCampaign() (campaignValidator.js) là nơi CẢNH BÁO người
-// dùng trước khi họ tới đây, không phải nơi này.
-function hasCampaignContent(proDoc) {
-  return (proDoc.storyBlueprint?.episodes || []).some((e) => e.sceneBlueprint?.scenes?.length);
-}
-function compileProDocument(proDoc) {
-  if (!hasCampaignContent(proDoc)) return { compiled: compileProGame(proDoc), campaignError: null };
-  try {
-    return { compiled: compileProCampaign(proDoc), campaignError: null };
-  } catch (e) {
-    return { compiled: compileProGame(proDoc), campaignError: e.message };
-  }
-}
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -162,6 +141,14 @@ function ProGameEditor({ gameId, onBack }) {
   // bên lệch nhau. Nên tách state xem trước này, KHÔNG lưu vào proDoc/DB.
   const [exportPreview, setExportPreview] = useState(null);
   const { toast } = useToast();
+  // HOTFIX PRO 5 (FIX 2): bản {meta,nodes} biên dịch THÀNH CÔNG gần nhất —
+  // "runtime snapshot" thật của game này. Khởi tạo từ chính hàng DB đã lưu
+  // (đúng nghĩa "lần lưu thành công gần nhất"), rồi cập nhật mỗi khi
+  // compileProDocument() thành công trong lúc soạn. handleSave() dùng bản này
+  // để KHÔNG BAO GIỜ ghi đè runtime đã lưu bằng 1 bản PRO 0 giả khi campaign
+  // đang lỗi (xem "Không được overwrite runtime snapshot bằng fake PRO0
+  // output" trong yêu cầu hotfix).
+  const lastGoodCompiledRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -172,6 +159,9 @@ function ProGameEditor({ gameId, onBack }) {
         // bộ nhớ, không đổi gì trên server cho tới lần "Lưu" tiếp theo (giống
         // mọi chỉnh sửa khác trong Xưởng Game Pro).
         setProDoc(ensureGlobalState(row.meta?.pro || newEmptyProGame()));
+        // "Lần lưu thành công gần nhất" trước khi ta chỉnh sửa gì — sàn an
+        // toàn ban đầu cho lastGoodCompiledRef (xem handleSave()).
+        lastGoodCompiledRef.current = { meta: row.meta || {}, nodes: row.nodes || {} };
       })
       .catch((e) => {
         toast({ variant: "destructive", title: "Không mở được Game Pro", description: e.message });
@@ -184,8 +174,39 @@ function ProGameEditor({ gameId, onBack }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const { compiled: { meta, nodes } } = compileProDocument(proDoc);
+      const { compiled, campaignError } = compileProDocument(proDoc);
+      if (campaignError) {
+        // FIX 2 — FAIL-CLOSED: campaign đang lỗi biên dịch. KHÔNG được lưu 1
+        // bản PRO 0 giả làm như campaign đang hoạt động. Vẫn phải cho lưu tài
+        // liệu authoring (proDoc mới nhất, kể cả bản lỗi — đúng yêu cầu
+        // "không được mất khả năng lưu tài liệu authoring") nhưng runtime
+        // snapshot (nodes + phần meta không phải `pro`) giữ nguyên bản biên
+        // dịch tốt gần nhất, không bị ghi đè.
+        const fallback = lastGoodCompiledRef.current;
+        if (!fallback) {
+          toast({
+            variant: "destructive",
+            title: "Không thể lưu — campaign chưa từng biên dịch thành công",
+            description: `Sửa lỗi campaign (xem "Trạng thái campaign" ở tab Kế hoạch) rồi lưu lại. Lỗi: ${campaignError}`,
+          });
+          return;
+        }
+        await updateGame(gameId, {
+          title: proDoc.title || "Game Pro Mới",
+          meta: { ...fallback.meta, pro: proDoc },
+          nodes: fallback.nodes,
+        });
+        setLastSavedAt(new Date());
+        toast({
+          variant: "destructive",
+          title: "Đã lưu bản soạn — CHƯA cập nhật game chơi được",
+          description: `Campaign đang lỗi biên dịch nên "Chơi thử"/"Xuất bản" vẫn dùng bản biên dịch tốt gần nhất cho tới khi bạn sửa lỗi và lưu lại. Lỗi: ${campaignError}`,
+        });
+        return;
+      }
+      const { meta, nodes } = compiled;
       await updateGame(gameId, { title: proDoc.title || "Game Pro Mới", meta, nodes });
+      lastGoodCompiledRef.current = { meta, nodes };
       setLastSavedAt(new Date());
       setPlayKey((k) => k + 1);
       toast({ title: "Đã lưu Game Pro" });
@@ -221,7 +242,12 @@ function ProGameEditor({ gameId, onBack }) {
   }
 
   const { compiled, campaignError } = compileProDocument(proDoc);
-  const compiledGameData = { meta: compiled.meta, nodes: compiled.nodes };
+  // Bất cứ lúc nào biên dịch THÀNH CÔNG trong phiên soạn này (kể cả chưa
+  // lưu) đều nâng cấp "bản tốt gần nhất" — không chỉ sau khi bấm Lưu — để
+  // handleSave() luôn có sàn an toàn mới nhất có thể khi campaign sau đó bị
+  // làm hỏng (mục "Save Safety").
+  if (compiled) lastGoodCompiledRef.current = { meta: compiled.meta, nodes: compiled.nodes };
+  const compiledGameData = compiled ? { meta: compiled.meta, nodes: compiled.nodes } : null;
 
   return (
     <div className="min-h-screen pb-20">
@@ -258,7 +284,7 @@ function ProGameEditor({ gameId, onBack }) {
       {campaignError && (
         <div className="max-w-4xl mx-auto px-4 pt-4">
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-            Không biên dịch được campaign nhiều tập — đang tạm dùng bản PRO 0 tối giản cho "Chơi thử"/"Xuất bản"/"Lưu". Lỗi: {campaignError}
+            Campaign nhiều tập đang lỗi biên dịch — "Chơi thử"/"Xuất bản" bị chặn cho tới khi sửa xong (xem "Trạng thái campaign" ở tab Kế hoạch). "Lưu" vẫn giữ được thay đổi soạn thảo, nhưng KHÔNG cập nhật bản chơi/xuất bản được. Lỗi: {campaignError}
           </div>
         </div>
       )}
@@ -327,13 +353,27 @@ function ProGameEditor({ gameId, onBack }) {
         )}
 
         {mode === "play" && (
-          <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "70vh" }}>
-            <GamePlayer key={playKey} gameData={compiledGameData} gameKey={gameId} onExit={() => setMode("edit")} />
-          </div>
+          campaignError ? (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+              Không thể chơi thử — campaign đang lỗi biên dịch. Sửa lỗi ở tab "Kế hoạch"/"Sơ đồ" rồi quay lại đây.
+              <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "70vh" }}>
+              <GamePlayer key={playKey} gameData={compiledGameData} gameKey={gameId} onExit={() => setMode("edit")} />
+            </div>
+          )
         )}
 
         {mode === "export" && (
-          <ExportCenter gameData={exportPreview || compiledGameData} setGameData={setExportPreview} />
+          campaignError ? (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+              Không thể xuất bản — campaign đang lỗi biên dịch. Sửa lỗi ở tab "Kế hoạch"/"Sơ đồ" rồi quay lại đây.
+              <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
+            </div>
+          ) : (
+            <ExportCenter gameData={exportPreview || compiledGameData} setGameData={setExportPreview} />
+          )
         )}
       </div>
     </div>

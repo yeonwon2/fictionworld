@@ -222,6 +222,62 @@ export function syncRegistryToAllEpisodes(storyBlueprint, registry) {
   };
 }
 
+// ---------- HOTFIX PRO 5: funnel DUY NHẤT để ghi 1 blueprint vào 1 episode ----------
+//
+// Trước hotfix này, mỗi nơi gọi setEpisodeBlueprint-kiểu-thủ-công (AI dựng sơ
+// đồ lần đầu, tạo sơ đồ trống, nhập kịch bản từ External AI Bridge...) có thể
+// âm thầm ghi đè episode.sceneBlueprint.registry bằng 1 registry KHÔNG phải
+// globalState.registry (vd rỗng — newSceneBlueprint()/emptyBlueprintBase()
+// luôn khởi tạo registry rỗng; hoặc registry đã "chốt" của riêng External AI
+// Bridge kèm entity vừa duyệt tạo mới, chưa từng được cộng vào global). Global
+// registry khi đó không còn là SOURCE OF TRUTH thật — đúng lỗi kiến trúc bị
+// chỉ ra.
+//
+// applyEpisodeBlueprint() là funnel DUY NHẤT: mọi UI ghi blueprint vào 1
+// episode (SmartMindMap.setEpisodeBlueprint — chính là nơi applyPending/
+// handleRegenerateScene/handleAddScene/handleDeleteScene/"Tạo sơ đồ
+// trống"/EndingsPanel/SceneIntentEditor/ExternalAiBridgeModal.onApplyBlueprint
+// đều đi qua) PHẢI gọi hàm này thay vì tự ghép { ...episode, sceneBlueprint }.
+// Hàm CỘNG DỒN (không đoán/không merge-theo-tên) mọi entity MỚI có trong
+// nextBlueprint.registry nhưng CHƯA có id trong globalState.registry vào
+// canonical registry, rồi mirror kết quả ra MỌI episode (kể cả episode vừa
+// ghi) — không có nơi nào khác được phép là "source of truth thứ hai".
+function unionEntitiesById(existing, incoming) {
+  const ids = new Set(existing.map((e) => e.id));
+  return [...existing, ...incoming.filter((e) => !ids.has(e.id))];
+}
+
+// Entity nào trong `incomingRegistry` chưa có id trong `globalRegistry` được
+// coi là THẬT SỰ MỚI (vd External AI Bridge vừa duyệt "Tạo mới") và được cộng
+// vào — entity trùng id giữ NGUYÊN bản global (global luôn là bản canonical,
+// không bị nội dung cũ hơn từ 1 blueprint local ghi đè ngược).
+export function mergeNewEntitiesIntoRegistry(globalRegistry, incomingRegistry) {
+  const g = ensureGlobalRegistryShape(globalRegistry);
+  const inc = ensureGlobalRegistryShape(incomingRegistry);
+  return {
+    stats: unionEntitiesById(g.stats, inc.stats),
+    flags: unionEntitiesById(g.flags, inc.flags),
+    items: unionEntitiesById(g.items, inc.items),
+  };
+}
+
+// Ghi `nextBlueprint` làm sceneBlueprint của `episodeId` — TRẢ VỀ cả
+// storyBlueprint lẫn globalState đã cập nhật, caller chỉ cần set 2 state đó,
+// không tự làm gì thêm (không cần tự nhớ sync).
+export function applyEpisodeBlueprint(storyBlueprint, globalState, episodeId, nextBlueprint) {
+  const mergedRegistry = mergeNewEntitiesIntoRegistry(globalState?.registry, nextBlueprint?.registry);
+  const swapped = {
+    ...storyBlueprint,
+    episodes: (storyBlueprint?.episodes || []).map((ep) =>
+      ep.id === episodeId ? { ...ep, sceneBlueprint: nextBlueprint } : ep
+    ),
+  };
+  return {
+    storyBlueprint: syncRegistryToAllEpisodes(swapped, mergedRegistry),
+    globalState: { ...globalState, registry: mergedRegistry },
+  };
+}
+
 function collectEpisodeTargets(blueprint) {
   const out = new Set();
   for (const s of blueprint?.scenes || []) {
