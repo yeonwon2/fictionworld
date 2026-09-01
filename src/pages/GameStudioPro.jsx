@@ -174,6 +174,12 @@ function ProGameEditor({ gameId, onBack }) {
   // đang lỗi (xem "Không được overwrite runtime snapshot bằng fake PRO0
   // output" trong yêu cầu hotfix).
   const lastGoodCompiledRef = useRef(null);
+  // Tự lưu sau khi ngừng chỉnh sửa 1.2s, và lưu ngay khi thoát/đổi game nếu
+  // còn thay đổi chưa lưu — cùng cơ chế với Xưởng Game thường (GameStudio.jsx),
+  // để thoát trang giữa chừng không làm mất bản soạn.
+  const saveTimerRef = useRef(null);
+  const dirtyRef = useRef(false);
+  const handleSaveRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -198,6 +204,13 @@ function ProGameEditor({ gameId, onBack }) {
         onBack();
       })
       .finally(() => setLoading(false));
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      if (dirtyRef.current) {
+        dirtyRef.current = false;
+        handleSaveRef.current?.();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
@@ -245,18 +258,31 @@ function ProGameEditor({ gameId, onBack }) {
       toast({ variant: "destructive", title: "Không lưu được", description: e.message });
     }
   }
+  handleSaveRef.current = handleSave;
+
+  function markDirty() {
+    dispatchSave({ type: "dirty" });
+    dirtyRef.current = true;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      dirtyRef.current = false;
+      handleSaveRef.current?.();
+    }, 1200);
+  }
 
   function updateField(patch) {
-    dispatchSave({ type: "dirty" });
+    markDirty();
     setProDoc((prev) => ({ ...prev, ...patch }));
   }
   function updateChoice(index, patch) {
+    markDirty();
     setProDoc((prev) => ({
       ...prev,
       choices: prev.choices.map((c, i) => (i === index ? { ...c, ...patch } : c)),
     }));
   }
   function updateEnding(index, patch) {
+    markDirty();
     setProDoc((prev) => ({
       ...prev,
       endings: prev.endings.map((e, i) => (i === index ? { ...e, ...patch } : e)),
@@ -346,7 +372,7 @@ function ProGameEditor({ gameId, onBack }) {
               mechanics={proDoc.mechanics}
               onMechanicsChange={(mechanics) => updateField({ mechanics })}
               proDoc={proDoc}
-              onProDocChange={(next) => { dispatchSave({ type: "dirty" }); setProDoc(next); }}
+              onProDocChange={(next) => { markDirty(); setProDoc(next); }}
             />
           ) : (
             <PlannerIntro
@@ -354,7 +380,7 @@ function ProGameEditor({ gameId, onBack }) {
               onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
               onSkip={() => setMode("edit")}
               proDoc={proDoc}
-              onProDocChange={(next) => { dispatchSave({ type: "dirty" }); setProDoc(next); }}
+              onProDocChange={(next) => { markDirty(); setProDoc(next); }}
             />
           )
         )}
@@ -411,7 +437,7 @@ function ProGameEditor({ gameId, onBack }) {
 
         {mode === "play" && (
           <div className="space-y-4">
-            <PresentationPicker value={proDoc.presentation} onChange={(presentation) => { dispatchSave({ type: "dirty" }); setProDoc((previous) => updateProPresentation(previous, presentation)); }} />
+            <PresentationPicker value={proDoc.presentation} onChange={(presentation) => { markDirty(); setProDoc((previous) => updateProPresentation(previous, presentation)); }} />
             {campaignError ? (
               <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
                 Chưa thể chơi thử — liên kết giữa các tập còn lỗi. Sửa ở Kế hoạch hoặc Sơ đồ rồi quay lại đây.
