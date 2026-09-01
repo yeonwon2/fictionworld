@@ -28,6 +28,8 @@ import {
   newSceneBlueprint,
 } from "./blueprintModel.js";
 import { resolveEpisodeConstraints, assessBlueprintScale } from "./planningConstraints.js";
+import { parseEffectsDeterministic } from "./ruleParser.js";
+import { ensureRegistry } from "./entityRegistry.js";
 
 // Dùng đúng trần cấu trúc thật; prompt topology được giữ súc tích để không
 // phải âm thầm thu nhỏ yêu cầu của người dùng theo một trần mềm khác.
@@ -47,7 +49,7 @@ function sanitizeRawChoice(raw) {
   const target = safeString(raw.target);
   if (!target || DANGEROUS_KEYS.has(target)) return null;
   const targetKind = raw.targetKind === "ending" ? "ending" : "scene";
-  return { text: safeString(raw.text), target, targetKind, gateIntent: safeString(raw.gateIntent) };
+  return { text: safeString(raw.text), target, targetKind, gateIntent: safeString(raw.gateIntent), effectIntent: safeString(raw.effectIntent) };
 }
 
 function sanitizeRawScene(raw) {
@@ -142,7 +144,7 @@ export function normalizeAIBlueprintResponse(
     isStart: s.isStart,
     choices: s.choices.map((c) => {
       const { targetType, targetId } = resolveTarget(c);
-      return { text: c.text, gateIntent: c.gateIntent, targetType, targetId };
+      return { text: c.text, gateIntent: c.gateIntent, effectIntent: c.effectIntent, targetType, targetId };
     }),
   }));
 
@@ -160,6 +162,7 @@ export function normalizeAIBlueprintResponse(
  * cảnh KHÔNG nằm trong tập này được giữ nguyên tham chiếu.
  */
 export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = null, replaceStartScene = false } = {}) {
+  const registry = ensureRegistry(blueprint);
   const originalById = new Map((blueprint.scenes || []).map((s) => [s.id, s]));
   const keepScenes = replaceIds
     ? blueprint.scenes.filter((s) => !replaceIds.has(s.id))
@@ -169,13 +172,23 @@ export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = n
     title: s.title,
     role: s.role,
     intent: s.intent,
-    choices: s.choices.map((c) => ({
+    choices: s.choices.map((c) => {
+      const parsed = parseEffectsDeterministic(c.effectIntent, registry);
+      const resolvedEffects = parsed.items?.filter((item) => item.status === "ok").map((item) => item.effect) || [];
+      const unresolvedEffects = c.effectIntent && (parsed.items?.some((item) => item.status !== "ok") || parsed.unmatchedText || !parsed.items?.length)
+        ? [{ intent: c.effectIntent, items: parsed.items || [] }]
+        : [];
+      return {
       id: `c_${Math.random().toString(36).slice(2, 9)}`,
       text: c.text,
       targetType: c.targetType,
       targetId: c.targetId,
       gateIntent: c.gateIntent,
-    })),
+      effectIntent: c.effectIntent,
+      rules: { conditions: [], effects: resolvedEffects },
+      conditionalOutcomes: [],
+      unresolvedEffects,
+    }; }),
     // Ghi chú (notes) do người dùng gõ tay ở Scene Intent Editor, AI không
     // biết tới trường này — giữ nguyên khi cập nhật tại chỗ 1 cảnh đã có.
     notes: originalById.get(s.id)?.notes || "",

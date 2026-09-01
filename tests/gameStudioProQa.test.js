@@ -35,6 +35,16 @@ test("non-repeatable stat gain keeps a finite conservative upper bound", () => {
   assert.equal(codes(result).has("STAT_REQUIREMENT_IMPOSSIBLE"), true);
 });
 
+test("start -100 can exceed success >100 only when generated gains make it viable", () => {
+  const viable = statFeasibilityDoc({ repeatable: false });
+  const stat = viable.globalState.registry.stats[0]; stat.default = -100;
+  viable.storyBlueprint.episodes[0].sceneBlueprint.scenes[0].choices[0].rules.effects[0].amount = 201;
+  viable.storyBlueprint.episodes[0].sceneBlueprint.scenes[2].choices[0].rules.conditions[0].operator = ">";
+  assert.equal(codes(runProQa(viable)).has("STAT_REQUIREMENT_IMPOSSIBLE"), false);
+  viable.storyBlueprint.episodes[0].sceneBlueprint.scenes[0].choices[0].rules.effects[0].amount = 200;
+  assert.equal(codes(runProQa(viable)).has("STAT_REQUIREMENT_IMPOSSIBLE"), true);
+});
+
 test("repeatable gain through an episode transition cycle fails open", () => {
   const doc = statFeasibilityDoc({ repeatable: false });
   const ep1 = doc.storyBlueprint.episodes[0];

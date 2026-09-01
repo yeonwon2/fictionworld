@@ -10,7 +10,7 @@ import { SCENE_ROLES, MAX_SCENES_PER_EPISODE } from "./blueprintModel.js";
 import { ensureRegistry } from "./entityRegistry.js";
 import { validateBlueprintRules } from "./ruleValidator.js";
 
-export function validateSceneBlueprint(blueprint, { knownEpisodeIds = null } = {}) {
+export function validateSceneBlueprint(blueprint, { knownEpisodeIds = null, planningConstraints = null } = {}) {
   const errors = [];
   const warnings = [];
   const scenes = blueprint?.scenes || [];
@@ -47,8 +47,21 @@ export function validateSceneBlueprint(blueprint, { knownEpisodeIds = null } = {
   for (const s of scenes) {
     if (!s.title?.trim()) warnings.push(`Cảnh "${s.id}" chưa có tên.`);
 
-    if (s.role === SCENE_ROLES.DECISION && s.choices.length < 2) {
+    const desired = planningConstraints?.desiredChoicesPerDecision;
+    if (s.role === SCENE_ROLES.DECISION && desired && s.choices.length !== desired) {
+      errors.push(`Cảnh "${s.title || s.id}" là cảnh chơi nhưng có ${s.choices.length} lựa chọn; yêu cầu đúng ${desired} lựa chọn có ý nghĩa.`);
+    } else if (s.role === SCENE_ROLES.DECISION && s.choices.length < 2) {
       warnings.push(`Cảnh "${s.title || s.id}" là cảnh Lựa chọn nhưng chỉ có ${s.choices.length} lựa chọn (nên có ít nhất 2).`);
+    }
+    if (s.role === SCENE_ROLES.DECISION && desired) {
+      const effectSignatures = new Set();
+      for (const choice of s.choices) {
+        if (choice.unresolvedEffects?.length) errors.push(`Cảnh "${s.title || s.id}" có hệ quả chưa ánh xạ vào danh mục hiện có: "${choice.effectIntent}". Hãy dùng cơ chế đề xuất/phê duyệt thực thể trước khi áp dụng.`);
+        const effects = choice.rules?.effects || [];
+        if (!effects.length) errors.push(`Cảnh "${s.title || s.id}" có lựa chọn "${choice.text || "(chưa đặt tên)"}" chưa có hệ quả luật thật.`);
+        else effectSignatures.add(JSON.stringify(effects));
+      }
+      if (s.choices.length && effectSignatures.size !== s.choices.length) errors.push(`Cảnh "${s.title || s.id}" phải có hệ quả luật thật khác nhau cho từng lựa chọn.`);
     }
 
     if (s.role === SCENE_ROLES.ENDING) continue; // ending-role scenes are terminal, no outgoing choices expected

@@ -172,8 +172,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const otherEpisodes = useMemo(() => episodes.filter((e) => e.id !== selectedId), [episodes, selectedId]);
 
   const validation = useMemo(
-    () => (blueprint ? validateSceneBlueprint(blueprint, { knownEpisodeIds }) : { errors: [], warnings: [] }),
-    [blueprint, knownEpisodeIds]
+    () => (blueprint ? validateSceneBlueprint(blueprint, { knownEpisodeIds, planningConstraints: episode?.planningConstraints || storyBlueprint.planningConstraints }) : { errors: [], warnings: [] }),
+    [blueprint, knownEpisodeIds, episode?.planningConstraints, storyBlueprint.planningConstraints]
   );
   const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
@@ -214,6 +214,12 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
 
   function applyPending() {
     if (pending.scale?.underGenerated && !pending.allowUnderGenerated) return;
+    const constraints = episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages);
+    const previewValidation = validateSceneBlueprint(pending.blueprint, { knownEpisodeIds, planningConstraints: constraints });
+    if (previewValidation.errors.length) {
+      toast({ variant: "destructive", title: "Bản xem trước chưa hợp lệ", description: previewValidation.errors[0] });
+      return;
+    }
     setEpisodeBlueprint(pending.blueprint);
     setPending(null);
     toast({ title: "Đã áp dụng sơ đồ" });

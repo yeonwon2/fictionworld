@@ -48,8 +48,18 @@ export function countMeaningfulScenes(blueprint) {
   return (blueprint?.scenes || []).filter((scene) => !helpers.has(scene.role) && scene.role !== SCENE_ROLES.ENDING).length;
 }
 
+// A requested "N scenes, M choices each" is a request for N interactive
+// moments. Linear narration remains useful, but is additional structure.
+export function countPlayableScenes(blueprint) {
+  return (blueprint?.scenes || []).filter((scene) =>
+    scene.role === SCENE_ROLES.DECISION && (scene.choices || []).length >= 2
+  ).length;
+}
+
 export function assessBlueprintScale(blueprint, constraints) {
-  const meaningfulSceneCount = countMeaningfulScenes(blueprint);
+  const meaningfulSceneCount = constraints?.desiredChoicesPerDecision
+    ? countPlayableScenes(blueprint)
+    : countMeaningfulScenes(blueprint);
   const minimum = constraints?.minimumSceneCount ?? 1;
   const maximum = constraints?.maximumSceneCount ?? MAX_SCENES_PER_EPISODE;
   return { meaningfulSceneCount, underGenerated: meaningfulSceneCount < minimum, withinTolerance: meaningfulSceneCount >= minimum && meaningfulSceneCount <= maximum };

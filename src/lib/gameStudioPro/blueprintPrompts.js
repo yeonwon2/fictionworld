@@ -57,7 +57,7 @@ Mỗi cảnh gồm:
 ${ROLE_GUIDE}
 - intent: Ý ĐỒ CẢNH súc tích (1-2 câu), đủ hiểu topology nhưng KHÔNG viết văn cảnh dài.
 - choices: mảng lựa chọn. Cảnh loại "decision" cần 2-${MAX_DECISION_CHOICES} lựa chọn (nếu ghi chú đặc biệt yêu cầu đúng 1 số lượng thì PHẢI theo đúng số đó). Cảnh loại "story"/"consequence"/"condition"/"convergence" thường chỉ cần 1 lựa chọn "đi tiếp" (hoặc để trống nếu không có lối đi tiếp — hiếm khi xảy ra). Cảnh loại "ending" KHÔNG có choices (để mảng rỗng).
-  Mỗi lựa chọn gồm: text (lời lựa chọn, có thể để trống nếu chỉ là "đi tiếp"), target (ref của cảnh/kết thúc mà lựa chọn này dẫn tới — PHẢI khớp đúng 1 ref đã khai báo), targetKind ("scene" hoặc "ending"), gateIntent (ghi chú ĐIỀU KIỆN bằng văn bản tự nhiên nếu lựa chọn này CHỈ nên xuất hiện/khả dụng khi có điều kiện gì đó, ví dụ "chỉ mở nếu trước đó đã giúp Tiểu Lan" — để trống nếu không có điều kiện gì).
+  Mỗi lựa chọn gồm: text (lời lựa chọn, có thể để trống nếu chỉ là "đi tiếp"), target (ref của cảnh/kết thúc mà lựa chọn này dẫn tới — PHẢI khớp đúng 1 ref đã khai báo), targetKind ("scene" hoặc "ending"), gateIntent (ghi chú ĐIỀU KIỆN bằng văn bản tự nhiên), effectIntent (HỆ QUẢ riêng bằng cú pháp tự nhiên tương thích luật hiện có, ví dụ "Thiện cảm nữ chính +15"; chỉ dùng đúng tên chỉ số/quan hệ/cờ/vật phẩm trong bối cảnh, không tự chế biến thể tên).
 - Nếu 1 lựa chọn dẫn tới cái chết/thất bại ngay lập tức: cho targetKind="ending", trỏ tới 1 kết thúc phù hợp (tone="death").
 
 # CÁCH MÔ TẢ 1 KẾT THÚC (endings)
@@ -65,7 +65,7 @@ Mỗi kết thúc gồm: ref (nhãn cục bộ), title, text (mô tả ngắn), 
 
 # GIỚI HẠN
 - Trần an toàn là ${maxScenes} cảnh. Không tự thu nhỏ hoặc gộp mất quy mô người dùng yêu cầu.
-${constraints ? `- Mục tiêu: khoảng ${constraints.targetSceneCount} cảnh có ý nghĩa (không tính kết thúc và các nút nối kỹ thuật), phạm vi chấp nhận ${constraints.minimumSceneCount}-${constraints.maximumSceneCount}.${constraints.desiredChoicesPerDecision ? ` Cảnh quyết định phải có ${constraints.desiredChoicesPerDecision} lựa chọn có ý nghĩa.` : ""}${constraints.sourceIdea ? `\n- Ràng buộc gốc của người dùng (phải giữ cả mốc thời gian, ngưỡng điểm và yêu cầu kết thúc): ${constraints.sourceIdea}` : ""}` : ""}
+${constraints ? `- Mục tiêu: khoảng ${constraints.targetSceneCount} ${constraints.desiredChoicesPerDecision ? "cảnh CHƠI được (playable decision/story moments)" : "cảnh có ý nghĩa"}, phạm vi chấp nhận ${constraints.minimumSceneCount}-${constraints.maximumSceneCount}.${constraints.desiredChoicesPerDecision ? ` MỖI cảnh chơi phải là role="decision", có ĐÚNG ${constraints.desiredChoicesPerDecision} lựa chọn có ý nghĩa và mỗi lựa chọn có effectIntent riêng. Không biến cảnh chơi thành STORY với một nút “đi tiếp”. STORY-only phải hiếm, chỉ dùng cho nhịp kể thật sự cần thiết, và KHÔNG tính vào mục tiêu ${constraints.targetSceneCount} cảnh chơi.` : ""}${constraints.sourceIdea ? `\n- Ràng buộc gốc của người dùng (phải giữ cả mốc thời gian, ngưỡng điểm và yêu cầu kết thúc): ${constraints.sourceIdea}` : ""}` : ""}
 - PHẢI có đúng 1 cảnh có isStart=true — đó là cảnh người chơi bắt đầu tập.
 - Mọi target PHẢI khớp đúng 1 ref có thật trong phản hồi (của scenes hoặc endings) — không được để trống hoặc trỏ ra ngoài.
 - Đây là LẬP SƠ ĐỒ (structure), CHƯA phải viết lời thoại/văn cảnh đầy đủ — intent súc tích, không cần văn hoa.`;
@@ -83,6 +83,7 @@ Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }
 
 export function buildBlueprintContinuationPrompt(gamePlan, episode, blueprint, missingCount) {
+  const constraints = resolveEpisodeConstraints(episode);
   const existing = (blueprint.scenes || []).map((scene) => `- ${scene.id} [${scene.role}] ${scene.title}`).join("\n");
   const endings = (blueprint.endings || []).map((ending) => `- ${ending.id}: ${ending.title}`).join("\n");
   return `Bạn là NHÀ THIẾT KẾ GAME. Hãy TIẾP TỤC phần sơ đồ còn thiếu, chỉ THÊM nội dung mới và không viết lại cảnh đã có.
@@ -96,7 +97,7 @@ ${endings || "(chưa có)"}
 
 # PHẦN CÒN THIẾU
 Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết. Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
-${sceneShapeInstructions(MAX_SCENES_PER_EPISODE)}
+${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, constraints)}
 Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }
 
@@ -107,6 +108,7 @@ export const SCENE_CHOICE_SCHEMA = {
     target: { type: "string" },
     targetKind: { type: "string" },
     gateIntent: { type: "string" },
+    effectIntent: { type: "string" },
   },
   required: ["target", "targetKind"],
 };
