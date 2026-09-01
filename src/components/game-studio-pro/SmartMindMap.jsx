@@ -7,7 +7,7 @@
 // hơn (cột theo độ sâu, không phải canvas tự do), đủ để người dùng "nhìn
 // graph và hiểu được đường đi" mà không phải viết lại toàn bộ map engine.
 import React, { useMemo, useState } from "react";
-import { Plus, Sparkles, Loader2, PlayCircle, AlertTriangle, XCircle, Lock, Flag, X } from "lucide-react";
+import { Plus, Sparkles, Loader2, PlayCircle, AlertTriangle, XCircle, Lock, Flag, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,7 @@ import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
 import { generateEpisodeBlueprint, regenerateScene } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
 import SceneIntentEditor from "./SceneIntentEditor";
+import ExternalAiBridgeModal from "./ExternalAiBridgeModal";
 
 const ROLE_STYLES = {
   [SCENE_ROLES.STORY]: "border-sky-400/50 bg-sky-500/10",
@@ -153,6 +154,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const [generating, setGenerating] = useState(false);
   const [pending, setPending] = useState(null); // { blueprint, isRegenerate }
   const [playtesting, setPlaytesting] = useState(false);
+  const [aiBridgeOpen, setAiBridgeOpen] = useState(false);
   const { toast } = useToast();
 
   const episode = episodes.find((e) => e.id === selectedId) || null;
@@ -240,6 +242,9 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
             </Select>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAiBridgeOpen(true)} disabled={!episode}>
+              <Bot className="w-3.5 h-3.5 mr-1.5" /> AI bên ngoài
+            </Button>
             {blueprint && (
               <Button size="sm" variant="outline" onClick={handleAddScene}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Thêm cảnh
@@ -361,6 +366,17 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
             )}
           </div>
         </div>
+      )}
+
+      {aiBridgeOpen && episode && (
+        <ExternalAiBridgeModal
+          open={aiBridgeOpen}
+          onClose={() => setAiBridgeOpen(false)}
+          episode={episode}
+          gamePlan={gamePlan}
+          blueprint={blueprint}
+          onApplyBlueprint={setEpisodeBlueprint}
+        />
       )}
     </div>
   );
