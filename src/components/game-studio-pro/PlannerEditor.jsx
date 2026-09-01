@@ -144,7 +144,7 @@ export default function PlannerEditor({
           <div className="flex flex-wrap gap-2">
             {globalState && (
               <Button type="button" size="sm" variant="outline" onClick={() => setRegistryOpen(true)}>
-                <Library className="w-3.5 h-3.5 mr-1.5" /> Trạng thái toàn Game
+                <Library className="w-3.5 h-3.5 mr-1.5" /> Chỉ số & trạng thái
               </Button>
             )}
             {mechanics && (
@@ -154,15 +154,15 @@ export default function PlannerEditor({
             )}
             {proDoc && onProDocChange && (
               <Button type="button" size="sm" variant="outline" onClick={() => setTemplatePickerOpen(true)}>
-                <Layers className="w-3.5 h-3.5 mr-1.5" /> Đổi kiểu game
+                <Layers className="w-3.5 h-3.5 mr-1.5" /> Chọn mẫu
               </Button>
             )}
             <Button type="button" size="sm" variant="outline" onClick={handleRegenerateAll} disabled={regeneratingAll}>
               {regeneratingAll ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
-              Tạo lại toàn bộ kế hoạch
+              Lập lại kế hoạch
             </Button>
             <Button type="button" size="sm" onClick={handleApprove} disabled={blockers.length > 0}>
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Duyệt bản thiết kế
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Duyệt kế hoạch
             </Button>
           </div>
         </div>
@@ -170,7 +170,7 @@ export default function PlannerEditor({
 
         <Collapsible open={showIdea} onOpenChange={setShowIdea}>
           <CollapsibleTrigger asChild>
-            <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition">
+            <button type="button" className="flex min-h-10 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition">
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showIdea ? "rotate-180" : ""}`} />
               Xem/sửa ý tưởng gốc
             </button>
@@ -198,7 +198,7 @@ export default function PlannerEditor({
       {globalState && (campaignValidation.errors.length > 0 || campaignValidation.warnings.length > 0) && (
         <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-1.5">
           <p className="text-xs font-semibold flex items-center gap-1.5 text-amber-600">
-            <AlertTriangle className="w-3.5 h-3.5" /> Trạng thái campaign (nhiều tập)
+            <AlertTriangle className="w-3.5 h-3.5" /> Liên kết giữa các tập
           </p>
           {campaignValidation.errors.map((e, i) => (
             <p key={`ce${i}`} className="text-xs text-destructive flex items-start gap-1.5"><XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{e}</p>

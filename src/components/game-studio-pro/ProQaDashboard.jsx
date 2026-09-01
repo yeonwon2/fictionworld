@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const SEVERITY_UI = {
-  error: { label: "Error", icon: AlertCircle, className: "text-destructive border-destructive/30 bg-destructive/5" },
-  warning: { label: "Warning", icon: AlertTriangle, className: "text-amber-700 border-amber-500/30 bg-amber-500/5" },
-  info: { label: "Info", icon: Info, className: "text-sky-700 border-sky-500/30 bg-sky-500/5" },
+  error: { label: "Lỗi phải sửa", icon: AlertCircle, className: "text-destructive border-destructive/30 bg-destructive/5" },
+  warning: { label: "Nên kiểm tra", icon: AlertTriangle, className: "text-amber-700 border-amber-500/30 bg-amber-500/5" },
+  info: { label: "Gợi ý", icon: Info, className: "text-sky-700 border-sky-500/30 bg-sky-500/5" },
 };
 
-export default function ProQaDashboard({ result, episodes, onRerun, onLocate }) {
+export default function ProQaDashboard({ result, episodes, onRerun, onLocate, onPlay }) {
   const [severity, setSeverity] = useState("all");
   const [episodeId, setEpisodeId] = useState("all");
   const [blockingOnly, setBlockingOnly] = useState(false);
@@ -36,16 +36,16 @@ export default function ProQaDashboard({ result, episodes, onRerun, onLocate }) 
           {Object.entries(SEVERITY_UI).map(([key, ui]) => <button key={key} type="button" onClick={() => setSeverity(severity === key ? "all" : key)} className={`rounded-xl border p-3 text-left ${ui.className} ${severity === key ? "ring-2 ring-primary/30" : ""}`}><span className="text-2xl font-bold">{result.summary[key]}</span><span className="block text-xs font-semibold">{ui.label}</span></button>)}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <Select value={severity} onValueChange={setSeverity}><SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi mức độ</SelectItem><SelectItem value="error">Error</SelectItem><SelectItem value="warning">Warning</SelectItem><SelectItem value="info">Info</SelectItem></SelectContent></Select>
+          <Select value={severity} onValueChange={setSeverity}><SelectTrigger className="w-full sm:w-48 min-h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi mức độ</SelectItem><SelectItem value="error">Lỗi phải sửa</SelectItem><SelectItem value="warning">Nên kiểm tra</SelectItem><SelectItem value="info">Gợi ý</SelectItem></SelectContent></Select>
           <Select value={episodeId} onValueChange={setEpisodeId}><SelectTrigger className="w-56 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Mọi tập</SelectItem>{(episodes || []).map((e) => <SelectItem key={e.id} value={e.id}>Tập {e.order} — {e.title}</SelectItem>)}</SelectContent></Select>
           <Button size="sm" variant={blockingOnly ? "default" : "outline"} onClick={() => setBlockingOnly((v) => !v)}>Chỉ xem lỗi chặn xuất bản</Button>
         </div>
-        {result.blocking ? <p className="text-xs text-destructive">Xuất bản đang bị chặn bởi {result.summary.error} lỗi. Bạn vẫn có thể lưu bản soạn và sửa từng cảnh.</p> : <p className="text-xs text-emerald-700">Không có lỗi chặn xuất bản.</p>}
+        {result.blocking ? <p className="text-xs text-destructive">Xuất game đang bị chặn bởi {result.summary.error} lỗi. Bạn vẫn có thể lưu bản soạn và sửa từng cảnh.</p> : <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium text-emerald-700">Game không có lỗi chặn xuất bản.</p>{onPlay && <Button size="sm" onClick={onPlay}>Chơi thử</Button>}</div>}
       </section>
 
       {visible.length === 0 ? <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">Không có kết quả phù hợp bộ lọc.</div> : [...grouped.entries()].map(([code, items]) => (
         <section key={code} className="rounded-2xl border border-border bg-card overflow-hidden">
-          <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between"><span className="font-mono text-xs font-semibold">{code}</span><Badge variant="secondary">{items.length}</Badge></div>
+          <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between"><span className="text-xs font-semibold">{items[0]?.title}</span><Badge variant="secondary">{items.length}</Badge></div>
           <div className="divide-y divide-border">
             {items.map((issue, index) => {
               const ui = SEVERITY_UI[issue.severity]; const Icon = ui.icon; const ep = episodeById[issue.episodeId];
@@ -54,6 +54,7 @@ export default function ProQaDashboard({ result, episodes, onRerun, onLocate }) 
                 {issue.whyItMatters && <p className="text-xs text-muted-foreground"><span className="font-semibold">Vì sao nguy hiểm:</span> {issue.whyItMatters}</p>}
                 {issue.suggestedFix && <p className="text-xs text-muted-foreground"><span className="font-semibold">Gợi ý sửa:</span> {issue.suggestedFix}</p>}
                 {issue.episodeId && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onLocate(issue)}><MapPin className="w-3 h-3 mr-1" /> {issue.sceneId ? "Mở đúng cảnh" : "Mở tập"}</Button>}
+                <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">Chi tiết kỹ thuật</summary><code>{code}{issue.choiceId ? ` · lựa chọn ${issue.choiceId}` : ""}</code></details>
               </article>;
             })}
           </div>

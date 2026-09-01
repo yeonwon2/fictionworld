@@ -127,7 +127,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proD
 
         <Collapsible open={showOptions} onOpenChange={setShowOptions}>
           <CollapsibleTrigger asChild>
-            <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition">
+            <button type="button" className="flex min-h-10 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition">
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOptions ? "rotate-180" : ""}`} />
               Tuỳ chọn thêm (không bắt buộc)
             </button>

@@ -90,8 +90,8 @@ export default function EntityRegistryPanel({ registry, onRegistryChange, onClos
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Danh mục chỉ số / cờ / vật phẩm / quan hệ</DialogTitle>
-          <DialogDescription>Khai báo trước ở đây để luật (điều kiện/hệ quả) luôn dùng đúng 1 tên cho mỗi thứ — tránh "Uy tín" và "uy tin" bị hiểu thành 2 biến khác nhau.</DialogDescription>
+          <DialogTitle>Chỉ số & trạng thái</DialogTitle>
+          <DialogDescription>Những dữ liệu người chơi có thể tích luỹ, nhận được hoặc dùng làm điều kiện trong toàn game.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">

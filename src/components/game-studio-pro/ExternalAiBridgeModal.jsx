@@ -102,7 +102,7 @@ export default function ExternalAiBridgeModal({
       setTimeout(() => setCopiedFlag(false), 2000);
       toast({ title: `Đã sao chép ${label}` });
     } catch (e) {
-      toast({ variant: "destructive", title: "Không thể sao chép", description: e.message });
+      toast({ variant: "destructive", title: "Không thể sao chép tự động", description: "Nội dung vẫn ở ô bên dưới để bạn chọn và sao chép thủ công." });
     }
   }
 
@@ -232,16 +232,16 @@ export default function ExternalAiBridgeModal({
         <DialogHeader className="p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            <DialogTitle className="text-lg">Cầu Nối AI Bên Ngoài · FictionWorld Pro Script</DialogTitle>
+            <DialogTitle className="text-lg">Viết bằng AI bên ngoài</DialogTitle>
           </div>
           <DialogDescription className="text-xs">
-            Soạn thảo kịch bản phân nhánh chất lượng cao bằng ChatGPT, Claude, Gemini, DeepSeek theo chuẩn {SCRIPT_HEADER_V1}.
+            Sao chép hướng dẫn, đưa cho ChatGPT / Claude / Gemini, rồi dán kết quả lại đây. Bạn không cần biết cấu trúc kỹ thuật.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid grid-cols-4 w-full">
+            <div className="overflow-x-auto"><TabsList className="grid grid-cols-4 min-w-[560px] w-full">
               <TabsTrigger value="copy_prompt" className="text-xs flex items-center gap-1.5">
                 <Copy className="w-3.5 h-3.5" /> Sao chép prompt
               </TabsTrigger>
@@ -252,9 +252,9 @@ export default function ExternalAiBridgeModal({
                 <Download className="w-3.5 h-3.5" /> Xuất kịch bản
               </TabsTrigger>
               <TabsTrigger value="format_docs" className="text-xs flex items-center gap-1.5">
-                <HelpCircle className="w-3.5 h-3.5" /> Định dạng
+                <HelpCircle className="w-3.5 h-3.5" /> Nâng cao
               </TabsTrigger>
-            </TabsList>
+            </TabsList></div>
 
             {/* TAB 1: SAO CHÉP PROMPT */}
             <TabsContent value="copy_prompt" className="space-y-4">
@@ -304,14 +304,14 @@ export default function ExternalAiBridgeModal({
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-muted-foreground">Xem trước Prompt tạo cho AI</Label>
+                  <Label className="text-xs font-semibold text-muted-foreground">Bước 1 · Hướng dẫn gửi cho AI</Label>
                   <Button
                     size="sm"
                     className="h-7 text-xs"
                     onClick={() => handleCopy(generatedPrompt, setCopiedPrompt, "Prompt AI")}
                   >
                     {copiedPrompt ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                    {copiedPrompt ? "Đã sao chép!" : "Sao chép Prompt"}
+                    {copiedPrompt ? "Đã sao chép!" : "Sao chép prompt cho AI"}
                   </Button>
                 </div>
                 <Textarea
@@ -328,7 +328,7 @@ export default function ExternalAiBridgeModal({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold">
-                    Dán nội dung từ ChatGPT / Claude / Gemini / DeepSeek vào đây:
+                    Bước 2 · Dán kết quả AI vào đây
                   </Label>
                   <Button
                     size="sm"
@@ -351,12 +351,12 @@ export default function ExternalAiBridgeModal({
 
               <div className="flex items-center justify-between gap-2">
                 <Button size="sm" onClick={handleCheckScript} disabled={!pastedScript.trim()}>
-                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Kiểm tra kịch bản
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Bước 3 · Kiểm tra kịch bản
                 </Button>
 
                 {inspection && canImport && (
                   <Button size="sm" variant="default" onClick={handleApplyImport}>
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Nhập vào Xưởng Game Pro
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Bước 5 · Nhập vào tập
                   </Button>
                 )}
 
@@ -378,12 +378,12 @@ export default function ExternalAiBridgeModal({
                 <div className="space-y-3 rounded-xl border border-border bg-card p-3">
                   {/* Summary Bar */}
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <span className="font-semibold">Trạng thái:</span>
+                    <span className="font-semibold">Bước 4 · Xem trước:</span>
                     <Badge variant={canImport ? "default" : "destructive"}>
                       {canImport
                         ? "✓ Sẵn sàng nhập"
                         : pendingProposalsCount > 0
-                        ? `⚠ Cần duyệt ${pendingProposalsCount} thực thể`
+                        ? `⚠ Cần duyệt ${pendingProposalsCount} dữ liệu mới`
                         : activeValidation?.errors?.length > 0
                         ? `✕ ${activeValidation.errors.length} lỗi sơ đồ`
                         : "Chưa hoàn tất"}
@@ -501,7 +501,7 @@ export default function ExternalAiBridgeModal({
                   {/* Lỗi chi tiết (Pre-validation hoặc Post-validation) */}
                   {activeValidation?.errors?.length > 0 && (
                     <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 space-y-1">
-                      <p className="text-xs font-semibold text-destructive">Lỗi cần sửa trước khi nhập:</p>
+                      <p className="text-xs font-semibold text-destructive">Cần sửa trước khi nhập:</p>
                       {activeValidation.errors.map((err, i) => (
                         <p key={i} className="text-xs text-destructive flex items-start gap-1.5">
                           <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />

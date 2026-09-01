@@ -17,8 +17,8 @@
 // scene/node graph thật, nên compileProGame() ở tab "Soạn"/"Chơi
 // thử"/"Xuất bản" hoàn toàn không đọc tới nó. Mind map Pro, Scene Intent,
 // Natural-Language-to-Rule, import kịch bản ngoài... vẫn CHƯA làm.
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Rocket, Plus, ArrowLeft, Trash2, Loader2, ShieldCheck } from "lucide-react";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Rocket, Plus, ArrowLeft, Trash2, Loader2, Check, AlertTriangle, Circle, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,25 @@ import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
 import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
 import ProQaDashboard from "@/components/game-studio-pro/ProQaDashboard";
 import { runProQa } from "@/lib/gameStudioPro/proQa";
+import { deriveWorkflowState, INITIAL_SAVE_STATE, saveStateLabel, saveStateReducer, WORKFLOW_STEPS } from "@/lib/gameStudioPro/workflowState";
+
+function WorkflowBar({ state, mode, onNavigate }) {
+  return (
+    <nav aria-label="Các bước làm game" className="overflow-x-auto [scrollbar-width:none]">
+      <div className="flex min-w-max gap-1 py-2 px-4 md:justify-center">
+        {WORKFLOW_STEPS.map((step) => {
+          const active = mode === step.id || (mode === "plan" && step.id === state.currentStep && ["idea", "plan"].includes(step.id));
+          const done = state.completed.has(step.id);
+          const errors = state.errorSteps.get(step.id);
+          return <button key={step.id} type="button" onClick={() => onNavigate(step.id)} aria-current={active ? "step" : undefined} className={`min-h-10 rounded-full border px-3 text-xs font-medium flex items-center gap-1.5 whitespace-nowrap ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background/70 hover:bg-accent"}`}>
+            {errors ? <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" /> : done ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <Circle className="w-3 h-3" aria-hidden="true" />}
+            {step.label}{errors ? ` ${errors}` : ""}
+          </button>;
+        })}
+      </div>
+    </nav>
+  );
+}
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -133,8 +152,7 @@ function ProGameLibrary({ onOpen }) {
 function ProGameEditor({ gameId, onBack }) {
   const [proDoc, setProDoc] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [saveState, dispatchSave] = useReducer(saveStateReducer, INITIAL_SAVE_STATE);
   const [mode, setMode] = useState("plan");
   const [playKey, setPlayKey] = useState(0);
   const [focusEpisodeId, setFocusEpisodeId] = useState(null);
@@ -167,6 +185,8 @@ function ProGameEditor({ gameId, onBack }) {
         // ensureMechanicsState() chuẩn hoá an toàn, cùng quy ước ensureGlobalState().
         const loaded = ensureGlobalState(row.meta?.pro || newEmptyProGame());
         setProDoc({ ...loaded, mechanics: ensureMechanicsState(loaded.mechanics), templateId: loaded.templateId || null });
+        setFocusEpisodeId(loaded.storyBlueprint?.episodes?.[0]?.id || null);
+        dispatchSave({ type: "saved", at: row.updated_at ? new Date(row.updated_at) : null });
         // "Lần lưu thành công gần nhất" trước khi ta chỉnh sửa gì — sàn an
         // toàn ban đầu cho lastGoodCompiledRef (xem handleSave()).
         lastGoodCompiledRef.current = { meta: row.meta || {}, nodes: row.nodes || {} };
@@ -180,7 +200,7 @@ function ProGameEditor({ gameId, onBack }) {
   }, [gameId]);
 
   async function handleSave() {
-    setSaving(true);
+    dispatchSave({ type: "saving" });
     try {
       const { compiled, campaignError } = compileProDocument(proDoc);
       if (campaignError) {
@@ -197,6 +217,7 @@ function ProGameEditor({ gameId, onBack }) {
             title: "Không thể lưu — campaign chưa từng biên dịch thành công",
             description: `Sửa lỗi campaign (xem "Trạng thái campaign" ở tab Kế hoạch) rồi lưu lại. Lỗi: ${campaignError}`,
           });
+          dispatchSave({ type: "error", error: campaignError });
           return;
         }
         await updateGame(gameId, {
@@ -204,7 +225,7 @@ function ProGameEditor({ gameId, onBack }) {
           meta: { ...fallback.meta, pro: proDoc },
           nodes: fallback.nodes,
         });
-        setLastSavedAt(new Date());
+        dispatchSave({ type: "saved" });
         toast({
           variant: "destructive",
           title: "Đã lưu bản soạn — CHƯA cập nhật game chơi được",
@@ -215,17 +236,16 @@ function ProGameEditor({ gameId, onBack }) {
       const { meta, nodes } = compiled;
       await updateGame(gameId, { title: proDoc.title || "Game Pro Mới", meta, nodes });
       lastGoodCompiledRef.current = { meta, nodes };
-      setLastSavedAt(new Date());
+      dispatchSave({ type: "saved" });
       setPlayKey((k) => k + 1);
-      toast({ title: "Đã lưu Game Pro" });
     } catch (e) {
+      dispatchSave({ type: "error", error: e.message });
       toast({ variant: "destructive", title: "Không lưu được", description: e.message });
-    } finally {
-      setSaving(false);
     }
   }
 
   function updateField(patch) {
+    dispatchSave({ type: "dirty" });
     setProDoc((prev) => ({ ...prev, ...patch }));
   }
   function updateChoice(index, patch) {
@@ -262,49 +282,57 @@ function ProGameEditor({ gameId, onBack }) {
   // làm hỏng (mục "Save Safety").
   if (compiled) lastGoodCompiledRef.current = { meta: compiled.meta, nodes: compiled.nodes };
   const compiledGameData = compiled ? { meta: compiled.meta, nodes: compiled.nodes } : null;
+  const workflow = deriveWorkflowState(proDoc, qaResult, campaignError);
+  const episodes = proDoc.storyBlueprint?.episodes || [];
+  const currentEpisode = episodes.find((episode) => episode.id === focusEpisodeId) || episodes[0] || null;
+  function navigate(nextMode) {
+    if (nextMode === "idea") setMode("plan");
+    else if (nextMode === "mechanics") setMode("plan");
+    else setMode(nextMode);
+  }
+  function runNextAction() {
+    if (workflow.nextAction.episodeId) setFocusEpisodeId(workflow.nextAction.episodeId);
+    navigate(workflow.nextAction.mode);
+  }
 
   return (
     <div className="min-h-screen pb-20">
       <header className="sticky top-0 z-40 glass-panel border-b">
-        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">
-          <button onClick={onBack} className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground shrink-0" title="Quay lại thư viện">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3">
+          <button onClick={onBack} className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground shrink-0 min-h-10 min-w-10" aria-label="Quay lại thư viện" title="Quay lại thư viện">
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="font-bold text-base leading-tight truncate">{proDoc.title || "Game Pro Mới"}</h1>
-            <p className="text-[11px] text-muted-foreground leading-tight">
-              {saving
-                ? "Đang lưu..."
-                : lastSavedAt
-                ? `Đã lưu lúc ${lastSavedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
-                : "Chưa lưu thay đổi"}
+            <p role={saveState.status === "error" ? "alert" : "status"} className={`text-[11px] leading-tight ${saveState.status === "error" ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+              {saveStateLabel(saveState)}
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant={mode === "plan" ? "default" : "outline"} onClick={() => setMode("plan")}>Kế hoạch</Button>
-            <Button size="sm" variant={mode === "mindmap" ? "default" : "outline"} onClick={() => setMode("mindmap")}>Sơ đồ</Button>
-            <Button size="sm" variant={mode === "qa" ? "default" : "outline"} onClick={() => setMode("qa")}><ShieldCheck className="w-3.5 h-3.5 mr-1" />Kiểm tra</Button>
-            <Button size="sm" variant={mode === "edit" ? "default" : "outline"} onClick={() => setMode("edit")}>Soạn</Button>
-            <Button size="sm" variant={mode === "play" ? "default" : "outline"} onClick={() => setMode("play")}>Chơi thử</Button>
-            <Button size="sm" variant={mode === "export" ? "default" : "outline"} onClick={() => setMode("export")}>Xuất bản</Button>
-            {(mode === "plan" || mode === "mindmap" || mode === "edit") && (
-              <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null} Lưu
-              </Button>
-            )}
+            <Button size="sm" variant="outline" className="hidden sm:inline-flex min-h-10" onClick={runNextAction}>{workflow.nextAction.label}</Button>
+            <Button size="sm" className="min-h-10 min-w-10" aria-label="Lưu thay đổi" onClick={handleSave} disabled={saveState.status === "saving" || saveState.status === "saved"}>
+              {saveState.status === "saving" ? <Loader2 className="w-4 h-4 sm:mr-1.5 animate-spin" /> : null}<span className="hidden sm:inline">Lưu</span>
+            </Button>
           </div>
         </div>
+        <WorkflowBar state={workflow} mode={mode} onNavigate={navigate} />
       </header>
+
+      {saveState.status === "error" && <div role="alert" className="sticky top-[104px] z-30 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-center text-xs text-destructive">Không thể lưu thay đổi. Dữ liệu vẫn còn trên màn hình — hãy kiểm tra mạng và bấm Lưu lại. {saveState.error}</div>}
 
       {campaignError && (
         <div className="max-w-4xl mx-auto px-4 pt-4">
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-            Campaign nhiều tập đang lỗi biên dịch — "Chơi thử"/"Xuất bản" bị chặn cho tới khi sửa xong (xem "Trạng thái campaign" ở tab Kế hoạch). "Lưu" vẫn giữ được thay đổi soạn thảo, nhưng KHÔNG cập nhật bản chơi/xuất bản được. Lỗi: {campaignError}
+            Liên kết nhiều tập chưa hợp lệ — Chơi thử và Xuất game bị chặn cho tới khi sửa xong. Bản soạn vẫn được lưu an toàn nhưng bản chơi gần nhất không bị ghi đè. Chi tiết: {campaignError}
           </div>
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {episodes.length > 0 && !["play", "export"].includes(mode) && <section className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2">
+          <div className="min-w-0"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Tập đang chỉnh</p><p className="font-semibold text-sm truncate">Tập {currentEpisode?.order} — {currentEpisode?.title}</p></div>
+          <label className="relative sm:max-w-xs"><span className="sr-only">Chuyển tập</span><select value={currentEpisode?.id || ""} onChange={(event) => { setFocusEpisodeId(event.target.value); setFocusSceneId(null); }} className="min-h-10 w-full appearance-none rounded-lg border bg-background pl-3 pr-9 text-sm"><option value="" disabled>Chọn tập</option>{episodes.map((episode) => <option key={episode.id} value={episode.id}>Tập {episode.order} — {episode.title}{episode.sceneBlueprint?.scenes?.length ? " · Đã có sơ đồ" : " · Chưa có sơ đồ"}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-3 w-4 h-4 text-muted-foreground" /></label>
+        </section>}
         {mode === "plan" && (
           proDoc.storyBlueprint?.gamePlan ? (
             <PlannerEditor
@@ -315,9 +343,8 @@ function ProGameEditor({ gameId, onBack }) {
               onGlobalStateChange={(globalState) => updateField({ globalState })}
               mechanics={proDoc.mechanics}
               onMechanicsChange={(mechanics) => updateField({ mechanics })}
-              templateId={proDoc.templateId}
               proDoc={proDoc}
-              onProDocChange={setProDoc}
+              onProDocChange={(next) => { dispatchSave({ type: "dirty" }); setProDoc(next); }}
             />
           ) : (
             <PlannerIntro
@@ -325,7 +352,7 @@ function ProGameEditor({ gameId, onBack }) {
               onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
               onSkip={() => setMode("edit")}
               proDoc={proDoc}
-              onProDocChange={setProDoc}
+              onProDocChange={(next) => { dispatchSave({ type: "dirty" }); setProDoc(next); }}
             />
           )
         )}
@@ -343,7 +370,7 @@ function ProGameEditor({ gameId, onBack }) {
           />
         )}
 
-        {mode === "qa" && <ProQaDashboard result={qaResult} episodes={proDoc.storyBlueprint?.episodes || []} onRerun={() => setQaRevision((v) => v + 1)} onLocate={(issue) => { setFocusEpisodeId(issue.episodeId); setFocusSceneId(issue.sceneId); setMode("mindmap"); }} />}
+        {mode === "qa" && <ProQaDashboard result={qaResult} episodes={proDoc.storyBlueprint?.episodes || []} onRerun={() => setQaRevision((v) => v + 1)} onLocate={(issue) => { setFocusEpisodeId(issue.episodeId); setFocusSceneId(issue.sceneId); setMode("mindmap"); }} onPlay={() => setMode("play")} />}
 
         {mode === "edit" && (
           <div className="space-y-4">
@@ -382,7 +409,7 @@ function ProGameEditor({ gameId, onBack }) {
         {mode === "play" && (
           campaignError ? (
             <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-              Không thể chơi thử — campaign đang lỗi biên dịch. Sửa lỗi ở tab "Kế hoạch"/"Sơ đồ" rồi quay lại đây.
+              Chưa thể chơi thử — liên kết giữa các tập còn lỗi. Sửa ở Kế hoạch hoặc Sơ đồ rồi quay lại đây.
               <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
             </div>
           ) : (
@@ -395,7 +422,7 @@ function ProGameEditor({ gameId, onBack }) {
         {mode === "export" && (
           campaignError || qaResult.blocking ? (
             <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-              Không thể xuất bản — {campaignError ? "campaign đang lỗi biên dịch" : `QA còn ${qaResult.summary.error} lỗi chặn`}. Mở tab "Kiểm tra" để xem vị trí và gợi ý sửa.
+              Chưa thể xuất game — {campaignError ? "liên kết giữa các tập còn lỗi" : `còn ${qaResult.summary.error} lỗi phải sửa`}. Mở Kiểm tra để xem vị trí và gợi ý sửa.
               {campaignError && <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>}
             </div>
           ) : (

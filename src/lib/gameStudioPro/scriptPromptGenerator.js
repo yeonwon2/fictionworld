@@ -73,7 +73,15 @@ export function generateExternalAiPrompt({
   ].filter(Boolean).join("\n");
 
   if (existingEntities) {
-    contextBlocks.push(`=== 3. DANH MỤC THỰC THỂ CÓ SẴN ===\n${existingEntities}`);
+    contextBlocks.push(`=== 3. CHỈ SỐ & TRẠNG THÁI CÓ SẴN ===\n${existingEntities}`);
+  }
+
+  if (blueprint?.scenes?.length) {
+    const relevantScenes = blueprint.scenes.slice(0, 40).map((scene) => {
+      const choices = (scene.choices || []).map((choice) => choice.text).filter(Boolean).join(" | ");
+      return `- ${scene.title || "Cảnh chưa đặt tên"} [${scene.role || "story"}]${choices ? ` — lựa chọn: ${choices}` : ""}`;
+    });
+    contextBlocks.push(`=== 4. CÁC CẢNH ĐÃ CÓ CẦN GIỮ NHẤT QUÁN ===\n${relevantScenes.join("\n")}`);
   }
 
   // Mode 2: Viết tiếp từ cảnh

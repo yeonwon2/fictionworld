@@ -6,7 +6,7 @@
 // node graph runtime + trường kỹ thuật) — đây là 1 renderer MỚI, đơn giản
 // hơn (cột theo độ sâu, không phải canvas tự do), đủ để người dùng "nhìn
 // graph và hiểu được đường đi" mà không phải viết lại toàn bộ map engine.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Sparkles, Loader2, PlayCircle, AlertTriangle, XCircle, Lock, Flag, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,7 @@ function groupScenesByDepth(blueprint) {
 
 function SceneCard({ blueprint, scene, isStart, onOpen, onDelete }) {
   const incoming = countIncoming(blueprint, scene.id);
+  const conditions = scene.choices.reduce((count, choice) => count + (choice.rules?.conditions?.length || 0) + (choice.conditionalOutcomes || []).reduce((sum, branch) => sum + (branch.conditions?.length || 0), 0), 0);
   return (
     <div className={`rounded-xl border p-3 space-y-1.5 ${ROLE_STYLES[scene.role] || ROLE_STYLES[SCENE_ROLES.STORY]}`}>
       <div className="flex items-center justify-between gap-2">
@@ -108,7 +109,7 @@ function SceneCard({ blueprint, scene, isStart, onOpen, onDelete }) {
           })
         )}
       </div>
-      <p className="text-[10px] text-muted-foreground/70">{incoming} lối vào</p>
+      <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground/80"><span>{scene.choices.length} lựa chọn</span><span aria-hidden="true">·</span><span>{conditions ? `${conditions} điều kiện` : "Không có điều kiện"}</span><span aria-hidden="true">·</span><span>{incoming} lối vào</span></div>
       <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={onOpen}>Thiết kế cảnh</Button>
     </div>
   );
@@ -157,6 +158,9 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const [playtesting, setPlaytesting] = useState(false);
   const [aiBridgeOpen, setAiBridgeOpen] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => { if (initialEpisodeId && episodes.some((item) => item.id === initialEpisodeId)) setSelectedId(initialEpisodeId); }, [initialEpisodeId, episodes]);
+  useEffect(() => { if (initialSceneId) setEditingSceneId(initialSceneId); }, [initialSceneId]);
 
   const episode = episodes.find((e) => e.id === selectedId) || null;
   const blueprint = episode?.sceneBlueprint || null;
@@ -245,17 +249,17 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   }
 
   if (episodes.length === 0) {
-    return <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground text-sm">Chưa có Tập nào trong Bản thiết kế — hãy lập kế hoạch ở tab "Kế hoạch" trước.</div>;
+    return <div className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm"><p>Game chưa có tập nào.</p><p className="mt-1">Quay lại Kế hoạch để tạo tập đầu tiên.</p></div>;
   }
 
   return (
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-muted-foreground shrink-0">Tập:</span>
             <Select value={selectedId || ""} onValueChange={setSelectedId}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Chọn tập..." /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-64 min-h-10"><SelectValue placeholder="Chọn tập..." /></SelectTrigger>
               <SelectContent>
                 {episodes.map((e) => (
                   <SelectItem key={e.id} value={e.id}>Tập {e.order} — {e.title}{e.sceneBlueprint ? "" : " (chưa có sơ đồ)"}</SelectItem>
@@ -263,9 +267,9 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
             <Button size="sm" variant="outline" onClick={() => setAiBridgeOpen(true)} disabled={!episode}>
-              <Bot className="w-3.5 h-3.5 mr-1.5" /> AI bên ngoài
+              <Bot className="w-3.5 h-3.5 mr-1.5" /> Viết bằng AI bên ngoài
             </Button>
             {blueprint && (
               <Button size="sm" variant="outline" onClick={handleAddScene}>
@@ -319,10 +323,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       {!blueprint && !pending && (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground text-sm space-y-2">
           <p>Tập này chưa có sơ đồ cảnh.</p>
-          <p>Bấm "Dựng sơ đồ tập" để AI dựng sơ đồ từ Kế hoạch Tập, hoặc bắt đầu tay:</p>
-          <Button size="sm" variant="outline" onClick={() => setEpisodeBlueprint(newSceneBlueprint(episode))}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" /> Tạo sơ đồ trống
-          </Button>
+          <p>Dựng từ kế hoạch bằng AI, nhập kịch bản từ AI bên ngoài, hoặc bắt đầu thủ công.</p>
+          <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={handleGenerate}><Sparkles className="w-3.5 h-3.5 mr-1.5" />Dựng từ kế hoạch</Button><Button size="sm" variant="outline" onClick={() => setAiBridgeOpen(true)}><Bot className="w-3.5 h-3.5 mr-1.5" />Nhập từ AI bên ngoài</Button><Button size="sm" variant="ghost" onClick={() => setEpisodeBlueprint(newSceneBlueprint(episode))}><Plus className="w-3.5 h-3.5 mr-1.5" />Bắt đầu thủ công</Button></div>
         </div>
       )}
 

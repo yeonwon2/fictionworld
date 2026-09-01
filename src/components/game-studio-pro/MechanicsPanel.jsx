@@ -32,8 +32,8 @@ import { ENTITY_KINDS, listEntities } from "@/lib/gameStudioPro/entityRegistry.j
 
 const SUPPORT_BADGE = {
   [SUPPORT_LEVELS.SUPPORTED]: null,
-  [SUPPORT_LEVELS.AUTHORING_ONLY]: "Chỉ hỗ trợ soạn thảo — chưa có hiệu ứng tự động khi chơi.",
-  [SUPPORT_LEVELS.DEFERRED_RUNTIME]: "Chỉ là ghi chú tác giả — game CHƯA tự thực thi.",
+  [SUPPORT_LEVELS.AUTHORING_ONLY]: "Hiện dùng để hỗ trợ thiết kế; game chưa tự chạy cơ chế này.",
+  [SUPPORT_LEVELS.DEFERRED_RUNTIME]: "Nhiệm vụ hiện dùng để lập kế hoạch. Game chưa tự theo dõi tiến độ nhiệm vụ.",
 };
 
 function StatSelect({ registry, value, onChange, placeholder = "Chọn chỉ số..." }) {
