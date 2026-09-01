@@ -53,10 +53,12 @@ test("presentation changes are local and make zero AI/provider calls", () => {
   assert.equal(calls, 0);
 });
 
-test("mobile picker uses a one-column base grid and overflow-safe cards", () => {
+test("presentation picker uses compact responsive dropdowns", () => {
   const source = fs.readFileSync(new URL("../src/components/game-studio-pro/PresentationPicker.jsx", import.meta.url), "utf8");
   assert.match(source, /grid-cols-1/);
   assert.match(source, /sm:grid-cols-2/);
   assert.match(source, /min-w-0/);
-  assert.match(source, /break-words/);
+  assert.match(source, /pro-theme-select/);
+  assert.match(source, /pro-effect-select/);
+  assert.match(source, /SelectContent/);
 });
