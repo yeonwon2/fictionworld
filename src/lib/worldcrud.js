@@ -295,6 +295,22 @@ export async function listGames() {
   const { data, error } = await supabase
     .from("games")
     .select(GAME_LITE_COLUMNS)
+    // Loại các game "Xưởng Game Pro" (đánh dấu bằng meta.builder = "pro") khỏi
+    // thư viện Xưởng Game cũ — hai xưởng có thư viện riêng biệt. Không ảnh
+    // hưởng game hiện có vì trước đây chưa game nào có meta.builder.
+    .filter("meta->>builder", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data || [];
+}
+// Thư viện riêng cho Xưởng Game Pro — cùng bảng `games`, chỉ lọc theo
+// meta.builder = "pro" (xem proModel.js / proCompiler.js).
+export async function listProGames() {
+  const { data, error } = await supabase
+    .from("games")
+    .select(GAME_LITE_COLUMNS)
+    .filter("meta->>builder", "eq", "pro")
     .order("updated_at", { ascending: false })
     .limit(200);
   if (error) throw error;

@@ -1,17 +1,18 @@
 import React, { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Sparkles, LogOut, Settings as SettingsIcon, Gamepad2, Factory, Clapperboard } from "lucide-react";
+import { Sparkles, LogOut, Settings as SettingsIcon, Gamepad2, Factory, Clapperboard, Rocket } from "lucide-react";
 import { StoryProvider } from "@/lib/StoryContext";
 import { useAuth } from "@/lib/AuthContext";
 import StorySwitcher from "@/components/StorySwitcher";
 import AISettingsModal from "@/components/AISettingsModal";
 import { cn } from "@/lib/utils";
 
-// FictionWorld hiện tập trung vào đúng ba dây chuyền sản xuất.
+// FictionWorld hiện tập trung vào đúng bốn dây chuyền sản xuất.
 const MAIN_NAV = [
   { label: "Xưởng Viết Truyện", short: "Xưởng Viết", path: "/xuong-viet-truyen", icon: Factory },
   { label: "Xưởng Kịch Bản Game", short: "Kịch Bản", path: "/xuong-kich-ban-game", icon: Clapperboard },
   { label: "Xưởng Game", short: "Game", path: "/xuong-game", icon: Gamepad2 },
+  { label: "Xưởng Game Pro", short: "Game Pro", path: "/xuong-game-pro", icon: Rocket },
 ];
 
 export default function Layout() {

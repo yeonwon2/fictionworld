@@ -17,6 +17,7 @@ import ResetPassword from '@/pages/ResetPassword';
 
 const WritingFactory = lazy(() => import('@/pages/WritingFactory'));
 const GameStudio = lazy(() => import('@/pages/GameStudio'));
+const GameStudioPro = lazy(() => import('@/pages/GameStudioPro'));
 const GameScriptProject = lazy(() => import('@/pages/GameScriptProject'));
 
 const lazyPage = (node) => (
@@ -59,6 +60,7 @@ const AuthenticatedApp = () => {
           <Route path="/sang-tac-ai" element={<Navigate to="/xuong-viet-truyen" replace />} />
           <Route path="/xuong-viet-truyen" element={lazyPage(<WritingFactory />)} />
           <Route path="/xuong-game" element={lazyPage(<GameStudio />)} />
+          <Route path="/xuong-game-pro" element={lazyPage(<GameStudioPro />)} />
           <Route path="/xuong-kich-ban-game" element={lazyPage(<GameScriptProject />)} />
         </Route>
       </Route>
