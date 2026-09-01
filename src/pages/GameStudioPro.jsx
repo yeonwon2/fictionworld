@@ -1,4 +1,4 @@
-// Xưởng Game Pro — PRO 0: nền tảng an toàn.
+// Xưởng Game Pro — PRO 0 (nền tảng) + PRO 1 (Game/Episode Planner).
 //
 // Đây là một lớp AUTHORING mới, độc lập với "Xưởng Game" cũ (src/pages/
 // GameStudio.jsx) — không thay thế, không đổi hành vi, không đổi parser cũ.
@@ -7,10 +7,16 @@
 // GamePlayer / ExportCenter hiện tại đã hiểu — nên "Chơi thử" và "Xuất bản"
 // bên dưới dùng lại y nguyên hai component đó, không có runtime/engine thứ 2.
 //
-// PRO 0 chỉ hỗ trợ 1 cảnh mở đầu → 2 lựa chọn → 2 kết thúc, đủ để xác minh
-// toàn bộ pipeline tạo/lưu/tải lại/sửa/biên dịch/chơi/xuất bản. Các tính
-// năng lớn hơn (episode planner, mind map Pro, natural-language rule, import
-// kịch bản ngoài, ...) CHƯA làm ở bước này.
+// Tab "Soạn" (PRO 0) vẫn chỉ hỗ trợ 1 cảnh mở đầu → 2 lựa chọn → 2 kết thúc —
+// đủ để xác minh toàn bộ pipeline tạo/lưu/tải lại/sửa/biên dịch/chơi/xuất
+// bản, KHÔNG đổi ở bước PRO 1 này.
+//
+// Tab "Kế hoạch" (PRO 1) thêm một lớp PLANNING phía trên: Ý tưởng tự nhiên →
+// AI lập Game Plan + Episode Plan (proDoc.storyBlueprint, xem plannerModel.js
+// /plannerAI.js/plannerValidator.js) — CHỈ là dữ liệu mô tả, chưa sinh
+// scene/node graph thật, nên compileProGame() ở tab "Soạn"/"Chơi
+// thử"/"Xuất bản" hoàn toàn không đọc tới nó. Mind map Pro, Scene Intent,
+// Natural-Language-to-Rule, import kịch bản ngoài... vẫn CHƯA làm.
 import React, { useEffect, useState } from "react";
 import { Rocket, Plus, ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +29,8 @@ import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import { newEmptyProGame } from "@/lib/gameStudioPro/proModel";
 import { compileProGame } from "@/lib/gameStudioPro/proCompiler";
 import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
+import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
+import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -74,7 +82,7 @@ function ProGameLibrary({ onOpen }) {
             <Rocket className="w-6 h-6 text-primary" /> Xưởng Game Pro
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Nền tảng Pro (PRO 0) — thư viện Game Pro riêng, tách biệt với Xưởng Game cũ.
+            Lập kế hoạch game bằng ý tưởng tự nhiên với AI — thư viện Game Pro riêng, tách biệt với Xưởng Game cũ.
           </p>
         </div>
         <Button onClick={handleCreate} disabled={creating}>
@@ -122,7 +130,7 @@ function ProGameEditor({ gameId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
-  const [mode, setMode] = useState("edit");
+  const [mode, setMode] = useState("plan");
   const [playKey, setPlayKey] = useState(0);
   // Bản xem trước riêng cho tab Xuất bản — ExportCenter cho phép "Import JSON"
   // để nạp lại 1 file đã xuất; nếu trỏ thẳng vào proDoc thì việc import đó sẽ
@@ -205,14 +213,35 @@ function ProGameEditor({ gameId, onBack }) {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant={mode === "plan" ? "default" : "outline"} onClick={() => setMode("plan")}>Kế hoạch</Button>
             <Button size="sm" variant={mode === "edit" ? "default" : "outline"} onClick={() => setMode("edit")}>Soạn</Button>
             <Button size="sm" variant={mode === "play" ? "default" : "outline"} onClick={() => setMode("play")}>Chơi thử</Button>
             <Button size="sm" variant={mode === "export" ? "default" : "outline"} onClick={() => setMode("export")}>Xuất bản</Button>
+            {(mode === "plan" || mode === "edit") && (
+              <Button size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null} Lưu
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
+        {mode === "plan" && (
+          proDoc.storyBlueprint?.gamePlan ? (
+            <PlannerEditor
+              storyBlueprint={proDoc.storyBlueprint}
+              onChange={(storyBlueprint) => updateField({ storyBlueprint })}
+            />
+          ) : (
+            <PlannerIntro
+              storyBlueprint={proDoc.storyBlueprint}
+              onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
+              onSkip={() => setMode("edit")}
+            />
+          )
+        )}
+
         {mode === "edit" && (
           <div className="space-y-4">
             <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-2">
@@ -244,10 +273,6 @@ function ProGameEditor({ gameId, onBack }) {
                 <Textarea rows={3} value={e.text} onChange={(ev) => updateEnding(i, { text: ev.target.value })} />
               </section>
             ))}
-
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null} Lưu
-            </Button>
           </div>
         )}
 

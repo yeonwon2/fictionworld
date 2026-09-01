@@ -3,7 +3,7 @@
 // Game cũ). Cố tình viết mỏng — không tự làm lại việc vá/chuẩn hoá node graph
 // mà gọi thẳng `normalizeAndRepair` (đã dùng bởi mọi parser của Xưởng Game
 // cũ), để Pro không có một bản sao logic runtime riêng.
-import { normalizeAndRepair } from "@/lib/gameStudio/postprocess";
+import { normalizeAndRepair } from "../gameStudio/postprocess.js";
 
 export function compileProGame(proDoc) {
   const rawNodes = {
