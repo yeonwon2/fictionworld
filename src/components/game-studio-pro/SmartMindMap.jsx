@@ -27,7 +27,7 @@ import {
   removeEnding,
 } from "@/lib/gameStudioPro/blueprintModel";
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
-import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint } from "@/lib/gameStudioPro/blueprintAI";
+import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint, refreshBlueprintEffects } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
 import { syncRegistryToAllEpisodes, applyEpisodeBlueprint } from "@/lib/gameStudioPro/globalStateModel";
 import SceneIntentEditor from "./SceneIntentEditor";
@@ -215,12 +215,17 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   function applyPending() {
     if (pending.scale?.underGenerated && !pending.allowUnderGenerated) return;
     const constraints = episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages);
-    const previewValidation = validateSceneBlueprint(pending.blueprint, { knownEpisodeIds, planningConstraints: constraints });
+    // Chấm lại hệ quả theo danh mục MỚI NHẤT trước khi kiểm tra — nếu người
+    // dùng vừa thêm entity còn thiếu vào "Chỉ số & trạng thái" sau khi AI dựng
+    // sơ đồ, bản nháp phải nhận ra ngay (không cần dựng lại, tốn thêm AI).
+    const refreshedBlueprint = refreshBlueprintEffects(pending.blueprint, globalState?.registry);
+    const previewValidation = validateSceneBlueprint(refreshedBlueprint, { knownEpisodeIds, planningConstraints: constraints });
     if (previewValidation.errors.length) {
+      setPending((value) => (value ? { ...value, blueprint: refreshedBlueprint } : value));
       toast({ variant: "destructive", title: "Bản xem trước chưa hợp lệ", description: previewValidation.errors[0] });
       return;
     }
-    setEpisodeBlueprint(pending.blueprint);
+    setEpisodeBlueprint(refreshedBlueprint);
     setPending(null);
     toast({ title: "Đã áp dụng sơ đồ" });
   }

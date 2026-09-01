@@ -162,6 +162,20 @@ export function normalizeAIBlueprintResponse(
  * đang "thiết kế lại", hoặc mọi cảnh chưa khoá khi tạo lại toàn bộ) — các
  * cảnh KHÔNG nằm trong tập này được giữ nguyên tham chiếu.
  */
+// Phân giải effectIntent (lời tự nhiên) thành rules.effects thật + phần chưa
+// ánh xạ được, dựa trên 1 bản registry cho trước — hàm THUẦN, dùng chung bởi
+// applyNormalizedBlueprint (lúc AI vừa dựng xong) VÀ refreshBlueprintEffects
+// (lúc người dùng vừa thêm entity còn thiếu vào danh mục, cần chấm lại NGAY
+// mà không tốn thêm 1 lượt gọi AI — xem refreshBlueprintEffects()).
+function resolveChoiceEffects(effectIntent, registry) {
+  const parsed = parseEffectsDeterministic(effectIntent, registry);
+  const effects = parsed.items?.filter((item) => item.status === "ok").map((item) => item.effect) || [];
+  const unresolvedEffects = effectIntent && (parsed.items?.some((item) => item.status !== "ok") || parsed.unmatchedText || !parsed.items?.length)
+    ? [{ intent: effectIntent, items: parsed.items || [] }]
+    : [];
+  return { effects, unresolvedEffects };
+}
+
 export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = null, replaceStartScene = false } = {}) {
   const registry = ensureRegistry(blueprint);
   const originalById = new Map((blueprint.scenes || []).map((s) => [s.id, s]));
@@ -174,11 +188,7 @@ export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = n
     role: s.role,
     intent: s.intent,
     choices: s.choices.map((c) => {
-      const parsed = parseEffectsDeterministic(c.effectIntent, registry);
-      const resolvedEffects = parsed.items?.filter((item) => item.status === "ok").map((item) => item.effect) || [];
-      const unresolvedEffects = c.effectIntent && (parsed.items?.some((item) => item.status !== "ok") || parsed.unmatchedText || !parsed.items?.length)
-        ? [{ intent: c.effectIntent, items: parsed.items || [] }]
-        : [];
+      const { effects, unresolvedEffects } = resolveChoiceEffects(c.effectIntent, registry);
       return {
       id: `c_${Math.random().toString(36).slice(2, 9)}`,
       text: c.text,
@@ -186,7 +196,7 @@ export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = n
       targetId: c.targetId,
       gateIntent: c.gateIntent,
       effectIntent: c.effectIntent,
-      rules: { conditions: [], effects: resolvedEffects },
+      rules: { conditions: [], effects },
       conditionalOutcomes: [],
       unresolvedEffects,
     }; }),
@@ -204,6 +214,28 @@ export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = n
   const endings = [...(blueprint.endings || []), ...normalized.endings.map((e) => ({ id: e.id, title: e.title, text: e.text, tone: e.tone }))];
   const startSceneId = replaceStartScene && normalized.startSceneId ? normalized.startSceneId : blueprint.startSceneId;
   return { ...blueprint, scenes, endings, startSceneId, updatedAt: new Date().toISOString() };
+}
+
+// Chấm lại rules.effects/unresolvedEffects của TOÀN BỘ blueprint theo 1 bản
+// registry MỚI — hàm THUẦN, KHÔNG gọi AI. Dùng khi người dùng vừa thêm/sửa
+// entity còn thiếu vào danh mục (vd qua "Chỉ số & trạng thái") trong lúc đang
+// xem bản nháp (pending) AI vừa dựng: applyNormalizedBlueprint() chỉ chấm
+// effectIntent MỘT LẦN lúc AI vừa trả lời, dùng đúng bản registry tại thời
+// điểm đó — nếu registry đổi sau đó, bản nháp vẫn giữ unresolvedEffects CŨ và
+// tiếp tục bị chặn "Áp dụng" dù entity đã có, buộc người dùng bấm dựng lại
+// (tốn thêm 1 lượt gọi AI) chỉ để chấm lại đúng phần tra cứu cục bộ này. Gọi
+// hàm này ngay trước khi validate/áp dụng để tránh lãng phí đó.
+export function refreshBlueprintEffects(blueprint, registry) {
+  return {
+    ...blueprint,
+    scenes: (blueprint.scenes || []).map((s) => ({
+      ...s,
+      choices: (s.choices || []).map((c) => {
+        const { effects, unresolvedEffects } = resolveChoiceEffects(c.effectIntent, registry);
+        return { ...c, rules: { ...c.rules, effects }, unresolvedEffects };
+      }),
+    })),
+  };
 }
 
 // ---------- Điều phối gọi AI (bất đồng bộ) ----------
