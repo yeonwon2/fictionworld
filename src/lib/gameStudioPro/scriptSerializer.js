@@ -135,7 +135,6 @@ export function serializeEpisodeBlueprint(blueprint, episode = null) {
     }
 
     if (scene.role === SCENE_ROLES.ENDING) {
-      // Scene role ending has no choices
       continue;
     }
 
@@ -152,35 +151,7 @@ export function serializeEpisodeBlueprint(blueprint, episode = null) {
       const effs = c.rules?.effects || [];
       const branches = c.conditionalOutcomes || [];
 
-      if (conds.length > 0) {
-        lines.push("NẾU:");
-        for (const cond of conds) {
-          lines.push(`- ${formatConditionLine(cond, registry)}`);
-        }
-      }
-
-      if (effs.length > 0) {
-        lines.push("HỆ QUẢ:");
-        for (const eff of effs) {
-          lines.push(`- ${formatEffectLine(eff, registry)}`);
-        }
-      }
-
-      if (c.targetType === "ending") {
-        const endObj = endingMap.get(c.targetId);
-        const endTitle = endObj ? endObj.title : c.targetId;
-        const toneTag = endObj?.tone && endObj.tone !== "neutral" ? ` [${toneLabel(endObj.tone)}]` : "";
-        lines.push(`KẾT THÚC${toneTag}:`);
-        lines.push(endTitle);
-        lines.push("");
-      } else if (c.targetType === "scene") {
-        const scObj = sceneMap.get(c.targetId);
-        lines.push("ĐẾN:");
-        lines.push(scObj ? scObj.title : c.targetId || "");
-        lines.push("");
-      }
-
-      // Conditional Outcomes
+      // 1. Serialize conditional outcome branches FIRST (deterministic ordering)
       for (const branch of branches) {
         if ((branch.conditions || []).length > 0) {
           lines.push("NẾU:");
@@ -207,6 +178,35 @@ export function serializeEpisodeBlueprint(blueprint, episode = null) {
           lines.push(scObj ? scObj.title : branch.targetId || "");
           lines.push("");
         }
+      }
+
+      // 2. Serialize base / fallback choice SECOND
+      if (conds.length > 0) {
+        lines.push("NẾU:");
+        for (const cond of conds) {
+          lines.push(`- ${formatConditionLine(cond, registry)}`);
+        }
+      }
+
+      if (effs.length > 0) {
+        lines.push("HỆ QUẢ:");
+        for (const eff of effs) {
+          lines.push(`- ${formatEffectLine(eff, registry)}`);
+        }
+      }
+
+      if (c.targetType === "ending") {
+        const endObj = endingMap.get(c.targetId);
+        const endTitle = endObj ? endObj.title : c.targetId;
+        const toneTag = endObj?.tone && endObj.tone !== "neutral" ? ` [${toneLabel(endObj.tone)}]` : "";
+        lines.push(`KẾT THÚC${toneTag}:`);
+        lines.push(endTitle);
+        lines.push("");
+      } else if (c.targetType === "scene") {
+        const scObj = sceneMap.get(c.targetId);
+        lines.push("ĐẾN:");
+        lines.push(scObj ? scObj.title : c.targetId || "");
+        lines.push("");
       }
     }
   }

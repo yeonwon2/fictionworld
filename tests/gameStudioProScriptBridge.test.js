@@ -6,7 +6,10 @@ import {
   cleanLine,
   stripBullet,
 } from '../src/lib/gameStudioPro/scriptParser.js';
-import { normalizeProScriptAst } from '../src/lib/gameStudioPro/scriptNormalizer.js';
+import {
+  normalizeProScriptAst,
+  finalizeProScriptBlueprint,
+} from '../src/lib/gameStudioPro/scriptNormalizer.js';
 import { validateParsedScript } from '../src/lib/gameStudioPro/scriptValidator.js';
 import { serializeEpisodeBlueprint } from '../src/lib/gameStudioPro/scriptSerializer.js';
 import {
@@ -170,7 +173,7 @@ test('parser enforces safety bounds (max script size & max scenes)', () => {
 });
 
 // =========================================================================
-// 2. NORMALIZER & ENTITY RESOLUTION TESTS
+// 2. NORMALIZER & ENTITY RESOLUTION TESTS (NO SILENT CREATION)
 // =========================================================================
 
 test('normalizer resolves target scene names to stable IDs without guessing', () => {
@@ -245,188 +248,321 @@ LỰA CHỌN A: Cầu cứu
   assert.ok(missingErr.line > 0);
 });
 
-test('normalizer handles conditional outcomes (multiple NẾU in one choice)', () => {
-  const script = `${SCRIPT_HEADER_V1}
-TẬP: Rẽ nhánh điều kiện
-
-CHỈ SỐ:
-- Uy tín = 10
-
-CẢNH: Yến tiệc
-LOẠI: Lựa chọn
-NỘI DUNG: Lệ Phi hỏi tội.
-
-LỰA CHỌN D: Phản bác Lệ Phi
-NẾU:
-- Uy tín < 20
-KẾT THÚC [Chết]: Bị xử tử
-
-NẾU:
-- Uy tín >= 20
-HỆ QUẢ:
-- Uy tín -10
-ĐẾN: Cảnh Sau Yến Tiệc
-
-CẢNH: Cảnh Sau Yến Tiệc
-LOẠI: Kể chuyện
-NỘI DUNG: An toàn qua ải.
-
-KẾT THÚC: Bị xử tử
-LOẠI: Chết
-NỘI DUNG: Bị xử trảm.`;
-
-  const { ast } = parseProScript(script);
-  const { blueprint, issues } = normalizeProScriptAst(ast, { episodeId: 'ep_test' });
-  assert.equal(issues.length, 0);
-
-  const scene1 = blueprint.scenes[0];
-  const choiceD = scene1.choices[0];
-  assert.ok(choiceD);
-  assert.equal(choiceD.conditionalOutcomes.length, 1);
-
-  // Nhánh 1 (trong conditionalOutcomes): Uy tín < 20 -> Ending Bị xử tử
-  const branch1 = choiceD.conditionalOutcomes[0];
-  assert.equal(branch1.conditions.length, 1);
-  assert.equal(branch1.conditions[0].operator, '<');
-  assert.equal(branch1.conditions[0].value, 20);
-  assert.equal(branch1.targetType, 'ending');
-
-  // Nhánh chính (else / nhánh 2): Uy tín >= 20 -> Uy tín -10 -> Cảnh Sau Yến Tiệc
-  assert.equal(choiceD.rules.conditions.length, 1);
-  assert.equal(choiceD.rules.conditions[0].operator, '>=');
-  assert.equal(choiceD.rules.conditions[0].value, 20);
-  assert.equal(choiceD.rules.effects.length, 1);
-  assert.equal(choiceD.rules.effects[0].amount, -10);
-  assert.equal(choiceD.targetType, 'scene');
-});
-
 // =========================================================================
-// 3. VALIDATOR & LINE-LEVEL ISSUES TESTS
+// 3. ENTITY PROPOSAL & NO SILENT CREATION TESTS (HOTFIX 1 & 3)
 // =========================================================================
 
-test('validator aggregates line-level errors, warnings, and returns stats', () => {
+test('entity approval test 1: existing registry has Uy tín, script uses Uy tín >= 20 -> resolves directly, 0 proposals', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+
   const script = `${SCRIPT_HEADER_V1}
-TẬP: Kiểm định
-
-CHỈ SỐ:
-- Uy tín = 10
-
+TẬP: Test 1
 CẢNH: Cảnh 1
 LOẠI: Lựa chọn
-NỘI DUNG: Cảnh mở đầu.
-
+NỘI DUNG: Test.
 LỰA CHỌN A: Đi tiếp
-ĐẾN: Cảnh Không Tồn Tại`;
+NẾU:
+- Uy tín >= 20
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
 
-  const result = parseAndValidateProScript(script, { episodeId: 'ep_1' });
-  assert.equal(result.validation.valid, false);
-  assert.ok(result.validation.errors.some((e) => e.line === 12 && /Không tìm thấy cảnh/.test(e.message)));
-  assert.equal(result.validation.stats.sceneCount, 1);
-  assert.equal(result.validation.stats.choiceCount, 1);
-  assert.equal(result.validation.stats.statCount, 1);
-});
-
-// =========================================================================
-// 4. SERIALIZER & BIDIRECTIONAL ROUND-TRIP TESTS
-// =========================================================================
-
-test('serializer exports blueprint to valid FICTIONWORLD PRO SCRIPT v1 text', () => {
-  let r = newEmptyRegistry();
-  r = addStatEntity(r, { displayName: 'Sinh tồn', default: 100, isVital: true, deathThreshold: 0 });
-  r = addStatEntity(r, { displayName: 'Uy tín', default: 10 });
-  r = addRelationshipEntity(r, { displayName: 'Sủng ái Lệ Phi', npc: 'Lệ Phi', default: 0 });
-  r = addFlagEntity(r, 'Đã cứu Tiểu Lan');
-  r = addItemEntity(r, 'Ngọc bội');
-
-  let bp = newSceneBlueprint({ id: 'ep_roundtrip', title: 'Tập Roundtrip' });
-  bp = setRegistry(bp, r);
-
-  // Tạo scene 1 & scene 2
-  let s2 = addScene(bp, SCENE_ROLES.STORY, { title: 'Cảnh Kế' });
-  bp = s2;
-  const targetId = bp.scenes[1].id;
-
-  const startId = bp.startSceneId;
-  bp = addChoice(bp, startId, { text: 'Đi tiếp sang Cảnh Kế' });
-  const cid = findScene(bp, startId).choices[0].id;
-  bp = connectChoice(bp, startId, cid, 'scene', targetId);
-  bp = updateChoice(bp, startId, cid, {
-    rules: {
-      conditions: [statCompare(r.stats[1].id, '>=', 20), flagPresent(r.flags[0].id), itemPresent(r.items[0].id)],
-      effects: [statChange(r.stats[1].id, -5), grantFlag(r.flags[0].id), removeItem(r.items[0].id)],
-    },
+  const result = parseAndValidateProScript(script, {
+    episodeId: 'ep_test',
+    existingRegistry,
   });
 
-  const serialized = serializeEpisodeBlueprint(bp, { title: 'Tập Roundtrip' });
-  assert.ok(serialized.startsWith(SCRIPT_HEADER_V1));
-  assert.ok(serialized.includes('TẬP: Tập Roundtrip'));
-  assert.ok(serialized.includes('Sinh tồn = 100 [sinh tồn, ngưỡng 0]'));
-  assert.ok(serialized.includes('Uy tín >= 20'));
-  assert.ok(serialized.includes('Có cờ: Đã cứu Tiểu Lan'));
-  assert.ok(serialized.includes('Có vật phẩm: Ngọc bội'));
-  assert.ok(serialized.includes('Uy tín -5'));
-  assert.ok(serialized.includes('Mất vật phẩm: Ngọc bội'));
+  assert.equal(result.entityProposals.length, 0);
+  assert.equal(result.validation.readyToImport, true);
+  assert.equal(result.validation.valid, true);
+
+  const statId = existingRegistry.stats[0].id;
+  assert.equal(result.blueprint.scenes[0].choices[0].rules.conditions[0].entityId, statId);
 });
 
-test('round-trip: Blueprint -> Serialize -> Parse -> Compile yields identical runtime behavior', () => {
-  let r = newEmptyRegistry();
-  r = addStatEntity(r, { displayName: 'Sinh tồn', default: 100, isVital: true, deathThreshold: 0 });
-  r = addStatEntity(r, { displayName: 'Uy tín', default: 10 });
-  r = addRelationshipEntity(r, { displayName: 'Sủng ái Lệ Phi', npc: 'Lệ Phi', default: 0 });
-  r = addFlagEntity(r, 'Đã cứu Tiểu Lan');
-  r = addItemEntity(r, 'Ngọc bội');
+test('entity approval test 2: existing registry has Uy tín, script uses Danh vọng >= 20 -> NO silent create, proposal generated, import blocked', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+  const registrySnapshot = JSON.stringify(existingRegistry);
 
-  let bp = newSceneBlueprint({ id: 'ep_rt', title: 'Tập Roundtrip' });
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test 2
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Test.
+LỰA CHỌN A: Đi tiếp
+NẾU:
+- Danh vọng >= 20
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const result = parseAndValidateProScript(script, {
+    episodeId: 'ep_test',
+    existingRegistry,
+  });
+
+  // 1. Không tự động thêm vào registry
+  assert.equal(JSON.stringify(existingRegistry), registrySnapshot, 'existingRegistry không bị mutate');
+  assert.equal(result.registry.stats.length, 1, 'Registry vẫn chỉ có 1 entity');
+
+  // 2. Tạo proposal và chặn import
+  assert.equal(result.entityProposals.length, 1);
+  assert.equal(result.entityProposals[0].requestedName, 'Danh vọng');
+  assert.equal(result.validation.readyToImport, false);
+  assert.equal(result.validation.valid, false);
+  assert.equal(result.validation.hasPendingProposals, true);
+});
+
+test('entity approval test 3: user maps Danh vọng -> Uy tín -> finalized blueprint uses exact entityId of Uy tín', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+  const uyTinId = existingRegistry.stats[0].id;
+
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test 3
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Test.
+LỰA CHỌN A: Đi tiếp
+NẾU:
+- Danh vọng >= 20
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const result = parseAndValidateProScript(script, {
+    episodeId: 'ep_test',
+    existingRegistry,
+  });
+
+  const prop = result.entityProposals[0];
+  const approvals = {
+    [prop.tempKey]: { action: 'map', targetEntityId: uyTinId },
+  };
+
+  const finalized = finalizeProScriptBlueprint(result, approvals, {
+    existingRegistry,
+    episodeId: 'ep_test',
+  });
+
+  assert.equal(finalized.registry.stats.length, 1, 'Không tạo stat mới');
+  const cond = finalized.blueprint.scenes[0].choices[0].rules.conditions[0];
+  assert.equal(cond.entityId, uyTinId, 'Rule sử dụng đúng ID của Uy tín');
+});
+
+test('entity approval test 4: user approves create Danh vọng -> entity created ONLY at finalize step', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test 4
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Test.
+LỰA CHỌN A: Đi tiếp
+NẾU:
+- Danh vọng >= 20
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const result = parseAndValidateProScript(script, {
+    episodeId: 'ep_test',
+    existingRegistry,
+  });
+
+  assert.equal(result.registry.stats.length, 1, 'Trước finalize, registry chưa có Danh vọng');
+
+  const prop = result.entityProposals[0];
+  const approvals = {
+    [prop.tempKey]: { action: 'create', config: { displayName: 'Danh vọng', default: 5 } },
+  };
+
+  const finalized = finalizeProScriptBlueprint(result, approvals, {
+    existingRegistry,
+    episodeId: 'ep_test',
+  });
+
+  assert.equal(finalized.registry.stats.length, 2, 'Sau finalize, registry có 2 stats');
+  const danhVongStat = finalized.registry.stats.find((s) => s.displayName === 'Danh vọng');
+  assert.ok(danhVongStat);
+  assert.equal(danhVongStat.default, 5);
+
+  const cond = finalized.blueprint.scenes[0].choices[0].rules.conditions[0];
+  assert.equal(cond.entityId, danhVongStat.id, 'Rule sử dụng ID mới được tạo của Danh vọng');
+});
+
+test('entity approval test 5: flags and items work identically with approval flow', () => {
+  let existingRegistry = newEmptyRegistry();
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test Flags & Items
+CỜ:
+- Đã cứu Tiểu Lan
+VẬT PHẨM:
+- Ngọc bội
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Test.
+LỰA CHỌN A: Đi tiếp
+NẾU:
+- Có vật phẩm: Ngọc bội
+HỆ QUẢ:
+- Đặt cờ: Đã cứu Tiểu Lan
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const result = parseAndValidateProScript(script, {
+    episodeId: 'ep_test',
+    existingRegistry,
+  });
+
+  assert.equal(result.entityProposals.length, 2);
+  assert.equal(result.registry.flags.length, 0);
+  assert.equal(result.registry.items.length, 0);
+
+  const approvals = {};
+  for (const p of result.entityProposals) {
+    approvals[p.tempKey] = { action: 'create' };
+  }
+
+  const finalized = finalizeProScriptBlueprint(result, approvals, {
+    existingRegistry,
+    episodeId: 'ep_test',
+  });
+
+  assert.equal(finalized.registry.flags.length, 1);
+  assert.equal(finalized.registry.items.length, 1);
+  assert.equal(finalized.registry.flags[0].displayName, 'Đã cứu Tiểu Lan');
+  assert.equal(finalized.registry.items[0].displayName, 'Ngọc bội');
+});
+
+test('entity approval test 6: existingRegistry is NEVER mutated after parse/check/normalize', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Sinh tồn', default: 100 });
+  const snapshot = JSON.stringify(existingRegistry);
+
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Pure Check
+CHỈ SỐ:
+- Uy tín = 10
+- Khí sắc = 50
+CỜ:
+- Cờ mới
+CẢNH: Cảnh 1
+LOẠI: Kể chuyện
+NỘI DUNG: Test.`;
+
+  parseAndValidateProScript(script, { episodeId: 'ep_1', existingRegistry });
+  assert.equal(JSON.stringify(existingRegistry), snapshot);
+});
+
+// =========================================================================
+// 4. CONDITIONAL OUTCOME & ROUND-TRIP TESTS (HOTFIX 2)
+// =========================================================================
+
+test('conditional outcome round-trip: Blueprint -> Serialize -> Parse -> Finalize -> Compile preserves 19 vs 20 semantics', () => {
+  let r = newEmptyRegistry();
+  r = addStatEntity(r, { displayName: 'Uy tín', default: 10 });
+  const uyTin = r.stats[0];
+
+  let bp = newSceneBlueprint({ id: 'ep_cond_rt', title: 'Tập Phản Bác' });
   bp = setRegistry(bp, r);
 
-  bp = addScene(bp, SCENE_ROLES.STORY, { title: 'Cảnh 2' });
-  const scene2Id = bp.scenes[1].id;
+  bp = addScene(bp, SCENE_ROLES.STORY, { title: 'Cảnh Sau Yến Tiệc' });
+  const nextSceneId = bp.scenes[1].id;
 
   bp = addEnding(bp, { title: 'Bị xử tử', tone: 'death' });
-  const endingId = bp.endings[0].id;
+  const deathEndingId = bp.endings[0].id;
 
   const startId = bp.startSceneId;
-  bp = addChoice(bp, startId, { text: 'Lựa chọn Phản bác' });
+  bp = addChoice(bp, startId, { text: 'Phản bác Lệ Phi' });
   const cid = findScene(bp, startId).choices[0].id;
 
+  // Cấu hình:
+  // Base choice (else): Uy tín >= 20 -> Uy tín -10 -> Cảnh Sau Yến Tiệc
+  // Conditional outcome branch: Uy tín < 20 -> Ending Bị xử tử
   bp = updateChoice(bp, startId, cid, {
     targetType: 'scene',
-    targetId: scene2Id,
+    targetId: nextSceneId,
     rules: {
-      conditions: [statCompare(r.stats[1].id, '>=', 20)],
-      effects: [statChange(r.stats[1].id, -10)],
+      conditions: [statCompare(uyTin.id, '>=', 20)],
+      effects: [statChange(uyTin.id, -10)],
     },
     conditionalOutcomes: [
       newOutcomeBranch({
-        conditions: [statCompare(r.stats[1].id, '<', 20)],
+        conditions: [statCompare(uyTin.id, '<', 20)],
         targetType: 'ending',
-        targetId: endingId,
+        targetId: deathEndingId,
       }),
     ],
   });
 
-  // 1. Serialize
-  const text = serializeEpisodeBlueprint(bp, { title: 'Tập Roundtrip' });
+  // 1. Serialize sang FICTIONWORLD PRO SCRIPT v1
+  const serialized = serializeEpisodeBlueprint(bp, { title: 'Tập Phản Bác' });
 
-  // 2. Parse back
-  const { blueprint: importedBp, validation } = parseAndValidateProScript(text, { episodeId: 'ep_rt' });
-  assert.equal(validation.valid, true);
-  assert.equal(importedBp.scenes.length, bp.scenes.length);
-  assert.equal(importedBp.endings.length, bp.endings.length);
+  // 2. Parse lại
+  const parsedResult = parseAndValidateProScript(serialized, {
+    episodeId: 'ep_cond_rt',
+    existingRegistry: r,
+  });
 
-  // 3. Compile both and compare runtime behavior
-  const compiledOrig = compileEpisodeBlueprint(bp, { title: 'Tập Roundtrip' });
-  const compiledImp = compileEpisodeBlueprint(importedBp, { title: 'Tập Roundtrip' });
+  // 3. Finalize
+  const finalized = finalizeProScriptBlueprint(parsedResult, {}, {
+    existingRegistry: r,
+    episodeId: 'ep_cond_rt',
+  });
 
-  assert.equal(compiledOrig.meta.statsConfig.length, compiledImp.meta.statsConfig.length);
-  assert.equal(compiledOrig.nodes.start_node.choices.length, compiledImp.nodes.start_node.choices.length);
+  // 4. Biên dịch cả 2 và kiểm tra tính nhất quán
+  const origCompiled = compileEpisodeBlueprint(bp, { title: 'Tập Phản Bác' });
+  const rtCompiled = compileEpisodeBlueprint(finalized.blueprint, { title: 'Tập Phản Bác' });
+
+  const origChoices = origCompiled.nodes.start_node.choices;
+  const rtChoices = rtCompiled.nodes.start_node.choices;
+
+  assert.equal(rtChoices.length, origChoices.length, 'Số lượng lựa chọn runtime phải bằng nhau (2)');
+
+  const rtDeathEndingId = finalized.blueprint.endings[0].id;
+  const rtNextSceneId = finalized.blueprint.scenes[1].id;
+
+  const origDeath = origChoices.find((c) => c.targetNodeId === deathEndingId);
+  const origSurvive = origChoices.find((c) => c.targetNodeId === nextSceneId);
+  const rtDeath = rtChoices.find((c) => c.targetNodeId === rtDeathEndingId);
+  const rtSurvive = rtChoices.find((c) => c.targetNodeId === rtNextSceneId);
+
+  assert.ok(origDeath && origSurvive);
+  assert.ok(rtDeath && rtSurvive);
+
+  // 5. Kiểm tra ranh giới 19 vs 20 điểm Uy tín
+  const state19 = { stats: { [uyTin.id]: 19 }, items: new Set(), flags: new Set(), npcAffinity: {} };
+  const state20 = { stats: { [uyTin.id]: 20 }, items: new Set(), flags: new Set(), npcAffinity: {} };
+
+  // Tại 19 điểm Uy tín: Phải chết, không được sống
+  assert.equal(choiceAvailable(origDeath, state19), true);
+  assert.equal(choiceAvailable(origSurvive, state19), false);
+  assert.equal(choiceAvailable(rtDeath, state19), true);
+  assert.equal(choiceAvailable(rtSurvive, state19), false);
+
+  // Tại 20 điểm Uy tín: Phải sống và bị trừ 10 điểm, không được chết
+  assert.equal(choiceAvailable(origDeath, state20), false);
+  assert.equal(choiceAvailable(origSurvive, state20), true);
+  assert.equal(choiceAvailable(rtDeath, state20), false);
+  assert.equal(choiceAvailable(rtSurvive, state20), true);
+  assert.equal(rtSurvive.statModifiers[uyTin.id], -10);
 });
 
 // =========================================================================
 // 5. MANDATORY TEST SCENARIO (Section 32: Hậu Cung — Tập 1: Nhập Cung)
 // =========================================================================
 
-test('mandatory scenario: Full Hậu Cung Episode 1 script parses, compiles, and verifies correctly', () => {
+test('mandatory scenario: Full Hậu Cung Episode 1 script parses, approves, compiles, and verifies correctly', () => {
   const scriptHauCung = `${SCRIPT_HEADER_V1}
 
 TẬP: Nhập cung
@@ -515,13 +651,22 @@ NỘI DUNG:
 Do không đủ uy tín để tự bảo vệ, bạn bị Lệ Phi khép tội khi quân và xử tử ngay tại yến tiệc.`;
 
   // 1. Phân tích kịch bản
-  const { blueprint, validation } = parseAndValidateProScript(scriptHauCung, { episodeId: 'ep_haucung' });
-  assert.equal(validation.valid, true, `Validation errors: ${JSON.stringify(validation.errors)}`);
-  assert.equal(validation.stats.sceneCount, 4); // Yến tiệc, Cảnh Gặp Tiểu Lan, Cảnh Sau Yến Tiệc, Qua Ải
-  assert.equal(validation.stats.endingCount, 1); // Bị xử tử
+  const parsed = parseAndValidateProScript(scriptHauCung, { episodeId: 'ep_haucung' });
+  assert.equal(parsed.entityProposals.length, 5, 'Phải có 5 entity proposals từ header khai báo');
+  assert.equal(parsed.validation.readyToImport, false, 'Import bị block khi chưa duyệt proposals');
 
-  // 2. Biên dịch sang runtime GamePlayer
-  const { nodes, meta, warnings } = compileEpisodeBlueprint(blueprint, { title: 'Tập 1 — Nhập cung' });
+  // 2. User duyệt tất cả entity được khai báo
+  const approvals = {};
+  for (const p of parsed.entityProposals) {
+    approvals[p.tempKey] = { action: 'create' };
+  }
+
+  const finalized = finalizeProScriptBlueprint(parsed, approvals, { episodeId: 'ep_haucung' });
+  assert.equal(finalized.blueprint.scenes.length, 4); // Yến tiệc, Cảnh Gặp Tiểu Lan, Cảnh Sau Yến Tiệc, Qua Ải
+  assert.equal(finalized.blueprint.endings.length, 1); // Bị xử tử
+
+  // 3. Biên dịch sang runtime GamePlayer
+  const { nodes, meta, warnings } = compileEpisodeBlueprint(finalized.blueprint, { title: 'Tập 1 — Nhập cung' });
   assert.equal(warnings.filter((w) => /Thiếu cảnh/.test(w)).length, 0);
 
   // Kiểm tra Stats Config (Sinh tồn isVital, deathThreshold 0)
@@ -534,11 +679,11 @@ Do không đủ uy tín để tự bảo vệ, bạn bị Lệ Phi khép tội k
   assert.ok(uyTinStat);
   assert.equal(uyTinStat.default, 10);
 
-  // 3. Kiểm tra các nhánh runtime qua buildRoutes
+  // 4. Kiểm tra các nhánh runtime qua buildRoutes
   const { routes } = buildRoutes(nodes, meta.statsConfig);
   assert.ok(routes.length >= 4);
 
-  // 4. Kiểm tra điều kiện loại trừ lẫn nhau tại lựa chọn Phản bác (19 vs 20 Uy tín)
+  // 5. Kiểm tra điều kiện loại trừ lẫn nhau tại lựa chọn Phản bác (19 vs 20 Uy tín)
   const ytsChoices = nodes.start_node.choices;
   const deathChoice = ytsChoices.find((c) => c.statRequirementsMax && c.statRequirementsMax[uyTinStat.key] === 19);
   const surviveChoice = ytsChoices.find((c) => c.statRequirements && c.statRequirements[uyTinStat.key] === 20);
@@ -554,7 +699,7 @@ Do không đủ uy tín để tự bảo vệ, bạn bị Lệ Phi khép tội k
   assert.equal(choiceAvailable(deathChoice, state20), false);
   assert.equal(choiceAvailable(surviveChoice, state20), true);
 
-  // 5. Kiểm tra Game Over vì Sinh tồn
+  // 6. Kiểm tra Game Over vì Sinh tồn
   assert.equal(gameOverReasons({ [sinhTonStat.key]: 100 }, meta.statsConfig).length, 0);
   assert.equal(gameOverReasons({ [sinhTonStat.key]: 0 }, meta.statsConfig).length, 1);
 });

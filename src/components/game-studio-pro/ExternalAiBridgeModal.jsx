@@ -3,7 +3,7 @@
 // Giao diện trao đổi kịch bản giữa FictionWorld và các AI bên ngoài (ChatGPT, Claude, Gemini, DeepSeek...)
 // Gồm 4 chức năng:
 // 1. Sao chép prompt (Copy Prompt)
-// 2. Nhập kịch bản (Import & Validate & Preview)
+// 2. Nhập kịch bản (Import, Validate, Entity Approval & Preview)
 // 3. Xuất kịch bản (Export Blueprint to DSL)
 // 4. Xem định dạng (Format Docs & Cheat Sheet)
 import React, { useState, useMemo } from "react";
@@ -22,6 +22,8 @@ import {
   Package,
   Heart,
   BarChart3,
+  PlusCircle,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import {
   parseAndValidateProScript,
+  finalizeProScriptBlueprint,
   serializeEpisodeBlueprint,
   generateExternalAiPrompt,
   generateRepairPrompt,
@@ -41,6 +44,7 @@ import {
   SCRIPT_FORMAT_DOCS,
 } from "@/lib/gameStudioPro/scriptBridge";
 import { SCENE_ROLE_LABELS } from "@/lib/gameStudioPro/blueprintModel";
+import { listEntities } from "@/lib/gameStudioPro/entityRegistry";
 
 export default function ExternalAiBridgeModal({
   open,
@@ -59,9 +63,10 @@ export default function ExternalAiBridgeModal({
   const [customInstructions, setCustomInstructions] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
-  // Tab 2: Import State
+  // Tab 2: Import & Entity Approval State
   const [pastedScript, setPastedScript] = useState("");
   const [inspection, setInspection] = useState(null);
+  const [entityApprovals, setEntityApprovals] = useState({}); // { [tempKey]: { action: "create" | "map", targetEntityId?: string } }
   const [copiedRepair, setCopiedRepair] = useState(false);
 
   // Tab 3: Export State
@@ -109,8 +114,14 @@ export default function ExternalAiBridgeModal({
     });
 
     setInspection(result);
+    setEntityApprovals({}); // Reset approvals khi re-check
 
-    if (result.validation.valid) {
+    if (result.entityProposals.length > 0) {
+      toast({
+        title: "Kịch bản có thực thể mới cần duyệt",
+        description: `Phát hiện ${result.entityProposals.length} thực thể mới/chưa có trong danh mục. Hãy duyệt bên dưới.`,
+      });
+    } else if (result.validation.valid) {
       toast({
         title: "Kịch bản hợp lệ!",
         description: `Đã phân tích thành công ${result.validation.stats.sceneCount} cảnh, ${result.validation.stats.choiceCount} lựa chọn.`,
@@ -124,8 +135,36 @@ export default function ExternalAiBridgeModal({
     }
   }
 
+  function handleApproveAllDeclared() {
+    if (!inspection) return;
+    const next = { ...entityApprovals };
+    for (const prop of inspection.entityProposals || []) {
+      if (prop.declaredInHeader) {
+        next[prop.tempKey] = { action: "create" };
+      }
+    }
+    setEntityApprovals(next);
+    toast({ title: "Đã chọn tạo tất cả thực thể được khai báo" });
+  }
+
+  function handleSetApproval(tempKey, decision) {
+    setEntityApprovals((prev) => ({ ...prev, [tempKey]: decision }));
+  }
+
+  // Kiểm tra xem tất cả proposals đã được duyệt hay chưa
+  const pendingProposalsCount = useMemo(() => {
+    if (!inspection || !inspection.entityProposals) return 0;
+    return inspection.entityProposals.filter((p) => !entityApprovals[p.tempKey]).length;
+  }, [inspection, entityApprovals]);
+
+  const canImport = useMemo(() => {
+    if (!inspection || !inspection.blueprint) return false;
+    if (inspection.validation.errors.length > 0) return false;
+    return pendingProposalsCount === 0;
+  }, [inspection, pendingProposalsCount]);
+
   function handleApplyImport() {
-    if (!inspection || !inspection.blueprint) return;
+    if (!inspection || !inspection.blueprint || !canImport) return;
 
     if (blueprint?.scenes?.length > 0) {
       const confirmOverwrite = window.confirm(
@@ -134,10 +173,16 @@ export default function ExternalAiBridgeModal({
       if (!confirmOverwrite) return;
     }
 
-    onApplyBlueprint(inspection.blueprint);
+    // Finalize blueprint với approvals của người dùng
+    const finalized = finalizeProScriptBlueprint(inspection, entityApprovals, {
+      existingRegistry: blueprint?.registry || null,
+      episodeId: episode?.id || "ep_1",
+    });
+
+    onApplyBlueprint(finalized.blueprint);
     toast({
       title: "Đã nhập kịch bản vào Xưởng Game Pro!",
-      description: `Đã nạp ${inspection.blueprint.scenes.length} cảnh và ${inspection.blueprint.endings.length} kết thúc.`,
+      description: `Đã nạp ${finalized.blueprint.scenes.length} cảnh và ${finalized.blueprint.endings.length} kết thúc.`,
     });
     onClose();
   }
@@ -296,28 +341,37 @@ export default function ExternalAiBridgeModal({
                   <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Kiểm tra kịch bản
                 </Button>
 
-                {inspection && inspection.validation.valid && (
+                {inspection && canImport && (
                   <Button size="sm" variant="default" onClick={handleApplyImport}>
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Nhập vào Xưởng Game Pro
                   </Button>
                 )}
 
-                {inspection && !inspection.validation.valid && (
-                  <Button size="sm" variant="outline" onClick={handleCopyRepairPrompt}>
+                {inspection && !canImport && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyRepairPrompt}
+                    disabled={inspection.validation.errors.length === 0}
+                  >
                     {copiedRepair ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
                     {copiedRepair ? "Đã sao chép yêu cầu sửa!" : "Sao chép yêu cầu sửa lỗi cho AI"}
                   </Button>
                 )}
               </div>
 
-              {/* KẾT QUẢ KIỂM TRA */}
+              {/* KẾT QUẢ KIỂM TRA & DUYỆT THỰC THỂ */}
               {inspection && (
                 <div className="space-y-3 rounded-xl border border-border bg-card p-3">
                   {/* Summary Bar */}
                   <div className="flex flex-wrap items-center gap-3 text-xs">
                     <span className="font-semibold">Kết quả:</span>
-                    <Badge variant={inspection.validation.valid ? "default" : "destructive"}>
-                      {inspection.validation.valid ? "✓ Kịch bản hợp lệ" : `✕ ${inspection.validation.errors.length} lỗi`}
+                    <Badge variant={canImport ? "default" : "destructive"}>
+                      {canImport
+                        ? "✓ Sẵn sàng nhập"
+                        : pendingProposalsCount > 0
+                        ? `⚠ Cần duyệt ${pendingProposalsCount} thực thể`
+                        : `✕ ${inspection.validation.errors.length} lỗi`}
                     </Badge>
                     {inspection.validation.warnings.length > 0 && (
                       <Badge variant="secondary" className="text-amber-600 bg-amber-500/10">
@@ -328,6 +382,106 @@ export default function ExternalAiBridgeModal({
                       {inspection.validation.stats.sceneCount} cảnh · {inspection.validation.stats.choiceCount} lựa chọn · {inspection.validation.stats.endingCount} kết thúc
                     </span>
                   </div>
+
+                  {/* SECTION DUYỆT THỰC THỂ (Entity Proposals Approval) */}
+                  {inspection.entityProposals.length > 0 && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                            <PlusCircle className="w-4 h-4" /> Duyệt thực thể mới ({inspection.entityProposals.length})
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Kịch bản sử dụng các thực thể chưa có trong danh mục. Hãy chọn tạo mới hoặc ánh xạ vào thực thể có sẵn:
+                          </p>
+                        </div>
+                        {inspection.entityProposals.some((p) => p.declaredInHeader) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs shrink-0"
+                            onClick={handleApproveAllDeclared}
+                          >
+                            <Check className="w-3 h-3 mr-1" /> Chấp nhận tất cả khai báo
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {inspection.entityProposals.map((prop) => {
+                          const approval = entityApprovals[prop.tempKey];
+                          const pool = listEntities(blueprint?.registry || { stats: [], flags: [], items: [] }, prop.kind);
+
+                          return (
+                            <div
+                              key={prop.tempKey}
+                              className="rounded-lg border border-border bg-background p-2 text-xs space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  {prop.kind === "relationship" ? (
+                                    <Heart className="w-3.5 h-3.5 text-pink-500" />
+                                  ) : prop.kind === "flag" ? (
+                                    <Flag className="w-3.5 h-3.5 text-emerald-500" />
+                                  ) : prop.kind === "item" ? (
+                                    <Package className="w-3.5 h-3.5 text-amber-500" />
+                                  ) : (
+                                    <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
+                                  )}
+                                  <strong className="text-foreground">{prop.requestedName}</strong>
+                                  <span className="text-[10px] text-muted-foreground">({prop.usage})</span>
+                                </div>
+                                {approval ? (
+                                  <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 text-[10px]">
+                                    ✓ {approval.action === "create" ? "Tạo mới" : "Ánh xạ"}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="destructive" className="text-[10px]">Chờ duyệt</Badge>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  variant={approval?.action === "create" ? "default" : "outline"}
+                                  className="h-6 text-[11px]"
+                                  onClick={() => handleSetApproval(prop.tempKey, { action: "create" })}
+                                >
+                                  <PlusCircle className="w-3 h-3 mr-1" /> Tạo {prop.kind === "flag" ? "cờ" : prop.kind === "item" ? "vật phẩm" : prop.kind === "relationship" ? "quan hệ" : "chỉ số"} "{prop.requestedName}"
+                                </Button>
+
+                                {prop.candidates?.map((cand) => (
+                                  <Button
+                                    key={cand.id}
+                                    size="sm"
+                                    variant={approval?.action === "map" && approval.targetEntityId === cand.id ? "default" : "outline"}
+                                    className="h-6 text-[11px]"
+                                    onClick={() => handleSetApproval(prop.tempKey, { action: "map", targetEntityId: cand.id })}
+                                  >
+                                    <Link2 className="w-3 h-3 mr-1" /> Dùng "{cand.displayName}" có sẵn
+                                  </Button>
+                                ))}
+
+                                {pool.length > 0 && !prop.candidates?.length && (
+                                  <Select
+                                    value={approval?.action === "map" ? approval.targetEntityId : ""}
+                                    onValueChange={(tid) => handleSetApproval(prop.tempKey, { action: "map", targetEntityId: tid })}
+                                  >
+                                    <SelectTrigger className="h-6 text-[11px] w-48"><SelectValue placeholder="Chọn thực thể có sẵn..." /></SelectTrigger>
+                                    <SelectContent>
+                                      {pool.map((e) => (
+                                        <SelectItem key={e.id} value={e.id}>{e.displayName}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Lỗi chi tiết theo dòng */}
                   {inspection.validation.errors.length > 0 && (
@@ -354,29 +508,6 @@ export default function ExternalAiBridgeModal({
                       ))}
                     </div>
                   )}
-
-                  {/* Thực thể phát hiện */}
-                  <div className="space-y-1.5 text-xs">
-                    <p className="font-semibold text-muted-foreground">Danh mục thực thể nhận diện:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {inspection.registry?.stats?.map((s) => (
-                        <Badge key={s.id} variant="outline" className="flex items-center gap-1 text-[11px]">
-                          {s.kind === "relationship" ? <Heart className="w-3 h-3 text-pink-500" /> : <BarChart3 className="w-3 h-3 text-blue-500" />}
-                          {s.displayName} ({s.default})
-                        </Badge>
-                      ))}
-                      {inspection.registry?.flags?.map((f) => (
-                        <Badge key={f.id} variant="outline" className="flex items-center gap-1 text-[11px]">
-                          <Flag className="w-3 h-3 text-emerald-500" /> {f.displayName}
-                        </Badge>
-                      ))}
-                      {inspection.registry?.items?.map((it) => (
-                        <Badge key={it.id} variant="outline" className="flex items-center gap-1 text-[11px]">
-                          <Package className="w-3 h-3 text-amber-500" /> {it.displayName}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
 
                   {/* Danh sách cảnh xem trước */}
                   {inspection.blueprint?.scenes?.length > 0 && (

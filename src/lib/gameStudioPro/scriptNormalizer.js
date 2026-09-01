@@ -2,9 +2,13 @@
 //
 // Chuyển đổi AST từ scriptParser.js thành Canonical Pro Blueprint (blueprintModel.js)
 // cùng Canonical Rule IR (ruleModel.js) và Entity Registry (entityRegistry.js).
+//
+// NGUYÊN TẮC:
+// 1. PURE & NO SILENT CREATION: Không bao giờ tự động tạo entity mới vào existingRegistry.
+// 2. Thu thập danh sách entityProposals để người dùng duyệt/khớp trước khi import.
+// 3. Finalize step (finalizeProScriptBlueprint) là nơi DUY NHẤT tạo entity khi người dùng đã approve.
 import {
   SCENE_ROLES,
-  newSceneBlueprint,
   newScene,
   newChoice,
   newEnding,
@@ -34,6 +38,13 @@ function normalizeForLookup(str) {
     .trim();
 }
 
+function cleanEntityText(rawText) {
+  let s = String(rawText || "").trim();
+  s = s.replace(/^(?:vật phẩm|cờ|chỉ số|quan hệ|item|flag|stat)\s*[:=]?\s*/i, "").trim();
+  s = s.replace(/^:\s*/, "").trim();
+  return s;
+}
+
 export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistry = null } = {}) {
   const issues = []; // { line, message, type: "error" | "warning" }
   const recordIssue = (line, message, type = "error") => {
@@ -42,70 +53,94 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
 
   if (!ast || !Array.isArray(ast.scenes)) {
     recordIssue(1, "AST kịch bản không hợp lệ.");
-    return { blueprint: null, issues, newEntities: { stats: [], flags: [], items: [] } };
+    return { blueprint: null, entityProposals: [], issues, registry: existingRegistry ? ensureRegistry({ registry: existingRegistry }) : newEmptyRegistry() };
   }
 
-  // 1. Khởi tạo / Cập nhật Registry
-  let registry = existingRegistry ? ensureRegistry({ registry: existingRegistry }) : newEmptyRegistry();
-  const newEntities = { stats: [], flags: [], items: [] };
+  // Registry hiện có — PURE, KHÔNG mutate
+  const currentRegistry = existingRegistry ? ensureRegistry({ registry: existingRegistry }) : newEmptyRegistry();
+  const entityProposals = [];
+  const tempKeyMap = new Map(); // kind:normalizedName -> tempKey | realEntityId
 
-  // Nạp stats từ khai báo
+  function getOrCreateProposal(kind, rawName, meta = {}) {
+    const cleanName = cleanEntityText(rawName);
+    const norm = normalizeForLookup(cleanName);
+    const key = `${kind}:${norm}`;
+    const isQuantity = kind === ENTITY_KINDS.STAT || kind === ENTITY_KINDS.RELATIONSHIP;
+    const quantityKey = isQuantity ? `quantity:${norm}` : null;
+
+    if (tempKeyMap.has(key)) {
+      return tempKeyMap.get(key);
+    }
+    if (quantityKey && tempKeyMap.has(quantityKey)) {
+      return tempKeyMap.get(quantityKey);
+    }
+
+    const tempKey = `temp:${kind}:${cleanName}`;
+    const resolution = resolveEntity(currentRegistry, isQuantity ? "quantity" : kind, cleanName);
+    
+    // Nếu khớp entity có sẵn thì dùng entityId thật, không cần proposal
+    if (resolution.status === "matched" && resolution.entity) {
+      tempKeyMap.set(key, resolution.entity.id);
+      if (quantityKey) tempKeyMap.set(quantityKey, resolution.entity.id);
+      return resolution.entity.id;
+    }
+
+    const proposal = {
+      tempKey,
+      kind,
+      requestedName: cleanName,
+      sourceLine: meta.line || 1,
+      usage: meta.usage || `Khai báo hoặc sử dụng "${cleanName}"`,
+      initial: meta.initial ?? 0,
+      isVital: !!meta.isVital,
+      deathThreshold: meta.deathThreshold,
+      npc: meta.npc || cleanName,
+      candidates: resolution.candidates || [],
+      declaredInHeader: !!meta.declaredInHeader,
+    };
+
+    entityProposals.push(proposal);
+    tempKeyMap.set(key, tempKey);
+    if (quantityKey) tempKeyMap.set(quantityKey, tempKey);
+    return tempKey;
+  }
+
+  // 1. Quét khai báo ở Header và tạo proposals cho các entity chưa có
   for (const s of ast.stats || []) {
-    const existing = resolveEntity(registry, "stat", s.name);
-    if (existing.status !== "matched") {
-      registry = addStatEntity(registry, {
-        displayName: s.name,
-        default: s.initial ?? 0,
-        isVital: !!s.isVital,
-        deathThreshold: s.deathThreshold,
-      });
-      const created = registry.stats[registry.stats.length - 1];
-      newEntities.stats.push(created);
-    } else if (existing.entity) {
-      if (Number.isFinite(s.initial)) {
-        existing.entity.default = s.initial;
-      }
-      if (s.isVital !== undefined) {
-        existing.entity.isVital = !!s.isVital;
-      }
-      if (Number.isFinite(s.deathThreshold)) {
-        existing.entity.deathThreshold = s.deathThreshold;
-      }
-    }
+    getOrCreateProposal(ENTITY_KINDS.STAT, s.name, {
+      line: s.line,
+      usage: "Khai báo ở phần CHỈ SỐ",
+      initial: s.initial ?? 0,
+      isVital: s.isVital,
+      deathThreshold: s.deathThreshold,
+      declaredInHeader: true,
+    });
   }
 
-  // Nạp relationships từ khai báo
   for (const r of ast.relationships || []) {
-    const existing = resolveEntity(registry, "relationship", r.name);
-    if (existing.status !== "matched") {
-      registry = addRelationshipEntity(registry, {
-        displayName: r.name,
-        npc: r.npc || r.name,
-        default: r.initial ?? 0,
-      });
-      const created = registry.stats[registry.stats.length - 1];
-      newEntities.stats.push(created);
-    }
+    getOrCreateProposal(ENTITY_KINDS.RELATIONSHIP, r.name, {
+      line: r.line,
+      usage: "Khai báo ở phần QUAN HỆ",
+      npc: r.npc || r.name,
+      initial: r.initial ?? 0,
+      declaredInHeader: true,
+    });
   }
 
-  // Nạp flags từ khai báo
   for (const f of ast.flags || []) {
-    const existing = resolveEntity(registry, ENTITY_KINDS.FLAG, f.name);
-    if (existing.status !== "matched") {
-      registry = addFlagEntity(registry, f.name);
-      const created = registry.flags[registry.flags.length - 1];
-      newEntities.flags.push(created);
-    }
+    getOrCreateProposal(ENTITY_KINDS.FLAG, f.name, {
+      line: f.line,
+      usage: "Khai báo ở phần CỜ",
+      declaredInHeader: true,
+    });
   }
 
-  // Nạp items từ khai báo
   for (const it of ast.items || []) {
-    const existing = resolveEntity(registry, ENTITY_KINDS.ITEM, it.name);
-    if (existing.status !== "matched") {
-      registry = addItemEntity(registry, it.name);
-      const created = registry.items[registry.items.length - 1];
-      newEntities.items.push(created);
-    }
+    getOrCreateProposal(ENTITY_KINDS.ITEM, it.name, {
+      line: it.line,
+      usage: "Khai báo ở phần VẬT PHẨM",
+      declaredInHeader: true,
+    });
   }
 
   // 2. Tạo bản đồ Cảnh (Scene Title -> Scene Object) và kiểm tra Ambiguity (Trùng tên)
@@ -165,7 +200,6 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
     endingsList.push(endObj);
   }
 
-  // Helper tìm hoặc tạo Ending theo tên
   function resolveOrCreateEnding(title, tone = "neutral", line = 1) {
     const norm = normalizeForLookup(title);
     if (!norm) return null;
@@ -182,14 +216,14 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
     return newEnd;
   }
 
-  // 4. Helper phân giải luật và tự động đăng ký entity nếu xuất hiện trong điều kiện/hệ quả
-  function resolveRules(conditionItemsRaw, effectItemsRaw, line) {
+  // 4. Phân giải luật — nếu gặp entity chưa có, gán tempKey và tạo Proposal (KHÔNG silent-create)
+  function resolveRules(conditionItemsRaw, effectItemsRaw, line, sceneTitle = "") {
     const conditions = [];
     const effects = [];
 
     // Parse conditions
     for (const c of conditionItemsRaw || []) {
-      const parsed = parseConditionsDeterministic(c.raw, registry);
+      const parsed = parseConditionsDeterministic(c.raw, currentRegistry);
       if (parsed.orDetected) {
         recordIssue(c.line || line, `Dòng ${c.line || line}: ${parsed.items[0]?.reason || "Điều kiện HOẶC chưa được hỗ trợ."}`);
       }
@@ -197,21 +231,24 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
         if (item.status === "ok") {
           conditions.push(item.condition);
         } else if (item.status === "unresolved") {
-          if (item.entityKind === ENTITY_KINDS.FLAG || item.pending.type === "flag_present" || item.pending.type === "flag_absent") {
-            registry = addFlagEntity(registry, item.text);
-            const created = registry.flags[registry.flags.length - 1];
-            newEntities.flags.push(created);
-            conditions.push(item.pending.type === "flag_absent" ? { type: "flag_absent", entityId: created.id } : { type: "flag_present", entityId: created.id });
-          } else if (item.entityKind === ENTITY_KINDS.ITEM || item.pending.type === "item_present") {
-            registry = addItemEntity(registry, item.text);
-            const created = registry.items[registry.items.length - 1];
-            newEntities.items.push(created);
-            conditions.push({ type: "item_present", entityId: created.id });
+          const kind = item.pending.type === "flag_present" || item.pending.type === "flag_absent"
+            ? ENTITY_KINDS.FLAG
+            : item.pending.type === "item_present"
+            ? ENTITY_KINDS.ITEM
+            : ENTITY_KINDS.STAT;
+          const cleanText = cleanEntityText(item.text);
+          const tempId = getOrCreateProposal(kind, cleanText, {
+            line: c.line || line,
+            usage: `Điều kiện tại "${sceneTitle || "Cảnh"}"`,
+          });
+          if (item.pending.type === "flag_absent") {
+            conditions.push({ type: "flag_absent", entityId: tempId });
+          } else if (item.pending.type === "flag_present") {
+            conditions.push({ type: "flag_present", entityId: tempId });
+          } else if (item.pending.type === "item_present") {
+            conditions.push({ type: "item_present", entityId: tempId });
           } else {
-            registry = addStatEntity(registry, { displayName: item.text, default: 0 });
-            const created = registry.stats[registry.stats.length - 1];
-            newEntities.stats.push(created);
-            conditions.push({ type: "stat_compare", entityId: created.id, operator: item.pending.operator, value: item.pending.value });
+            conditions.push({ type: "stat_compare", entityId: tempId, operator: item.pending.operator, value: item.pending.value });
           }
         } else if (item.status === "ambiguous") {
           recordIssue(c.line || line, `Dòng ${c.line || line}: Tên "${item.text}" không rõ ràng (khớp nhiều thực thể).`);
@@ -223,26 +260,29 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
 
     // Parse effects
     for (const e of effectItemsRaw || []) {
-      const parsed = parseEffectsDeterministic(e.raw, registry);
+      const parsed = parseEffectsDeterministic(e.raw, currentRegistry);
       for (const item of parsed.items || []) {
         if (item.status === "ok") {
           effects.push(item.effect);
         } else if (item.status === "unresolved") {
-          if (item.entityKind === ENTITY_KINDS.FLAG || item.pending.type === "grant_flag") {
-            registry = addFlagEntity(registry, item.text);
-            const created = registry.flags[registry.flags.length - 1];
-            newEntities.flags.push(created);
-            effects.push({ type: "grant_flag", entityId: created.id });
-          } else if (item.entityKind === ENTITY_KINDS.ITEM || item.pending.type === "grant_item" || item.pending.type === "remove_item") {
-            registry = addItemEntity(registry, item.text);
-            const created = registry.items[registry.items.length - 1];
-            newEntities.items.push(created);
-            effects.push({ type: item.pending.type, entityId: created.id });
+          const kind = item.pending.type === "grant_flag"
+            ? ENTITY_KINDS.FLAG
+            : item.pending.type === "grant_item" || item.pending.type === "remove_item"
+            ? ENTITY_KINDS.ITEM
+            : ENTITY_KINDS.STAT;
+          const cleanText = cleanEntityText(item.text);
+          const tempId = getOrCreateProposal(kind, cleanText, {
+            line: e.line || line,
+            usage: `Hệ quả tại "${sceneTitle || "Cảnh"}"`,
+          });
+          if (item.pending.type === "grant_flag") {
+            effects.push({ type: "grant_flag", entityId: tempId });
+          } else if (item.pending.type === "grant_item") {
+            effects.push({ type: "grant_item", entityId: tempId });
+          } else if (item.pending.type === "remove_item") {
+            effects.push({ type: "remove_item", entityId: tempId });
           } else {
-            registry = addStatEntity(registry, { displayName: item.text, default: 0 });
-            const created = registry.stats[registry.stats.length - 1];
-            newEntities.stats.push(created);
-            effects.push({ type: "stat_change", entityId: created.id, amount: item.pending.amount });
+            effects.push({ type: "stat_change", entityId: tempId, amount: item.pending.amount });
           }
         } else if (item.status === "unsupported") {
           recordIssue(e.line || line, `Dòng ${e.line || line}: ${item.reason || "Hệ quả chưa được hỗ trợ."}`);
@@ -255,7 +295,6 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
 
   // 5. Liên kết các lựa chọn và chuyển đổi sang Blueprint Models
   for (const { raw, model } of scenesList) {
-    // Nếu cảnh không có choices nhưng có autoTarget (cảnh tự động đi tiếp)
     if ((!raw.choices || raw.choices.length === 0) && (raw.autoTarget || model.role === SCENE_ROLES.ENDING)) {
       if (model.role === SCENE_ROLES.ENDING) {
         model.choices = [];
@@ -293,7 +332,6 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
       continue;
     }
 
-    // Xử lý các lựa chọn trong cảnh
     for (const rawChoice of raw.choices || []) {
       const choiceLine = rawChoice.line || raw.line;
       const blocks = rawChoice.outcomeBlocks || [];
@@ -338,7 +376,7 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
       if (blocks.length === 1) {
         const block = blocks[0];
         const { targetType, targetId } = resolveBlockTarget(block);
-        const { conditions, effects } = resolveRules(block.conditions, block.effects, block.line || choiceLine);
+        const { conditions, effects } = resolveRules(block.conditions, block.effects, block.line || choiceLine, model.title);
 
         const choiceModel = newChoice({
           text: rawChoice.text || "Tiếp tục",
@@ -357,7 +395,7 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
         for (let bIdx = 0; bIdx < blocks.length - 1; bIdx++) {
           const block = blocks[bIdx];
           const { targetType, targetId } = resolveBlockTarget(block);
-          const { conditions, effects } = resolveRules(block.conditions, block.effects, block.line || choiceLine);
+          const { conditions, effects } = resolveRules(block.conditions, block.effects, block.line || choiceLine, model.title);
 
           const branchObj = newOutcomeBranch({
             label: "",
@@ -374,7 +412,8 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
         const { conditions: lastConditions, effects: lastEffects } = resolveRules(
           lastBlock.conditions,
           lastBlock.effects,
-          lastBlock.line || choiceLine
+          lastBlock.line || choiceLine,
+          model.title
         );
 
         const choiceModel = newChoice({
@@ -395,9 +434,98 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
     startSceneId: startSceneId || scenesList[0]?.model.id || null,
     scenes: scenesList.map((s) => s.model),
     endings: endingsList,
-    registry,
+    registry: currentRegistry, // PURE registry, chưa chứa entity mới
     updatedAt: new Date().toISOString(),
   };
 
-  return { blueprint, issues, newEntities, registry };
+  return { blueprint, entityProposals, issues, registry: currentRegistry };
+}
+
+// =========================================================================
+// FINALIZE BLUEPRINT (Chỉ thực thi khi người dùng DUYỆT entity proposals)
+// =========================================================================
+export function finalizeProScriptBlueprint(
+  normalizedResult,
+  approvals = {}, // { [tempKey]: { action: "create" | "map", targetEntityId, config } }
+  { existingRegistry = null, episodeId = "ep_1" } = {}
+) {
+  if (!normalizedResult || !normalizedResult.blueprint) return null;
+
+  const blueprintCopy = JSON.parse(JSON.stringify(normalizedResult.blueprint));
+  let finalRegistry = existingRegistry ? ensureRegistry({ registry: existingRegistry }) : ensureRegistry(blueprintCopy);
+  const idMap = new Map();
+
+  for (const proposal of normalizedResult.entityProposals || []) {
+    const approval = approvals[proposal.tempKey] || { action: "create" };
+
+    if (approval.action === "map" && approval.targetEntityId) {
+      idMap.set(proposal.tempKey, approval.targetEntityId);
+    } else if (approval.action === "create") {
+      const cfg = approval.config || {};
+      const displayName = cfg.displayName || proposal.requestedName;
+
+      if (proposal.kind === ENTITY_KINDS.STAT) {
+        finalRegistry = addStatEntity(finalRegistry, {
+          displayName,
+          default: cfg.default ?? proposal.initial ?? 0,
+          isVital: cfg.isVital ?? proposal.isVital,
+          deathThreshold: cfg.deathThreshold ?? proposal.deathThreshold,
+        });
+        const created = finalRegistry.stats[finalRegistry.stats.length - 1];
+        idMap.set(proposal.tempKey, created.id);
+      } else if (proposal.kind === ENTITY_KINDS.RELATIONSHIP) {
+        finalRegistry = addRelationshipEntity(finalRegistry, {
+          displayName,
+          npc: cfg.npc || proposal.npc || displayName,
+          default: cfg.default ?? proposal.initial ?? 0,
+        });
+        const created = finalRegistry.stats[finalRegistry.stats.length - 1];
+        idMap.set(proposal.tempKey, created.id);
+      } else if (proposal.kind === ENTITY_KINDS.FLAG) {
+        finalRegistry = addFlagEntity(finalRegistry, displayName);
+        const created = finalRegistry.flags[finalRegistry.flags.length - 1];
+        idMap.set(proposal.tempKey, created.id);
+      } else if (proposal.kind === ENTITY_KINDS.ITEM) {
+        finalRegistry = addItemEntity(finalRegistry, displayName);
+        const created = finalRegistry.items[finalRegistry.items.length - 1];
+        idMap.set(proposal.tempKey, created.id);
+      }
+    }
+  }
+
+  // Thay thế toàn bộ tempKey trong điều kiện & hệ quả sang realEntityId
+  for (const scene of blueprintCopy.scenes || []) {
+    for (const choice of scene.choices || []) {
+      for (const cond of choice.rules?.conditions || []) {
+        if (idMap.has(cond.entityId)) {
+          cond.entityId = idMap.get(cond.entityId);
+        }
+      }
+      for (const eff of choice.rules?.effects || []) {
+        if (idMap.has(eff.entityId)) {
+          eff.entityId = idMap.get(eff.entityId);
+        }
+      }
+      for (const branch of choice.conditionalOutcomes || []) {
+        for (const cond of branch.conditions || []) {
+          if (idMap.has(cond.entityId)) {
+            cond.entityId = idMap.get(cond.entityId);
+          }
+        }
+        for (const eff of branch.effects || []) {
+          if (idMap.has(eff.entityId)) {
+            eff.entityId = idMap.get(eff.entityId);
+          }
+        }
+      }
+    }
+  }
+
+  blueprintCopy.registry = finalRegistry;
+  blueprintCopy.updatedAt = new Date().toISOString();
+
+  return {
+    blueprint: blueprintCopy,
+    registry: finalRegistry,
+  };
 }

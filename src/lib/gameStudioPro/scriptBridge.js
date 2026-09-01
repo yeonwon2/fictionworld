@@ -2,10 +2,11 @@
 //
 // Đầu mối chính kết nối toàn bộ hệ thống kịch bản ngoài:
 // - Phân tích cục bộ (Parser + Normalizer + Validator)
+// - Duyệt và khớp thực thể (Entity Approval & Finalization)
 // - Xuất bản kịch bản (Serializer)
 // - Tạo prompt cho AI bên ngoài (ChatGPT, Claude, Gemini, DeepSeek...)
 import { parseProScript } from "./scriptParser.js";
-import { normalizeProScriptAst } from "./scriptNormalizer.js";
+import { normalizeProScriptAst, finalizeProScriptBlueprint } from "./scriptNormalizer.js";
 import { validateParsedScript } from "./scriptValidator.js";
 import { serializeEpisodeBlueprint } from "./scriptSerializer.js";
 import { generateExternalAiPrompt, generateRepairPrompt } from "./scriptPromptGenerator.js";
@@ -15,24 +16,25 @@ export function parseAndValidateProScript(scriptText, { episodeId = "ep_1", exis
   // 1. Lexer & Parser
   const { ast, issues: parserIssues, lines } = parseProScript(scriptText);
 
-  // 2. Normalizer & Entity Resolver
+  // 2. Normalizer & Entity Resolver (PURE - Không silent create)
   let blueprint = null;
   let normalizerIssues = [];
-  let newEntities = { stats: [], flags: [], items: [] };
+  let entityProposals = [];
   let registry = existingRegistry;
 
   if (ast) {
     const normResult = normalizeProScriptAst(ast, { episodeId, existingRegistry });
     blueprint = normResult.blueprint;
     normalizerIssues = normResult.issues;
-    newEntities = normResult.newEntities;
+    entityProposals = normResult.entityProposals;
     registry = normResult.registry;
   }
 
-  // 3. Validator (Line-Level Errors & Stats)
+  // 3. Validator (Line-Level Errors, Proposal Tracking & Stats)
   const validation = validateParsedScript({
     ast,
     blueprint,
+    entityProposals,
     parserIssues,
     normalizerIssues,
   });
@@ -40,14 +42,15 @@ export function parseAndValidateProScript(scriptText, { episodeId = "ep_1", exis
   return {
     ast,
     blueprint,
+    entityProposals,
     validation,
-    newEntities,
     registry,
     lines,
   };
 }
 
 export {
+  finalizeProScriptBlueprint,
   serializeEpisodeBlueprint,
   generateExternalAiPrompt,
   generateRepairPrompt,
