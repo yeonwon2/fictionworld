@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { LEGACY_GAME_FILTER } from "@/lib/gameListFilters";
 
 // =============================================================================
 // CRUD — kết nối trực tiếp Supabase (Postgres + Storage), thay cho backend Base44.
@@ -295,10 +296,9 @@ export async function listGames() {
   const { data, error } = await supabase
     .from("games")
     .select(GAME_LITE_COLUMNS)
-    // Loại các game "Xưởng Game Pro" (đánh dấu bằng meta.builder = "pro") khỏi
-    // thư viện Xưởng Game cũ — hai xưởng có thư viện riêng biệt. Không ảnh
-    // hưởng game hiện có vì trước đây chưa game nào có meta.builder.
-    .filter("meta->>builder", "is", null)
+    // Chỉ loại game Pro. Legacy có thể mang builder cũ/khác hoặc không có
+    // builder, nên lọc `!= pro OR is null` thay vì giả định tất cả đều null.
+    .or(LEGACY_GAME_FILTER)
     .order("updated_at", { ascending: false })
     .limit(200);
   if (error) throw error;

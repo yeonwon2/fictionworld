@@ -1,0 +1,26 @@
+{
+  "name": "Fiction World — Xưởng Sáng Tác",
+  "short_name": "Fiction World",
+  "description": "Không gian sáng tác truyện và game của LilyHub.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#6f3bb3",
+  "background_color": "#faf8f4",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

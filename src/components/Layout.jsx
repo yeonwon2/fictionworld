@@ -22,9 +22,9 @@ export default function Layout() {
 
   return (
     <StoryProvider>
-    <div className="min-h-screen flex bg-background parchment-texture">
+    <div className="app-shell flex bg-background parchment-texture">
       {/* Thanh bên điều hướng (desktop) */}
-      <aside className="hidden md:flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background sticky top-0 h-screen">
+      <aside className="app-sidebar hidden md:flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background sticky top-0">
         <div className="px-6 py-7 border-b border-sidebar-border">
           <Link to="/xuong-viet-truyen" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm">
@@ -62,7 +62,7 @@ export default function Layout() {
       {/* Khu vực nội dung chính */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Thanh trên (mobile) */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card/60 backdrop-blur sticky top-0 z-30">
+        <header className="app-mobile-header md:hidden flex items-center justify-between px-4 pb-3 border-b border-border bg-card/60 backdrop-blur sticky top-0 z-30">
           <Link to="/xuong-viet-truyen" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-primary-foreground" />
@@ -80,7 +80,7 @@ export default function Layout() {
         </header>
 
         {/* Điều hướng dưới (mobile) — 3 tab chính */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur px-1 py-1.5">
+        <nav className="app-mobile-nav md:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur px-1 pt-1.5">
           {MAIN_NAV.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.path;
@@ -100,7 +100,7 @@ export default function Layout() {
           })}
         </nav>
 
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="app-main flex-1 overflow-y-auto">
           {/* Thanh tiêu đề — chuyển đổi / quản lý bộ truyện */}
           <div className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur px-4 py-2 flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground hidden sm:inline">Bộ truyện hiện tại</span>
