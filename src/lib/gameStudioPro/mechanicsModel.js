@@ -167,12 +167,18 @@ export function removeCurrencyConfig(mechanics, id) {
 export function newRankLevel({ label = "", threshold = 0 } = {}) {
   return { id: `ranklv_${uniqueSuffix()}`, label, threshold };
 }
-export function newRankConfig({ label = "Cấp bậc", entityId, levels = [] } = {}) {
+// `templateId` (mặc định null): metadata ỔN ĐỊNH đánh dấu rank config này do
+// chính Template nào sinh ra — KHÔNG dùng displayName/label để phân biệt
+// (nhiều template có thể trùng label, và người dùng có thể tự đổi label sau
+// khi tạo). null = rank do người dùng tự tạo tay (qua MechanicsPanel), không
+// bao giờ bị applyTemplate() coi là "đã có rank của template này" — xem
+// templateRegistry.js#applyTemplate (HOTFIX PRO 6: idempotent rank apply).
+export function newRankConfig({ label = "Cấp bậc", entityId, levels = [], templateId = null } = {}) {
   // Chuẩn hoá levels: mỗi level luôn có id ổn định — chấp nhận input thô
   // {label, threshold} (vd từ templateRegistry.js's suggestedRank, chưa từng
   // đi qua addRankLevel()) lẫn level đã có id sẵn (giữ nguyên, không cấp lại).
   const normalizedLevels = levels.map((lv) => (lv?.id ? lv : newRankLevel(lv)));
-  return { id: `rank_${uniqueSuffix()}`, label, entityId, levels: normalizedLevels };
+  return { id: `rank_${uniqueSuffix()}`, label, entityId, levels: normalizedLevels, templateId };
 }
 export function setRankConfigs(mechanics, configs) {
   const m = ensureMechanicsState(mechanics);
@@ -181,6 +187,13 @@ export function setRankConfigs(mechanics, configs) {
 export function addRankConfig(mechanics, opts) {
   const m = ensureMechanicsState(mechanics);
   return { ...m, configs: { ...m.configs, rank: [...m.configs.rank, newRankConfig(opts)] } };
+}
+// Tìm rank config do ĐÚNG template này sinh ra trước đó (nếu có) — dùng bởi
+// applyTemplate() để không tạo bản sao khi áp lại cùng 1 template (HOTFIX PRO
+// 6). Rank do người dùng tự tạo luôn có templateId=null nên không bao giờ khớp.
+export function findRankConfigByTemplateId(mechanics, templateId) {
+  const m = ensureMechanicsState(mechanics);
+  return m.configs.rank.find((r) => r.templateId === templateId) || null;
 }
 export function removeRankConfig(mechanics, id) {
   const m = ensureMechanicsState(mechanics);

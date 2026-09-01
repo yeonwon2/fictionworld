@@ -10,7 +10,7 @@ import {
   applyTemplate,
 } from '../src/lib/gameStudioPro/templateRegistry.js';
 import { newEmptyRegistry, addStatEntity, ENTITY_KINDS } from '../src/lib/gameStudioPro/entityRegistry.js';
-import { isMechanicEnabled, MECHANIC_IDS } from '../src/lib/gameStudioPro/mechanicsModel.js';
+import { isMechanicEnabled, MECHANIC_IDS, addRankConfig } from '../src/lib/gameStudioPro/mechanicsModel.js';
 import { newEmptyProGame } from '../src/lib/gameStudioPro/proModel.js';
 import { newEmptyGlobalState } from '../src/lib/gameStudioPro/globalStateModel.js';
 
@@ -133,4 +133,60 @@ test('blank template applies cleanly (no entities, no mechanics) — a no-op tha
   assert.deepEqual(next.globalState.registry, proDoc.globalState.registry);
   assert.deepEqual(next.mechanics.enabled, []);
   assert.equal(next.templateId, TEMPLATE_IDS.BLANK);
+});
+
+// ---------- HOTFIX PRO 6: applyTemplate() idempotent for template-sourced rank config ----------
+
+test('applying PALACE once creates exactly 1 rank config', () => {
+  const proDoc = applyTemplate(newEmptyProGame(), TEMPLATE_IDS.PALACE);
+  assert.equal(proDoc.mechanics.configs.rank.length, 1);
+  assert.equal(proDoc.mechanics.configs.rank[0].templateId, TEMPLATE_IDS.PALACE);
+});
+
+test('applying PALACE a second time does not duplicate the rank config', () => {
+  let proDoc = applyTemplate(newEmptyProGame(), TEMPLATE_IDS.PALACE);
+  const firstRankId = proDoc.mechanics.configs.rank[0].id;
+  proDoc = applyTemplate(proDoc, TEMPLATE_IDS.PALACE);
+  assert.equal(proDoc.mechanics.configs.rank.length, 1);
+  assert.equal(proDoc.mechanics.configs.rank[0].id, firstRankId, 'reuses the SAME rank config object, not a fresh one');
+});
+
+test('applying PALACE many times in a row never accumulates duplicate rank configs', () => {
+  let proDoc = newEmptyProGame();
+  for (let i = 0; i < 5; i++) proDoc = applyTemplate(proDoc, TEMPLATE_IDS.PALACE);
+  assert.equal(proDoc.mechanics.configs.rank.length, 1);
+});
+
+test("a user-created rank config is never deleted or overwritten by applying PALACE", () => {
+  let proDoc = newEmptyProGame();
+  proDoc = { ...proDoc, mechanics: addRankConfig(proDoc.mechanics, { label: 'Cấp bậc tự chế', entityId: 'stat_user_made', levels: [{ label: 'Sơ cấp', threshold: 0 }] }) };
+  const userRankId = proDoc.mechanics.configs.rank[0].id;
+  assert.equal(proDoc.mechanics.configs.rank[0].templateId, null, 'rank tự tạo tay không có templateId');
+
+  proDoc = applyTemplate(proDoc, TEMPLATE_IDS.PALACE);
+  assert.equal(proDoc.mechanics.configs.rank.length, 2, 'rank của user + rank mới của template, không mất cái nào');
+  const userRankStillThere = proDoc.mechanics.configs.rank.find((r) => r.id === userRankId);
+  assert.ok(userRankStillThere);
+  assert.equal(userRankStillThere.label, 'Cấp bậc tự chế');
+  assert.equal(userRankStillThere.entityId, 'stat_user_made');
+  assert.equal(userRankStillThere.levels[0].label, 'Sơ cấp');
+});
+
+test('PALACE -> another template -> PALACE does not create a second Cung Đấu rank copy, and entities stay deduplicated', () => {
+  let proDoc = newEmptyProGame();
+  proDoc = applyTemplate(proDoc, TEMPLATE_IDS.PALACE);
+  const palaceRankId = proDoc.mechanics.configs.rank.find((r) => r.templateId === TEMPLATE_IDS.PALACE).id;
+  const statsAfterPalace = proDoc.globalState.registry.stats.length;
+
+  proDoc = applyTemplate(proDoc, TEMPLATE_IDS.REBIRTH);
+  proDoc = applyTemplate(proDoc, TEMPLATE_IDS.PALACE);
+
+  const palaceRanks = proDoc.mechanics.configs.rank.filter((r) => r.templateId === TEMPLATE_IDS.PALACE);
+  assert.equal(palaceRanks.length, 1, 'không có bản sao rank Cung Đấu thứ hai');
+  assert.equal(palaceRanks[0].id, palaceRankId, 'vẫn đúng rank config Cung Đấu ban đầu, không tạo mới');
+  assert.equal(proDoc.mechanics.configs.rank.length, 2, '1 rank Cung Đấu + 1 rank Trọng Sinh, không hơn');
+
+  // Sinh tồn được cả PALACE và REBIRTH KHÔNG đề xuất (chỉ PALACE đề xuất) —
+  // entity vẫn không nhân đôi qua các lần áp lẫn nhau.
+  assert.equal(proDoc.globalState.registry.stats.length, statsAfterPalace + 2, 'chỉ thêm đúng 2 entity mới của Trọng Sinh (Tiền, Danh tiếng), không nhân đôi entity Cung Đấu');
 });

@@ -16,7 +16,7 @@ import {
   newFlagEntity,
   newItemEntity,
 } from "./entityRegistry.js";
-import { MECHANIC_IDS, enableMechanics, addRankConfig } from "./mechanicsModel.js";
+import { MECHANIC_IDS, enableMechanics, addRankConfig, findRankConfigByTemplateId } from "./mechanicsModel.js";
 
 export const TEMPLATE_IDS = {
   BLANK: "blank",
@@ -233,7 +233,15 @@ export function applyTemplate(proDoc, templateId) {
 
   let mechanics = enableMechanics(proDoc.mechanics, template.suggestedMechanics);
 
-  if (template.suggestedRank) {
+  // HOTFIX PRO 6: idempotent với rank do CHÍNH template này đã tạo trước đó
+  // (đánh dấu bằng templateId, KHÔNG dùng label — 2 template khác nhau có
+  // thể trùng label, và người dùng có thể tự đổi label sau khi tạo). Nếu đã
+  // có, TÁI SỬ DỤNG (giữ nguyên, không tạo thêm bản sao) — áp lại cùng
+  // template nhiều lần, hoặc đổi qua template khác rồi quay lại, không tích
+  // tụ rank config trùng. Rank do người dùng tự tạo tay luôn có
+  // templateId=null nên không bao giờ bị coi là "đã có" ở đây — không bị
+  // applyTemplate() đụng tới.
+  if (template.suggestedRank && !findRankConfigByTemplateId(mechanics, template.id)) {
     const byName = (name) =>
       [...mergedRegistry.stats].find((e) => e.displayName === name) ||
       preview.existing.find((x) => x.suggested.displayName === name)?.entity ||
@@ -244,6 +252,7 @@ export function applyTemplate(proDoc, templateId) {
         label: template.suggestedRank.label,
         entityId: statEntity.id,
         levels: template.suggestedRank.levels,
+        templateId: template.id,
       });
     }
   }
