@@ -155,6 +155,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const [selectedId, setSelectedId] = useState(initialEpisodeId || episodes[0]?.id || null);
   const [editingSceneId, setEditingSceneId] = useState(initialSceneId || null);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState("");
   const [pending, setPending] = useState(null); // { blueprint, isRegenerate }
   const [playtesting, setPlaytesting] = useState(false);
   const [aiBridgeOpen, setAiBridgeOpen] = useState(false);
@@ -162,6 +163,14 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
 
   useEffect(() => { if (initialEpisodeId && episodes.some((item) => item.id === initialEpisodeId)) setSelectedId(initialEpisodeId); }, [initialEpisodeId, episodes]);
   useEffect(() => { if (initialSceneId) setEditingSceneId(initialSceneId); }, [initialSceneId]);
+  // Bản nháp AI (pending) trước đây chỉ sống trong state cục bộ — dựng xong
+  // 30 cảnh (kể cả sau nhiều vòng "Tiếp tục phần còn thiếu", tốn quota AI
+  // thật) mà CHƯA bấm "Áp dụng" thì thoát màn hình/đổi tập/tải lại trang là
+  // mất sạch, quay về "chưa có sơ đồ" y như chưa dựng gì. Nạp lại đúng bản
+  // nháp đã lưu của tập đang chọn (nếu có) mỗi khi đổi tập/mở lại màn hình.
+  useEffect(() => {
+    setPending(episodes.find((e) => e.id === selectedId)?.pendingBlueprint || null);
+  }, [selectedId]);
 
   const episode = episodes.find((e) => e.id === selectedId) || null;
   const blueprint = episode?.sceneBlueprint || null;
@@ -198,17 +207,64 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     onChange(syncRegistryToAllEpisodes(storyBlueprint, nextRegistry));
   }
 
+  function patchEpisode(patch) {
+    if (!episode) return;
+    onChange({ ...storyBlueprint, episodes: episodes.map((e) => (e.id === episode.id ? { ...e, ...patch } : e)) });
+  }
+
+  // Đổi `pending` VÀ lưu ngay vào tập đang chọn (đi qua autosave chung của
+  // ProGameEditor) — dùng thay setPending() trực tiếp ở MỌI nơi để bản nháp
+  // AI không còn chỉ sống trong bộ nhớ tạm (xem effect nạp lại pendingBlueprint
+  // ở trên).
+  function commitPending(updater) {
+    const resolved = typeof updater === "function" ? updater(pending) : updater;
+    setPending(resolved);
+    patchEpisode({ pendingBlueprint: resolved });
+  }
+
+  // ~30 cảnh dài, đúng văn phong người dùng yêu cầu (tả tâm lý/đối thoại đủ
+  // dài, không cụt) rất dễ vượt ngân sách token của 1 lượt gọi AI — model
+  // thường tự dừng sớm (vd 21/30) dù JSON vẫn hợp lệ (không phải lỗi/crash).
+  // Trước đây người dùng phải tự nhận ra cảnh báo "thiếu cảnh" rồi bấm "Tiếp
+  // tục phần còn thiếu" — thường phải bấm lặp lại nhiều lần. Tự động lặp vài
+  // vòng "tiếp tục" (rẻ hơn dựng lại từ đầu — mỗi vòng chỉ xin đúng phần
+  // thiếu) ngay trong 1 lượt "Dựng sơ đồ tập"; nếu vẫn chưa đủ sau
+  // MAX_AUTO_CONTINUE_ROUNDS, nút "Tiếp tục phần còn thiếu"/"Thử tạo lại" thủ
+  // công vẫn còn đó để người dùng tự quyết tiếp.
+  const MAX_AUTO_CONTINUE_ROUNDS = 3;
+  async function fillUntilTarget(generationEpisode, startBlueprint) {
+    let next = startBlueprint;
+    let scale = getBlueprintScaleStatus(next, generationEpisode);
+    let round = 0;
+    while (scale.underGenerated && round < MAX_AUTO_CONTINUE_ROUNDS) {
+      round += 1;
+      setProgress(`Chưa đủ cảnh (${scale.meaningfulSceneCount}/${generationEpisode.planningConstraints.targetSceneCount}) — đang tự bổ sung (vòng ${round}/${MAX_AUTO_CONTINUE_ROUNDS})...`);
+      try {
+        next = await continueEpisodeBlueprint(generationEpisode, gamePlan, next);
+        scale = getBlueprintScaleStatus(next, generationEpisode);
+      } catch (e) {
+        // Dừng vòng lặp tự động nhưng KHÔNG ném lỗi ra ngoài — giữ lại mọi
+        // cảnh đã bổ sung thành công tới vòng trước, không mất công đã làm.
+        toast({ variant: "destructive", title: "Tự động bổ sung bị dừng giữa chừng", description: e.message });
+        break;
+      }
+    }
+    return { blueprint: next, scale };
+  }
+
   async function handleGenerate(forceRefresh = false) {
     if (!episode) return;
     const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
     setGenerating(true);
     try {
-      const next = await generateEpisodeBlueprint(generationEpisode, gamePlan, blueprint, { forceRefresh });
-      setPending({ blueprint: next, isRegenerate: !!blueprint, scale: getBlueprintScaleStatus(next, generationEpisode), targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false });
+      const first = await generateEpisodeBlueprint(generationEpisode, gamePlan, blueprint, { forceRefresh });
+      const { blueprint: next, scale } = await fillUntilTarget(generationEpisode, first);
+      commitPending({ blueprint: next, isRegenerate: !!blueprint, scale, targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false });
     } catch (e) {
       toast({ variant: "destructive", title: "Không dựng được sơ đồ", description: e.message });
     } finally {
       setGenerating(false);
+      setProgress("");
     }
   }
 
@@ -221,11 +277,20 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     const refreshedBlueprint = refreshBlueprintEffects(pending.blueprint, globalState?.registry);
     const previewValidation = validateSceneBlueprint(refreshedBlueprint, { knownEpisodeIds, planningConstraints: constraints });
     if (previewValidation.errors.length) {
-      setPending((value) => (value ? { ...value, blueprint: refreshedBlueprint } : value));
+      commitPending((value) => (value ? { ...value, blueprint: refreshedBlueprint } : value));
       toast({ variant: "destructive", title: "Bản xem trước chưa hợp lệ", description: previewValidation.errors[0] });
       return;
     }
-    setEpisodeBlueprint(refreshedBlueprint);
+    // Áp dụng sceneBlueprint THẬT và xoá pendingBlueprint trong CÙNG 1 lần ghi
+    // storyBlueprint — gọi setEpisodeBlueprint() rồi commitPending(null) riêng
+    // rẽ sẽ dùng 2 bản `storyBlueprint` cũ (đóng băng lúc hàm này bắt đầu
+    // chạy) khác nhau, lần ghi sau đè mất chính sceneBlueprint vừa áp dụng.
+    const result = applyEpisodeBlueprint(storyBlueprint, globalState, episode.id, refreshedBlueprint);
+    onGlobalStateChange(result.globalState);
+    onChange({
+      ...result.storyBlueprint,
+      episodes: result.storyBlueprint.episodes.map((e) => (e.id === episode.id ? { ...e, pendingBlueprint: null } : e)),
+    });
     setPending(null);
     toast({ title: "Đã áp dụng sơ đồ" });
   }
@@ -234,12 +299,11 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
     setGenerating(true);
     try {
-      const next = await continueEpisodeBlueprint(generationEpisode, gamePlan, pending.blueprint);
-      setPending((value) => ({ ...value, blueprint: next, scale: getBlueprintScaleStatus(next, generationEpisode), allowUnderGenerated: false }));
-    } catch (e) {
-      toast({ variant: "destructive", title: "Chưa thể tiếp tục", description: e.message });
+      const { blueprint: next, scale } = await fillUntilTarget(generationEpisode, pending.blueprint);
+      commitPending((value) => ({ ...value, blueprint: next, scale, allowUnderGenerated: false }));
     } finally {
       setGenerating(false);
+      setProgress("");
     }
   }
 
@@ -315,6 +379,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
           </div>
         </div>
 
+        {generating && progress && <p className="text-xs text-muted-foreground">{progress}</p>}
+
         {(validation.errors.length > 0 || validation.warnings.length > 0) && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-1">
             {validation.errors.map((e, i) => (
@@ -332,7 +398,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
           <div className="flex min-w-0 flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <span className="min-w-0 break-words text-sm font-semibold">Xem trước sơ đồ AI vừa dựng ({pending.scale?.meaningfulSceneCount ?? pending.blueprint.scenes.length} cảnh có ý nghĩa, {pending.blueprint.endings.length} kết thúc) — chưa áp dụng</span>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setPending(null)}>Huỷ</Button>
+              <Button size="sm" variant="outline" onClick={() => commitPending(null)}>Huỷ</Button>
               {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={handleContinueMissing} disabled={generating}>Tiếp tục phần còn thiếu</Button>}
               {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={() => handleGenerate(true)} disabled={generating}>Thử tạo lại</Button>}
               <Button size="sm" onClick={applyPending} disabled={pending.scale?.underGenerated && !pending.allowUnderGenerated}>Áp dụng</Button>
@@ -341,7 +407,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
           {pending.scale?.underGenerated && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <p>Kế hoạch yêu cầu khoảng {pending.targetSceneCount} cảnh nhưng AI mới dựng {pending.scale.meaningfulSceneCount} cảnh.</p>
-              <button type="button" className="mt-2 text-xs text-muted-foreground underline" onClick={() => setPending((value) => ({ ...value, allowUnderGenerated: true }))}>Nâng cao: vẫn áp dụng bản thiếu</button>
+              <button type="button" className="mt-2 text-xs text-muted-foreground underline" onClick={() => commitPending((value) => ({ ...value, allowUnderGenerated: true }))}>Nâng cao: vẫn áp dụng bản thiếu</button>
             </div>
           )}
           <div className="max-h-56 overflow-y-auto space-y-1 text-xs">
