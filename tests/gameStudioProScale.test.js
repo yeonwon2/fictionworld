@@ -29,6 +29,12 @@ test("8 trên mục tiêu 30 bị chặn, khoảng 30 hợp lệ", () => {
   assert.equal(assessBlueprintScale({ scenes: makeRaw(8).scenes }, constraints).underGenerated, true);
   assert.equal(assessBlueprintScale({ scenes: makeRaw(30).scenes }, constraints).withinTolerance, true);
 });
+test("yêu cầu chính xác 30 cảnh không chấp nhận bản 27 cảnh", () => {
+  const constraints = derivePlanningConstraints("30 cảnh");
+  assert.equal(constraints.precision, "exact");
+  assert.equal(assessBlueprintScale({ scenes: makeRaw(27).scenes }, constraints).underGenerated, true);
+  assert.equal(assessBlueprintScale({ scenes: makeRaw(30).scenes }, constraints).underGenerated, false);
+});
 test("30 STORY tuyến tính không thỏa mục tiêu 30 cảnh chơi", () => {
   const constraints = derivePlanningConstraints("khoảng 30 cảnh, mỗi cảnh 4 lựa chọn");
   const linear = makeRaw(30); linear.scenes.forEach((scene) => { scene.role = "story"; });

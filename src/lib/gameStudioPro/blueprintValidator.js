@@ -56,12 +56,12 @@ export function validateSceneBlueprint(blueprint, { knownEpisodeIds = null, plan
     if (s.role === SCENE_ROLES.DECISION && desired) {
       const effectSignatures = new Set();
       for (const choice of s.choices) {
-        if (choice.unresolvedEffects?.length) errors.push(`Cảnh "${s.title || s.id}" có hệ quả chưa ánh xạ vào danh mục hiện có: "${choice.effectIntent}". Hãy dùng cơ chế đề xuất/phê duyệt thực thể trước khi áp dụng.`);
+        if (choice.unresolvedEffects?.length) warnings.push(`Cảnh "${s.title || s.id}" có hệ quả chưa ánh xạ vào danh mục hiện có: "${choice.effectIntent}". Hệ thống sẽ giữ nội dung này nhưng chưa áp dụng thành chỉ số/cờ/vật phẩm.`);
         const effects = choice.rules?.effects || [];
-        if (!effects.length) errors.push(`Cảnh "${s.title || s.id}" có lựa chọn "${choice.text || "(chưa đặt tên)"}" chưa có hệ quả luật thật.`);
+        if (!effects.length) warnings.push(`Cảnh "${s.title || s.id}" có lựa chọn "${choice.text || "(chưa đặt tên)"}" chưa có thay đổi chỉ số/cờ/vật phẩm; lựa chọn vẫn dùng được như một nhánh truyện.`);
         else effectSignatures.add(JSON.stringify(effects));
       }
-      if (s.choices.length && effectSignatures.size !== s.choices.length) errors.push(`Cảnh "${s.title || s.id}" phải có hệ quả luật thật khác nhau cho từng lựa chọn.`);
+      if (effectSignatures.size > 0 && effectSignatures.size !== s.choices.filter((choice) => (choice.rules?.effects || []).length).length) warnings.push(`Cảnh "${s.title || s.id}" có một số lựa chọn dùng cùng hệ quả luật; có thể cân bằng thêm sau nhưng không chặn dựng sơ đồ.`);
     }
 
     if (s.role === SCENE_ROLES.ENDING) continue; // ending-role scenes are terminal, no outgoing choices expected

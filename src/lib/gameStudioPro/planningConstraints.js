@@ -60,7 +60,11 @@ export function assessBlueprintScale(blueprint, constraints) {
   const meaningfulSceneCount = constraints?.desiredChoicesPerDecision
     ? countPlayableScenes(blueprint)
     : countMeaningfulScenes(blueprint);
-  const minimum = constraints?.minimumSceneCount ?? 1;
+  // "30 cảnh" là một con số chính xác, không phải lời mời giao 27/30. Dung
+  // sai chỉ áp dụng khi chính người dùng nói "khoảng/tầm" hoặc đưa một dải.
+  const minimum = constraints?.precision === "exact"
+    ? constraints.targetSceneCount
+    : constraints?.minimumSceneCount ?? 1;
   const maximum = constraints?.maximumSceneCount ?? MAX_SCENES_PER_EPISODE;
   return { meaningfulSceneCount, underGenerated: meaningfulSceneCount < minimum, withinTolerance: meaningfulSceneCount >= minimum && meaningfulSceneCount <= maximum };
 }

@@ -126,9 +126,10 @@ export default function PlannerEditor({
     // would immediately undo the very status this action sets.
     onChange({ ...storyBlueprint, status: PLANNER_STATUS.APPROVED });
     toast({
-      title: "Bản thiết kế đã sẵn sàng",
-      description: "Ở bước tiếp theo, FictionWorld có thể dựng sơ đồ game từ kế hoạch này.",
+      title: "Đã duyệt — Xưởng bắt đầu sản xuất",
+      description: "Hệ thống sẽ tự dựng, kiểm tra, hoàn thiện và lưu sơ đồ; bạn không cần xử lý lỗi kỹ thuật.",
     });
+    onOpenBlueprint?.(episodes[0]?.id);
   }
 
   return (

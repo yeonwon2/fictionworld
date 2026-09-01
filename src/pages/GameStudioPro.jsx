@@ -180,6 +180,14 @@ function ProGameEditor({ gameId, onBack }) {
   const saveTimerRef = useRef(null);
   const dirtyRef = useRef(false);
   const handleSaveRef = useRef(null);
+  const proDocRef = useRef(null);
+  // Supabase update là last-write-wins. Nếu hai autosave chạy song song, bản
+  // cũ có thể hoàn tất sau và ghi đè checkpoint mới (đúng hiện tượng 27 cảnh
+  // quay về 21). Xếp mọi lần lưu thành một hàng đợi để thứ tự trên server
+  // luôn giống thứ tự chỉnh sửa trong giao diện.
+  const saveQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => { proDocRef.current = proDoc; }, [proDoc]);
 
   useEffect(() => {
     setLoading(true);
@@ -214,10 +222,11 @@ function ProGameEditor({ gameId, onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
-  async function handleSave() {
+  async function persistSnapshot(snapshot) {
+    if (!snapshot) return;
     dispatchSave({ type: "saving" });
     try {
-      const { compiled, campaignError } = compileProDocument(proDoc);
+      const { compiled, campaignError } = compileProDocument(snapshot);
       if (campaignError) {
         // FIX 2 — FAIL-CLOSED: campaign đang lỗi biên dịch. KHÔNG được lưu 1
         // bản PRO 0 giả làm như campaign đang hoạt động. Vẫn phải cho lưu tài
@@ -236,8 +245,8 @@ function ProGameEditor({ gameId, onBack }) {
           return;
         }
         await updateGame(gameId, {
-          title: proDoc.title || "Game Pro Mới",
-          meta: { ...fallback.meta, pro: proDoc },
+          title: snapshot.title || "Game Pro Mới",
+          meta: { ...fallback.meta, pro: snapshot },
           nodes: fallback.nodes,
         });
         dispatchSave({ type: "saved" });
@@ -249,7 +258,7 @@ function ProGameEditor({ gameId, onBack }) {
         return;
       }
       const { meta, nodes } = compiled;
-      await updateGame(gameId, { title: proDoc.title || "Game Pro Mới", meta, nodes });
+      await updateGame(gameId, { title: snapshot.title || "Game Pro Mới", meta, nodes });
       lastGoodCompiledRef.current = { meta, nodes };
       dispatchSave({ type: "saved" });
       setPlayKey((k) => k + 1);
@@ -257,6 +266,14 @@ function ProGameEditor({ gameId, onBack }) {
       dispatchSave({ type: "error", error: e.message });
       toast({ variant: "destructive", title: "Không lưu được", description: e.message });
     }
+  }
+
+  function handleSave() {
+    const snapshot = proDocRef.current;
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => {})
+      .then(() => persistSnapshot(snapshot));
+    return saveQueueRef.current;
   }
   handleSaveRef.current = handleSave;
 

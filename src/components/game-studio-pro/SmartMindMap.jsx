@@ -6,7 +6,7 @@
 // node graph runtime + trường kỹ thuật) — đây là 1 renderer MỚI, đơn giản
 // hơn (cột theo độ sâu, không phải canvas tự do), đủ để người dùng "nhìn
 // graph và hiểu được đường đi" mà không phải viết lại toàn bộ map engine.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sparkles, Loader2, PlayCircle, AlertTriangle, XCircle, Lock, Flag, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,6 +160,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [playtesting, setPlaytesting] = useState(false);
   const [aiBridgeOpen, setAiBridgeOpen] = useState(false);
+  const autoStartedEpisodeIds = useRef(new Set());
   const { toast } = useToast();
 
   useEffect(() => { if (initialEpisodeId && episodes.some((item) => item.id === initialEpisodeId)) setSelectedId(initialEpisodeId); }, [initialEpisodeId, episodes]);
@@ -193,6 +194,12 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const pendingValidation = useMemo(
     () => (pending ? validateSceneBlueprint(refreshBlueprintEffects(pending.blueprint, globalState?.registry), { knownEpisodeIds, planningConstraints: episode?.planningConstraints || storyBlueprint.planningConstraints }) : { errors: [], warnings: [] }),
     [pending, knownEpisodeIds, episode?.planningConstraints, storyBlueprint.planningConstraints, globalState?.registry]
+  );
+  const blueprintScale = useMemo(
+    () => (blueprint && episode ? getBlueprintScaleStatus(blueprint, resolveGenerationEpisode()) : null),
+    // resolveGenerationEpisode only derives from these authored values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blueprint, episode, storyBlueprint.planningConstraints, storyBlueprint.idea]
   );
   const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
@@ -241,8 +248,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   // thiếu) ngay trong 1 lượt "Dựng sơ đồ tập"; nếu vẫn chưa đủ sau
   // MAX_AUTO_CONTINUE_ROUNDS, nút "Tiếp tục phần còn thiếu"/"Thử tạo lại" thủ
   // công vẫn còn đó để người dùng tự quyết tiếp.
-  const MAX_AUTO_CONTINUE_ROUNDS = 3;
-  async function fillUntilTarget(generationEpisode, startBlueprint) {
+  const MAX_AUTO_CONTINUE_ROUNDS = 10;
+  async function fillUntilTarget(generationEpisode, startBlueprint, isRegenerate = false) {
     let next = startBlueprint;
     let scale = getBlueprintScaleStatus(next, generationEpisode);
     let round = 0;
@@ -250,8 +257,23 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       round += 1;
       setProgress(`Chưa đủ cảnh (${scale.meaningfulSceneCount}/${generationEpisode.planningConstraints.targetSceneCount}) — đang tự bổ sung (vòng ${round}/${MAX_AUTO_CONTINUE_ROUNDS})...`);
       try {
+        const beforeCount = scale.meaningfulSceneCount;
         next = await continueEpisodeBlueprint(generationEpisode, gamePlan, next);
         scale = getBlueprintScaleStatus(next, generationEpisode);
+        // Lưu checkpoint sau TỪNG lô thành công. Nếu quota/mạng hỏng ở lô sau,
+        // tải lại trang vẫn trở về đúng tiến độ mới nhất thay vì bản 21 cảnh.
+        commitPending({
+          blueprint: next,
+          isRegenerate,
+          scale,
+          targetSceneCount: generationEpisode.planningConstraints.targetSceneCount,
+          allowUnderGenerated: false,
+          needsRepair: false,
+        });
+        if (scale.meaningfulSceneCount <= beforeCount) {
+          toast({ variant: "destructive", title: "AI chưa thêm được cảnh mới", description: "Hệ thống đã giữ nguyên toàn bộ cảnh hiện có và dừng để tránh gọi lặp vô ích." });
+          break;
+        }
       } catch (e) {
         // Dừng vòng lặp tự động nhưng KHÔNG ném lỗi ra ngoài — giữ lại mọi
         // cảnh đã bổ sung thành công tới vòng trước, không mất công đã làm.
@@ -289,6 +311,22 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       }
     }
     const finalValidation = validateSceneBlueprint(finalBlueprint, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
+    if (!scale.underGenerated && finalValidation.errors.length === 0) {
+      // Happy path của Xưởng: kỹ thuật đã đạt thì tự áp dụng, không bắt tác
+      // giả duyệt thêm một lần cho dữ liệu graph nội bộ vừa do hệ thống tạo.
+      const result = applyEpisodeBlueprint(storyBlueprint, globalState, episode.id, finalBlueprint);
+      onGlobalStateChange(result.globalState);
+      const completedStory = {
+        ...result.storyBlueprint,
+        episodes: result.storyBlueprint.episodes.map((item) => (item.id === episode.id ? { ...item, pendingBlueprint: null } : item)),
+      };
+      onChange(completedStory);
+      setPending(null);
+      const nextMissing = completedStory.episodes.find((item) => !item.sceneBlueprint?.scenes?.length);
+      if (nextMissing) setSelectedId(nextMissing.id);
+      else toast({ title: "Xưởng đã dựng xong toàn bộ sơ đồ", description: "Đang tự lưu thành phẩm; bạn có thể chơi thử hoặc xem QA." });
+      return;
+    }
     commitPending({
       blueprint: finalBlueprint,
       isRegenerate,
@@ -305,7 +343,10 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     setGenerating(true);
     try {
       const first = await generateEpisodeBlueprint(generationEpisode, gamePlan, blueprint, { forceRefresh });
-      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, first);
+      // Giữ ngay lô đầu tiên trước khi gọi tiếp các lô còn thiếu.
+      const firstScale = getBlueprintScaleStatus(first, generationEpisode);
+      commitPending({ blueprint: first, isRegenerate: !!blueprint, scale: firstScale, targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false, needsRepair: false });
+      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, first, !!blueprint);
       await finalizeGeneration(generationEpisode, filled, scale, !!blueprint);
     } catch (e) {
       toast({ variant: "destructive", title: "Không dựng được sơ đồ", description: e.message });
@@ -314,6 +355,18 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       setProgress("");
     }
   }
+
+  // Sau khi tác giả duyệt kế hoạch, Xưởng tự sản xuất lần lượt từng tập.
+  // Đây chỉ chạy một lần/tập trong mỗi lần mở màn hình; checkpoint đã lưu sẽ
+  // được tiếp tục thay vì gọi lại từ đầu khi tải lại trang.
+  useEffect(() => {
+    if (storyBlueprint?.status !== "approved" || !episode || blueprint || pending || generating) return;
+    if (autoStartedEpisodeIds.current.has(episode.id)) return;
+    autoStartedEpisodeIds.current.add(episode.id);
+    handleGenerate(false);
+    // handleGenerate intentionally uses the latest render snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyBlueprint?.status, episode?.id, blueprint, pending, generating]);
 
   // Xin AI hoàn thiện lại (gộp 1 lượt) mà KHÔNG dựng lại từ đầu — dùng khi
   // finalizeGeneration() đã thử 1 lần mà vẫn còn cảnh chưa xong (hết quota
@@ -368,8 +421,26 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     const generationEpisode = resolveGenerationEpisode();
     setGenerating(true);
     try {
-      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, pending.blueprint);
+      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, pending.blueprint, pending.isRegenerate);
       await finalizeGeneration(generationEpisode, filled, scale, pending.isRegenerate);
+    } finally {
+      setGenerating(false);
+      setProgress("");
+    }
+  }
+
+  // Cứu cả sơ đồ thiếu đã được áp dụng/lưu từ phiên bản cũ: chuyển nó thành
+  // checkpoint pending rồi chỉ xin phần còn thiếu, tuyệt đối không dựng lại
+  // hay xoá các cảnh hiện có.
+  async function handleCompleteAppliedBlueprint() {
+    if (!blueprint || !blueprintScale?.underGenerated) return;
+    const generationEpisode = resolveGenerationEpisode();
+    const checkpoint = { blueprint, isRegenerate: true, scale: blueprintScale, targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false, needsRepair: false };
+    commitPending(checkpoint);
+    setGenerating(true);
+    try {
+      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, blueprint, true);
+      await finalizeGeneration(generationEpisode, filled, scale, true);
     } finally {
       setGenerating(false);
       setProgress("");
@@ -459,6 +530,12 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
             {blueprint && (
               <Button size="sm" variant="outline" onClick={handleAddScene}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Thêm cảnh
+              </Button>
+            )}
+            {blueprint && blueprintScale?.underGenerated && (
+              <Button size="sm" onClick={handleCompleteAppliedBlueprint} disabled={generating}>
+                {generating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+                Bổ sung cho đủ {resolveGenerationEpisode().planningConstraints.targetSceneCount} cảnh
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => handleGenerate(false)} disabled={generating || !episode}>
