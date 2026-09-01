@@ -27,7 +27,7 @@ import {
   removeEnding,
 } from "@/lib/gameStudioPro/blueprintModel";
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
-import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint, refreshBlueprintEffects } from "@/lib/gameStudioPro/blueprintAI";
+import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint, refreshBlueprintEffects, repairBlueprintEffects } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
 import { syncRegistryToAllEpisodes, applyEpisodeBlueprint } from "@/lib/gameStudioPro/globalStateModel";
 import SceneIntentEditor from "./SceneIntentEditor";
@@ -156,7 +156,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const [editingSceneId, setEditingSceneId] = useState(initialSceneId || null);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState("");
-  const [pending, setPending] = useState(null); // { blueprint, isRegenerate }
+  const [pending, setPending] = useState(null); // { blueprint, isRegenerate, needsRepair }
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [playtesting, setPlaytesting] = useState(false);
   const [aiBridgeOpen, setAiBridgeOpen] = useState(false);
   const { toast } = useToast();
@@ -183,6 +184,15 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const validation = useMemo(
     () => (blueprint ? validateSceneBlueprint(blueprint, { knownEpisodeIds, planningConstraints: episode?.planningConstraints || storyBlueprint.planningConstraints }) : { errors: [], warnings: [] }),
     [blueprint, knownEpisodeIds, episode?.planningConstraints, storyBlueprint.planningConstraints]
+  );
+  // Chấm trước lỗi của BẢN NHÁP (chưa áp dụng) ngay khi hiện danh sách cảnh —
+  // trước đây người dùng chỉ thấy lỗi ĐẦU TIÊN qua toast lúc bấm "Áp dụng",
+  // không biết CẢNH NÀO sai hay còn lỗi nào khác, và không có cách sửa ngoài
+  // huỷ/dựng lại toàn bộ. Hiện đủ danh sách + cho sửa TỪNG cảnh bằng AI ngay
+  // tại đây (xem handleRegeneratePendingScene ở dưới).
+  const pendingValidation = useMemo(
+    () => (pending ? validateSceneBlueprint(refreshBlueprintEffects(pending.blueprint, globalState?.registry), { knownEpisodeIds, planningConstraints: episode?.planningConstraints || storyBlueprint.planningConstraints }) : { errors: [], warnings: [] }),
+    [pending, knownEpisodeIds, episode?.planningConstraints, storyBlueprint.planningConstraints, globalState?.registry]
   );
   const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
@@ -252,16 +262,73 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     return { blueprint: next, scale };
   }
 
+  function resolveGenerationEpisode() {
+    return { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
+  }
+
+  // Người dùng THƯỜNG (không rành kỹ thuật) không được để tự đọc/hiểu lỗi
+  // validate kỹ thuật (vd "phải có hệ quả luật thật khác nhau") — bước này
+  // chạy NGAY sau khi sơ đồ đủ cảnh, tự sửa những gì suy luận được cục bộ rồi
+  // xin AI vá NỘI DUNG còn thiếu (GỘP CHUNG 1 lượt, xem repairBlueprintEffects
+  // ở blueprintAI.js) trước khi cho xem bản nháp — để trường hợp thường gặp
+  // (như ảnh lỗi "hệ quả luật thật khác nhau" của người dùng) tự hết mà không
+  // ai phải bấm gì. Nếu lượt sửa gộp bị lỗi/hết quota, GIỮ NGUYÊN bản nháp
+  // trước khi sửa (không mất công đã dựng) — người dùng có thể "Thử hoàn
+  // thiện lại" sau, hoặc mở "Chi tiết kỹ thuật" để tự sửa từng cảnh.
+  async function finalizeGeneration(generationEpisode, startBlueprint, scale, isRegenerate) {
+    let finalBlueprint = startBlueprint;
+    let stillHasGaps = false;
+    if (!scale.underGenerated) {
+      setProgress("Đang hoàn thiện...");
+      try {
+        const repairResult = await repairBlueprintEffects(startBlueprint, gamePlan, generationEpisode, globalState?.registry);
+        finalBlueprint = repairResult.blueprint;
+        stillHasGaps = repairResult.stillHasGaps;
+      } catch (e) {
+        toast({ variant: "destructive", title: "Sơ đồ đã được giữ lại nhưng chưa hoàn thiện", description: `${e.message} — bạn có thể bấm "Thử hoàn thiện lại" khi sẵn sàng.` });
+      }
+    }
+    const finalValidation = validateSceneBlueprint(finalBlueprint, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
+    commitPending({
+      blueprint: finalBlueprint,
+      isRegenerate,
+      scale: getBlueprintScaleStatus(finalBlueprint, generationEpisode),
+      targetSceneCount: generationEpisode.planningConstraints.targetSceneCount,
+      allowUnderGenerated: false,
+      needsRepair: finalValidation.errors.length > 0 || stillHasGaps,
+    });
+  }
+
   async function handleGenerate(forceRefresh = false) {
     if (!episode) return;
-    const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
+    const generationEpisode = resolveGenerationEpisode();
     setGenerating(true);
     try {
       const first = await generateEpisodeBlueprint(generationEpisode, gamePlan, blueprint, { forceRefresh });
-      const { blueprint: next, scale } = await fillUntilTarget(generationEpisode, first);
-      commitPending({ blueprint: next, isRegenerate: !!blueprint, scale, targetSceneCount: generationEpisode.planningConstraints.targetSceneCount, allowUnderGenerated: false });
+      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, first);
+      await finalizeGeneration(generationEpisode, filled, scale, !!blueprint);
     } catch (e) {
       toast({ variant: "destructive", title: "Không dựng được sơ đồ", description: e.message });
+    } finally {
+      setGenerating(false);
+      setProgress("");
+    }
+  }
+
+  // Xin AI hoàn thiện lại (gộp 1 lượt) mà KHÔNG dựng lại từ đầu — dùng khi
+  // finalizeGeneration() đã thử 1 lần mà vẫn còn cảnh chưa xong (hết quota
+  // giữa chừng, hoặc AI vẫn chưa vá đủ ở lượt đầu).
+  async function handleRetryRepair() {
+    if (!pending) return;
+    const generationEpisode = resolveGenerationEpisode();
+    setGenerating(true);
+    setProgress("Đang hoàn thiện...");
+    try {
+      const { blueprint: repaired, stillHasGaps } = await repairBlueprintEffects(pending.blueprint, gamePlan, generationEpisode, globalState?.registry);
+      const finalValidation = validateSceneBlueprint(repaired, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
+      commitPending((value) => (value ? { ...value, blueprint: repaired, scale: getBlueprintScaleStatus(repaired, generationEpisode), needsRepair: finalValidation.errors.length > 0 || stillHasGaps } : value));
+    } catch (e) {
+      toast({ variant: "destructive", title: "Chưa hoàn thiện được", description: e.message });
     } finally {
       setGenerating(false);
       setProgress("");
@@ -277,8 +344,10 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     const refreshedBlueprint = refreshBlueprintEffects(pending.blueprint, globalState?.registry);
     const previewValidation = validateSceneBlueprint(refreshedBlueprint, { knownEpisodeIds, planningConstraints: constraints });
     if (previewValidation.errors.length) {
-      commitPending((value) => (value ? { ...value, blueprint: refreshedBlueprint } : value));
-      toast({ variant: "destructive", title: "Bản xem trước chưa hợp lệ", description: previewValidation.errors[0] });
+      // KHÔNG dump lỗi kỹ thuật lên toast — bản nháp vẫn còn nguyên, panel
+      // "chưa hoàn thiện" (needsRepair) đã đủ hướng dẫn "Thử hoàn thiện
+      // lại"/"Chi tiết kỹ thuật".
+      commitPending((value) => (value ? { ...value, blueprint: refreshedBlueprint, needsRepair: true } : value));
       return;
     }
     // Áp dụng sceneBlueprint THẬT và xoá pendingBlueprint trong CÙNG 1 lần ghi
@@ -296,11 +365,11 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   }
 
   async function handleContinueMissing() {
-    const generationEpisode = { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
+    const generationEpisode = resolveGenerationEpisode();
     setGenerating(true);
     try {
-      const { blueprint: next, scale } = await fillUntilTarget(generationEpisode, pending.blueprint);
-      commitPending((value) => ({ ...value, blueprint: next, scale, allowUnderGenerated: false }));
+      const { blueprint: filled, scale } = await fillUntilTarget(generationEpisode, pending.blueprint);
+      await finalizeGeneration(generationEpisode, filled, scale, pending.isRegenerate);
     } finally {
       setGenerating(false);
       setProgress("");
@@ -311,6 +380,31 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     const next = await regenerateScene(blueprint, episode, gamePlan, sceneId, instructionText);
     setEpisodeBlueprint(next);
     toast({ title: "Đã thiết kế lại cảnh" });
+  }
+
+  // Sửa MỘT cảnh ngay trong bản nháp AI (pending, chưa áp dụng) — trước đây
+  // gặp lỗi (vd 2 lựa chọn cùng hệ quả) thì chỉ có thể "Huỷ"/"Thử tạo lại"
+  // toàn bộ, không có cách sửa riêng 1 cảnh mà không mất các cảnh khác đã ổn.
+  // Không cần người dùng tự viết yêu cầu kỹ thuật — tự mô tả đúng lỗi đang có
+  // (nếu có) cho AI sửa; nếu cảnh không có lỗi thì để trống, AI tự cải thiện.
+  async function handleRegeneratePendingScene(sceneId) {
+    if (!pending) return;
+    const generationEpisode = resolveGenerationEpisode();
+    const sceneErrors = pendingValidation.errors.filter((e) => e.includes(`"${pending.blueprint.scenes.find((s) => s.id === sceneId)?.title}"`));
+    const instructionText = sceneErrors.length
+      ? `Cảnh này đang bị lỗi, hãy sửa cho đúng: ${sceneErrors.join(" ")}`
+      : "Giữ đúng vai trò/kết nối hiện tại, chỉ cải thiện nội dung và đảm bảo mỗi lựa chọn có hệ quả luật thật khác nhau, không trùng nhau.";
+    setGenerating(true);
+    try {
+      const next = await regenerateScene(pending.blueprint, generationEpisode, gamePlan, sceneId, instructionText);
+      const finalValidation = validateSceneBlueprint(next, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
+      commitPending((value) => (value ? { ...value, blueprint: next, scale: getBlueprintScaleStatus(next, generationEpisode), needsRepair: finalValidation.errors.length > 0 } : value));
+      toast({ title: "Đã sửa lại cảnh trong bản nháp" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Chưa sửa được cảnh này", description: e.message });
+    } finally {
+      setGenerating(false);
+    }
   }
 
   function handleAddScene() {
@@ -401,22 +495,62 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
               <Button size="sm" variant="outline" onClick={() => commitPending(null)}>Huỷ</Button>
               {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={handleContinueMissing} disabled={generating}>Tiếp tục phần còn thiếu</Button>}
               {pending.scale?.underGenerated && <Button size="sm" variant="outline" onClick={() => handleGenerate(true)} disabled={generating}>Thử tạo lại</Button>}
-              <Button size="sm" onClick={applyPending} disabled={pending.scale?.underGenerated && !pending.allowUnderGenerated}>Áp dụng</Button>
+              <Button size="sm" onClick={applyPending} disabled={(pending.scale?.underGenerated && !pending.allowUnderGenerated) || pending.needsRepair}>Áp dụng</Button>
             </div>
           </div>
+
+          {generating && progress && <p className="text-xs text-muted-foreground">{progress}</p>}
+
           {pending.scale?.underGenerated && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <p>Kế hoạch yêu cầu khoảng {pending.targetSceneCount} cảnh nhưng AI mới dựng {pending.scale.meaningfulSceneCount} cảnh.</p>
               <button type="button" className="mt-2 text-xs text-muted-foreground underline" onClick={() => commitPending((value) => ({ ...value, allowUnderGenerated: true }))}>Nâng cao: vẫn áp dụng bản thiếu</button>
             </div>
           )}
+
+          {/* Người dùng thường KHÔNG thấy lỗi kỹ thuật thô — chỉ 1 câu đơn
+              giản + cách xử lý. "Chi tiết kỹ thuật" là tuỳ chọn, dành cho ai
+              muốn tự sửa tay từng cảnh (nút "Sửa bằng AI" dưới mỗi cảnh). */}
+          {!pending.scale?.underGenerated && pending.needsRepair && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm space-y-2">
+              <p>AI chưa hoàn thiện xong một vài phần của sơ đồ. Bản nháp vẫn được giữ nguyên — không mất công đã dựng.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={handleRetryRepair} disabled={generating}>Thử hoàn thiện lại</Button>
+                <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setShowTechnicalDetails((v) => !v)}>
+                  {showTechnicalDetails ? "Ẩn chi tiết kỹ thuật" : "Chi tiết kỹ thuật"}
+                </button>
+              </div>
+              {showTechnicalDetails && (
+                <div className="space-y-1 pt-2 border-t border-amber-500/30">
+                  {pendingValidation.errors.map((e, i) => (
+                    <p key={`pe${i}`} className="text-xs text-destructive flex items-start gap-1.5"><XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!pending.scale?.underGenerated && !pending.needsRepair && (
+            <p className="text-xs text-emerald-600 flex items-center gap-1.5">Đã sẵn sàng — có thể "Áp dụng".</p>
+          )}
+
           <div className="max-h-56 overflow-y-auto space-y-1 text-xs">
-            {pending.blueprint.scenes.map((s) => (
-              <p key={s.id} className="text-muted-foreground">
-                <Badge variant="secondary" className="text-[10px] mr-1.5">{SCENE_ROLE_LABELS[s.role]}</Badge>
-                {s.title || "(chưa đặt tên)"}{s.id === pending.blueprint.startSceneId ? " · bắt đầu" : ""}
-              </p>
-            ))}
+            {pending.blueprint.scenes.map((s) => {
+              const sceneHasError = pendingValidation.errors.some((e) => e.includes(`"${s.title}"`));
+              return (
+                <div key={s.id} className={`flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 ${sceneHasError && showTechnicalDetails ? "bg-destructive/5" : ""}`}>
+                  <p className="text-muted-foreground min-w-0 truncate">
+                    <Badge variant="secondary" className="text-[10px] mr-1.5">{SCENE_ROLE_LABELS[s.role]}</Badge>
+                    {s.title || "(chưa đặt tên)"}{s.id === pending.blueprint.startSceneId ? " · bắt đầu" : ""}
+                  </p>
+                  {showTechnicalDetails && (
+                    <button type="button" className={`shrink-0 text-[11px] underline ${sceneHasError ? "text-destructive" : "text-muted-foreground"}`} disabled={generating} onClick={() => handleRegeneratePendingScene(s.id)}>
+                      Sửa bằng AI
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@
 // bằng entityRegistry.resolveEntity() — AI chỉ được tin một phần.
 import { ENTITY_KINDS, listEntities } from "./entityRegistry.js";
 
-function registryBlock(registry) {
+export function registryBlock(registry) {
   const stats = listEntities(registry, ENTITY_KINDS.STAT).map((e) => `  - "${e.displayName}" (chỉ số)`);
   const rels = listEntities(registry, ENTITY_KINDS.RELATIONSHIP).map((e) => `  - "${e.displayName}" (quan hệ/thiện cảm với ${e.npc})`);
   const flags = listEntities(registry, ENTITY_KINDS.FLAG).map((e) => `  - "${e.displayName}" (cờ)`);

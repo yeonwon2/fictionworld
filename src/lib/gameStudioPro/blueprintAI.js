@@ -18,6 +18,8 @@ import {
   buildSceneRedesignPrompt,
   buildBlueprintContinuationPrompt,
   SCENE_REDESIGN_SCHEMA,
+  buildBatchEffectRepairPrompt,
+  BATCH_EFFECT_REPAIR_SCHEMA,
 } from "./blueprintPrompts.js";
 import {
   SCENE_ROLES,
@@ -30,11 +32,20 @@ import {
 import { resolveEpisodeConstraints, assessBlueprintScale } from "./planningConstraints.js";
 import { parseEffectsDeterministic } from "./ruleParser.js";
 import { ensureRegistry } from "./entityRegistry.js";
+import { findChoiceEffectGaps, applyEffectFixes } from "./blueprintRepair.js";
 
 // Dùng đúng trần cấu trúc thật; prompt topology được giữ súc tích để không
 // phải âm thầm thu nhỏ yêu cầu của người dùng theo một trần mềm khác.
 export const AI_GENERATION_SCENE_CAP = MAX_SCENES_PER_EPISODE;
 export const BLUEPRINT_AI_MAX_OUTPUT_TOKENS = 32768;
+// Trần "an toàn ngân sách" cho MỘT lượt gọi dựng/tiếp tục sơ đồ — độc lập với
+// mục tiêu thật của người dùng (vd 30 cảnh). Cảnh dài, chi tiết (đúng văn
+// phong người dùng có thể yêu cầu) khiến 1 lượt xin hết mục tiêu rất dễ chạm
+// MAX_TOKENS giữa chừng và hỏng JSON hoàn toàn (mất trắng cả lượt, 0 cảnh đọc
+// được — khác với chỉ thiếu cảnh). Xin từng đợt nhỏ ≤ trần này, dùng
+// continueEpisodeBlueprint() bồi thêm nhiều đợt (đã tự động lặp — xem
+// fillUntilTarget() ở SmartMindMap.jsx) an toàn hơn nhiều so với 1 đợt lớn.
+export const GENERATION_BATCH_SCENE_CAP = 10;
 
 function safeString(v) {
   return typeof v === "string" ? v.trim() : "";
@@ -238,6 +249,30 @@ export function refreshBlueprintEffects(blueprint, registry) {
   };
 }
 
+// TỰ SỬA: người dùng thường KHÔNG được yêu cầu tự hiểu/sửa lỗi kỹ thuật như
+// "hệ quả luật thật khác nhau" (xem findChoiceEffectGaps() ở
+// blueprintRepair.js). Bước 1 (cục bộ, KHÔNG tốn AI): chấm lại effectIntent
+// theo registry mới nhất — thường đã tự khớp được entity AI viết hơi khác
+// tên. Nếu sau đó vẫn còn cảnh thiếu/trùng hệ quả (lỗi NỘI DUNG, không suy
+// luận cục bộ được), gửi ĐÚNG 1 lượt gọi AI GỘP CHUNG cho mọi cảnh còn thiếu
+// (không phải 1 lượt/cảnh) để xin hệ quả mới, rồi vá cục bộ. Trả về cả
+// `repaired` (có sửa gì không) và `stillHasGaps` (còn cảnh nào AI không trả
+// đủ bản vá) để UI quyết định hiển thị gì.
+export async function repairBlueprintEffects(blueprint, gamePlan, episode, registry) {
+  const refreshed = refreshBlueprintEffects(blueprint, registry);
+  const gaps = findChoiceEffectGaps(refreshed);
+  if (!gaps.length) return { blueprint: refreshed, repaired: false, stillHasGaps: false };
+  const raw = await aiCall(buildBatchEffectRepairPrompt(gamePlan, episode, gaps, registry), {
+    jsonSchema: BATCH_EFFECT_REPAIR_SCHEMA,
+    maxAttempts: 1,
+    maxOutputTokens: 8192,
+  });
+  const fixes = Array.isArray(raw?.fixes) ? raw.fixes : [];
+  const patched = applyEffectFixes(refreshed, fixes, registry);
+  const stillHasGaps = findChoiceEffectGaps(patched).length > 0;
+  return { blueprint: patched, repaired: fixes.length > 0, stillHasGaps };
+}
+
 // ---------- Điều phối gọi AI (bất đồng bộ) ----------
 
 // Khung blueprint RỖNG (không cảnh nào) để nhận trọn bộ cảnh AI vừa dựng —
@@ -251,7 +286,9 @@ export function emptyBlueprintBase(episode, existingBlueprint = null) {
 
 // Dựng sơ đồ tập LẦN ĐẦU (hoặc tạo lại toàn bộ, giữ nguyên các cảnh đã khoá).
 export async function generateEpisodeBlueprint(episode, gamePlan, existingBlueprint = null, { forceRefresh = false } = {}) {
-  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA, maxAttempts: 1, maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS, forceRefresh });
+  const targetSceneCount = episode?.planningConstraints?.targetSceneCount;
+  const targetOverride = Number.isFinite(targetSceneCount) && targetSceneCount > GENERATION_BATCH_SCENE_CAP ? GENERATION_BATCH_SCENE_CAP : null;
+  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode, { targetOverride }), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA, maxAttempts: 1, maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS, forceRefresh });
   const lockedScenes = (existingBlueprint?.scenes || []).filter((s) => s.locked);
   const rejectSceneRefs = new Set(lockedScenes.map((s) => s.id));
   const normalized = normalizeAIBlueprintResponse(raw, episode.id, { rejectSceneRefs });
@@ -273,7 +310,12 @@ export async function continueEpisodeBlueprint(episode, gamePlan, partialBluepri
   const constraints = resolveEpisodeConstraints(episode);
   const status = assessBlueprintScale(partialBlueprint, constraints);
   const missingCount = Math.max(1, constraints.targetSceneCount - status.meaningfulSceneCount);
-  const raw = await aiCall(buildBlueprintContinuationPrompt(gamePlan, episode, partialBlueprint, missingCount), {
+  // Cùng lý do với generateEpisodeBlueprint() — mỗi lượt "tiếp tục" cũng chỉ
+  // xin tối đa GENERATION_BATCH_SCENE_CAP cảnh, kể cả khi phần thiếu còn
+  // nhiều; fillUntilTarget() ở SmartMindMap.jsx tự lặp thêm đợt cho tới khi
+  // đủ hoặc hết số vòng tự động.
+  const requestCount = Math.min(missingCount, GENERATION_BATCH_SCENE_CAP);
+  const raw = await aiCall(buildBlueprintContinuationPrompt(gamePlan, episode, partialBlueprint, requestCount), {
     jsonSchema: EPISODE_BLUEPRINT_SCHEMA,
     maxAttempts: 1,
     maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS,

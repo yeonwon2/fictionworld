@@ -10,6 +10,7 @@
 import { compactGamePlanSummary, compactEpisodeSummary } from "./plannerPrompts.js";
 import { SCENE_ROLES, SCENE_ROLE_LABELS, MAX_DECISION_CHOICES, MAX_SCENES_PER_EPISODE } from "./blueprintModel.js";
 import { resolveEpisodeConstraints } from "./planningConstraints.js";
+import { registryBlock } from "./rulePrompts.js";
 
 const ROLE_GUIDE = Object.entries(SCENE_ROLE_LABELS)
   .map(([key, label]) => `  - "${key}" (${label})`)
@@ -71,13 +72,25 @@ ${constraints ? `- Mục tiêu: khoảng ${constraints.targetSceneCount} ${const
 - Đây là LẬP SƠ ĐỒ (structure), CHƯA phải viết lời thoại/văn cảnh đầy đủ — intent súc tích, không cần văn hoa.`;
 }
 
-export function buildEpisodeBlueprintPrompt(gamePlan, episode) {
+// `targetOverride` (tuỳ chọn): dựng ĐỢT ĐẦU nhỏ hơn mục tiêu thật — ~30 cảnh
+// dài (đúng văn phong người dùng yêu cầu) xin trong 1 lượt rất dễ vượt ngân
+// sách token (MAX_TOKENS, JSON hỏng hoàn toàn, mất trắng cả lượt gọi). Xin
+// một đợt nhỏ hơn, an toàn hơn, rồi để continueEpisodeBlueprint() bồi thêm
+// nhiều lượt nhỏ (đã có sẵn — xem blueprintAI.js) thay vì 1 lượt lớn rủi ro.
+export function buildEpisodeBlueprintPrompt(gamePlan, episode, { targetOverride = null } = {}) {
   const constraints = resolveEpisodeConstraints(episode);
+  const capped = targetOverride && targetOverride < constraints.targetSceneCount;
+  const promptConstraints = capped
+    ? { ...constraints, targetSceneCount: targetOverride, maximumSceneCount: Math.min(constraints.maximumSceneCount, targetOverride) }
+    : constraints;
+  const batchNote = capped
+    ? `\n# ĐỢT ĐẦU TRONG NHIỀU LƯỢT\nMục tiêu CUỐI CÙNG của tập là khoảng ${constraints.targetSceneCount} cảnh, nhưng phản hồi NÀY chỉ cần khoảng ${targetOverride} cảnh mở đầu (từ cảnh isStart), mạch lạc và tự hợp lệ (mọi target vẫn phải khớp đúng 1 ref có thật TRONG phản hồi này). KHÔNG cần chạm hết mọi kết thúc — các lượt sau sẽ được yêu cầu dựng tiếp và nối vào đúng các ref của lượt này. Việc chia nhỏ này CHỈ để an toàn ngân sách phản hồi, không phải giảm quy mô câu chuyện.\n`
+    : "";
   return `Bạn là NHÀ THIẾT KẾ GAME. Từ Kế hoạch Tập bên dưới, hãy DỰNG SƠ ĐỒ CẢNH (Scene Blueprint) cho MỘT TẬP — xác định các cảnh sẽ đi qua và cách chúng nối với nhau (topology), CHƯA viết lời thoại đầy đủ.
 
 ${episodeContextBlock(gamePlan, episode)}
-
-${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, constraints)}
+${batchNote}
+${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, promptConstraints)}
 
 Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }
@@ -196,3 +209,51 @@ Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }
 
 export const SCENE_REDESIGN_SCHEMA = EPISODE_BLUEPRINT_SCHEMA;
+
+// Sửa HỆ QUẢ LỰA CHỌN hàng loạt, GỘP CHUNG 1 lượt gọi cho TOÀN BỘ tập —
+// dùng khi validate sau khi dựng/tiếp tục sơ đồ phát hiện lựa chọn thiếu hệ
+// quả hoặc 2+ lựa chọn cùng cảnh cho cùng 1 hệ quả (xem
+// blueprintRepair.js#findChoiceEffectGaps). KHÔNG gửi lại cả sơ đồ, KHÔNG
+// gọi 1 lượt/cảnh — chỉ gửi đúng các cảnh/lựa chọn đang thiếu, để tiết kiệm
+// request (mỗi lượt "hoàn thiện" tự động chỉ tốn TỐI ĐA 1 lượt gọi AI, bất
+// kể có bao nhiêu cảnh cần vá — xem repairBlueprintEffects() ở blueprintAI.js).
+export function buildBatchEffectRepairPrompt(gamePlan, episode, gaps, registry) {
+  const scenesBlock = gaps
+    .map((g) => {
+      const choicesText = g.choices
+        .map((c, i) => `    ${i + 1}. choiceId="${c.id}" text="${c.text || "(đi tiếp)"}"${g.problemChoiceIds.has(c.id) ? " ← ĐANG THIẾU/TRÙNG hệ quả, cần hệ quả MỚI" : " (đã có hệ quả riêng, GIỮ NGUYÊN, không cần trả lại)"}`)
+        .join("\n");
+      return `- Cảnh "${g.sceneTitle}" (id="${g.sceneId}")\n  Ý đồ: ${g.sceneIntent || "(không có)"}\n  Lựa chọn:\n${choicesText}`;
+    })
+    .join("\n");
+  return `Bạn là NHÀ THIẾT KẾ GAME. Các cảnh QUYẾT ĐỊNH bên dưới đang VI PHẠM yêu cầu gốc của người chơi: "mỗi lựa chọn phải có hệ quả riêng, không được thiết kế theo kiểu lựa chọn nào cũng cộng điểm — có lựa chọn tốt, tương đối tốt, trung tính/nguy hiểm, và có thể gây hậu quả nghiêm trọng." Một số lựa chọn đang THIẾU hệ quả hoặc TRÙNG hệ quả với lựa chọn khác trong cùng cảnh.
+
+# BỐI CẢNH
+${compactGamePlanSummary(gamePlan)}
+Tập: "${episode.title}" — ${episode.summary || ""}
+
+# CHỈ SỐ/QUAN HỆ/CỜ/VẬT PHẨM ĐÃ CÓ (chỉ dùng đúng tên này, KHÔNG tự đặt tên mới)
+${registryBlock(registry)}
+
+# CÁC CẢNH CẦN VÁ HỆ QUẢ (chỉ trả lại đúng những choiceId được đánh dấu "ĐANG THIẾU/TRÙNG")
+${scenesBlock}
+
+Với MỖI choiceId được đánh dấu, đề xuất 1 hệ quả MỚI (cú pháp "Tên chỉ số/quan hệ +N" hoặc "-N", ví dụ "Thiện cảm nữ chính +15"), sao cho MỌI lựa chọn trong CÙNG 1 cảnh có hệ quả rõ ràng KHÁC NHAU — có mức tăng nhiều/ít, mức giảm ít/nhiều (nguy hiểm), phù hợp với văn bản lựa chọn ("text") và ý đồ cảnh. KHÔNG trả lại choiceId nào không được đánh dấu.
+
+Trả JSON đúng schema: { fixes: [{ choiceId, effectIntent }] }.`;
+}
+
+export const BATCH_EFFECT_REPAIR_SCHEMA = {
+  type: "object",
+  properties: {
+    fixes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { choiceId: { type: "string" }, effectIntent: { type: "string" } },
+        required: ["choiceId", "effectIntent"],
+      },
+    },
+  },
+  required: ["fixes"],
+};
