@@ -17,8 +17,8 @@
 // scene/node graph thật, nên compileProGame() ở tab "Soạn"/"Chơi
 // thử"/"Xuất bản" hoàn toàn không đọc tới nó. Mind map Pro, Scene Intent,
 // Natural-Language-to-Rule, import kịch bản ngoài... vẫn CHƯA làm.
-import React, { useEffect, useRef, useState } from "react";
-import { Rocket, Plus, ArrowLeft, Trash2, Loader2 } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Rocket, Plus, ArrowLeft, Trash2, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,8 @@ import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib
 import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
 import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
 import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
+import ProQaDashboard from "@/components/game-studio-pro/ProQaDashboard";
+import { runProQa } from "@/lib/gameStudioPro/proQa";
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -136,6 +138,8 @@ function ProGameEditor({ gameId, onBack }) {
   const [mode, setMode] = useState("plan");
   const [playKey, setPlayKey] = useState(0);
   const [focusEpisodeId, setFocusEpisodeId] = useState(null);
+  const [focusSceneId, setFocusSceneId] = useState(null);
+  const [qaRevision, setQaRevision] = useState(0);
   // Bản xem trước riêng cho tab Xuất bản — ExportCenter cho phép "Import JSON"
   // để nạp lại 1 file đã xuất; nếu trỏ thẳng vào proDoc thì việc import đó sẽ
   // âm thầm ghi đè tài liệu Pro (nguồn thật) bằng dữ liệu đã biên dịch, làm 2
@@ -237,6 +241,9 @@ function ProGameEditor({ gameId, onBack }) {
     }));
   }
 
+  // Must stay above the loading early-return to preserve React hook order.
+  const qaResult = useMemo(() => runProQa(proDoc), [proDoc, qaRevision]);
+
   if (loading || !proDoc) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -246,6 +253,9 @@ function ProGameEditor({ gameId, onBack }) {
   }
 
   const { compiled, campaignError } = compileProDocument(proDoc);
+  // QA runs against the authoring source, before compiler normalization. It
+  // is deterministic/local, so imported External-AI blueprints are included
+  // automatically as soon as they are applied to proDoc.
   // Bất cứ lúc nào biên dịch THÀNH CÔNG trong phiên soạn này (kể cả chưa
   // lưu) đều nâng cấp "bản tốt gần nhất" — không chỉ sau khi bấm Lưu — để
   // handleSave() luôn có sàn an toàn mới nhất có thể khi campaign sau đó bị
@@ -273,6 +283,7 @@ function ProGameEditor({ gameId, onBack }) {
           <div className="flex gap-2 shrink-0">
             <Button size="sm" variant={mode === "plan" ? "default" : "outline"} onClick={() => setMode("plan")}>Kế hoạch</Button>
             <Button size="sm" variant={mode === "mindmap" ? "default" : "outline"} onClick={() => setMode("mindmap")}>Sơ đồ</Button>
+            <Button size="sm" variant={mode === "qa" ? "default" : "outline"} onClick={() => setMode("qa")}><ShieldCheck className="w-3.5 h-3.5 mr-1" />Kiểm tra</Button>
             <Button size="sm" variant={mode === "edit" ? "default" : "outline"} onClick={() => setMode("edit")}>Soạn</Button>
             <Button size="sm" variant={mode === "play" ? "default" : "outline"} onClick={() => setMode("play")}>Chơi thử</Button>
             <Button size="sm" variant={mode === "export" ? "default" : "outline"} onClick={() => setMode("export")}>Xuất bản</Button>
@@ -324,12 +335,15 @@ function ProGameEditor({ gameId, onBack }) {
             storyBlueprint={proDoc.storyBlueprint}
             onChange={(storyBlueprint) => updateField({ storyBlueprint })}
             initialEpisodeId={focusEpisodeId}
+            initialSceneId={focusSceneId}
             globalState={proDoc.globalState}
             onGlobalStateChange={(globalState) => updateField({ globalState })}
             mechanics={proDoc.mechanics}
             templateId={proDoc.templateId}
           />
         )}
+
+        {mode === "qa" && <ProQaDashboard result={qaResult} episodes={proDoc.storyBlueprint?.episodes || []} onRerun={() => setQaRevision((v) => v + 1)} onLocate={(issue) => { setFocusEpisodeId(issue.episodeId); setFocusSceneId(issue.sceneId); setMode("mindmap"); }} />}
 
         {mode === "edit" && (
           <div className="space-y-4">
@@ -379,10 +393,10 @@ function ProGameEditor({ gameId, onBack }) {
         )}
 
         {mode === "export" && (
-          campaignError ? (
+          campaignError || qaResult.blocking ? (
             <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-              Không thể xuất bản — campaign đang lỗi biên dịch. Sửa lỗi ở tab "Kế hoạch"/"Sơ đồ" rồi quay lại đây.
-              <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
+              Không thể xuất bản — {campaignError ? "campaign đang lỗi biên dịch" : `QA còn ${qaResult.summary.error} lỗi chặn`}. Mở tab "Kiểm tra" để xem vị trí và gợi ý sửa.
+              {campaignError && <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>}
             </div>
           ) : (
             <ExportCenter gameData={exportPreview || compiledGameData} setGameData={setExportPreview} />

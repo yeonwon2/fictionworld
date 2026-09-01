@@ -148,10 +148,10 @@ function EndingsPanel({ blueprint, onBlueprintChange }) {
   );
 }
 
-export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, globalState, onGlobalStateChange, mechanics, templateId }) {
+export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, initialSceneId, globalState, onGlobalStateChange, mechanics, templateId }) {
   const episodes = storyBlueprint?.episodes || [];
   const [selectedId, setSelectedId] = useState(initialEpisodeId || episodes[0]?.id || null);
-  const [editingSceneId, setEditingSceneId] = useState(null);
+  const [editingSceneId, setEditingSceneId] = useState(initialSceneId || null);
   const [generating, setGenerating] = useState(false);
   const [pending, setPending] = useState(null); // { blueprint, isRegenerate }
   const [playtesting, setPlaytesting] = useState(false);
