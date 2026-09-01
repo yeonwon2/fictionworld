@@ -10,7 +10,10 @@ import {
   normalizeProScriptAst,
   finalizeProScriptBlueprint,
 } from '../src/lib/gameStudioPro/scriptNormalizer.js';
-import { validateParsedScript } from '../src/lib/gameStudioPro/scriptValidator.js';
+import {
+  validateParsedScript,
+  validateFinalizedBlueprint,
+} from '../src/lib/gameStudioPro/scriptValidator.js';
 import { serializeEpisodeBlueprint } from '../src/lib/gameStudioPro/scriptSerializer.js';
 import {
   generateExternalAiPrompt,
@@ -18,6 +21,7 @@ import {
 } from '../src/lib/gameStudioPro/scriptPromptGenerator.js';
 import {
   parseAndValidateProScript,
+  finalizeAndValidateProScript,
   SCRIPT_HEADER_V1,
   SCRIPT_FORMAT_VERSION,
 } from '../src/lib/gameStudioPro/scriptBridge.js';
@@ -173,7 +177,7 @@ test('parser enforces safety bounds (max script size & max scenes)', () => {
 });
 
 // =========================================================================
-// 2. NORMALIZER & ENTITY RESOLUTION TESTS (NO SILENT CREATION)
+// 2. NORMALIZER & TARGET RESOLUTION TESTS
 // =========================================================================
 
 test('normalizer resolves target scene names to stable IDs without guessing', () => {
@@ -249,46 +253,16 @@ LỰA CHỌN A: Cầu cứu
 });
 
 // =========================================================================
-// 3. ENTITY PROPOSAL & NO SILENT CREATION TESTS (HOTFIX 1 & 3)
+// 3. FAIL-CLOSED ENTITY APPROVAL & VALIDATION TESTS (HOTFIX 2)
 // =========================================================================
 
-test('entity approval test 1: existing registry has Uy tín, script uses Uy tín >= 20 -> resolves directly, 0 proposals', () => {
+test('audit test 1: finalize with proposals but approvals = {} fails and creates zero entities', () => {
   let existingRegistry = newEmptyRegistry();
   existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+  const snapshot = JSON.stringify(existingRegistry);
 
   const script = `${SCRIPT_HEADER_V1}
-TẬP: Test 1
-CẢNH: Cảnh 1
-LOẠI: Lựa chọn
-NỘI DUNG: Test.
-LỰA CHỌN A: Đi tiếp
-NẾU:
-- Uy tín >= 20
-ĐẾN: Cảnh 2
-CẢNH: Cảnh 2
-LOẠI: Kể chuyện
-NỘI DUNG: Hết.`;
-
-  const result = parseAndValidateProScript(script, {
-    episodeId: 'ep_test',
-    existingRegistry,
-  });
-
-  assert.equal(result.entityProposals.length, 0);
-  assert.equal(result.validation.readyToImport, true);
-  assert.equal(result.validation.valid, true);
-
-  const statId = existingRegistry.stats[0].id;
-  assert.equal(result.blueprint.scenes[0].choices[0].rules.conditions[0].entityId, statId);
-});
-
-test('entity approval test 2: existing registry has Uy tín, script uses Danh vọng >= 20 -> NO silent create, proposal generated, import blocked', () => {
-  let existingRegistry = newEmptyRegistry();
-  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
-  const registrySnapshot = JSON.stringify(existingRegistry);
-
-  const script = `${SCRIPT_HEADER_V1}
-TẬP: Test 2
+TẬP: Test Fail Closed
 CẢNH: Cảnh 1
 LOẠI: Lựa chọn
 NỘI DUNG: Test.
@@ -300,175 +274,182 @@ CẢNH: Cảnh 2
 LOẠI: Kể chuyện
 NỘI DUNG: Hết.`;
 
-  const result = parseAndValidateProScript(script, {
-    episodeId: 'ep_test',
-    existingRegistry,
-  });
+  const parsed = parseAndValidateProScript(script, { episodeId: 'ep_test', existingRegistry });
+  assert.equal(parsed.entityProposals.length, 1);
 
-  // 1. Không tự động thêm vào registry
-  assert.equal(JSON.stringify(existingRegistry), registrySnapshot, 'existingRegistry không bị mutate');
-  assert.equal(result.registry.stats.length, 1, 'Registry vẫn chỉ có 1 entity');
-
-  // 2. Tạo proposal và chặn import
-  assert.equal(result.entityProposals.length, 1);
-  assert.equal(result.entityProposals[0].requestedName, 'Danh vọng');
-  assert.equal(result.validation.readyToImport, false);
-  assert.equal(result.validation.valid, false);
-  assert.equal(result.validation.hasPendingProposals, true);
+  // Gọi finalize với approvals rỗng
+  const finalized = finalizeProScriptBlueprint(parsed, {}, { existingRegistry, episodeId: 'ep_test' });
+  assert.equal(finalized.ok, false);
+  assert.equal(finalized.blueprint, null);
+  assert.ok(finalized.errors.some((e) => e.includes('Chưa có quyết định')));
+  assert.equal(JSON.stringify(existingRegistry), snapshot, 'existingRegistry không bị thay đổi');
 });
 
-test('entity approval test 3: user maps Danh vọng -> Uy tín -> finalized blueprint uses exact entityId of Uy tín', () => {
+test('audit test 2: script has 2 proposals but user approves only 1 -> finalize fails', () => {
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test 2 Proposals
+CHỈ SỐ:
+- Danh vọng = 20
+CỜ:
+- Đã gặp Lệ Phi
+CẢNH: Cảnh 1
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const parsed = parseAndValidateProScript(script, { episodeId: 'ep_test' });
+  assert.equal(parsed.entityProposals.length, 2);
+
+  const prop1 = parsed.entityProposals[0];
+  const approvals = { [prop1.tempKey]: { action: 'create' } }; // chỉ approve 1 cái
+
+  const finalized = finalizeProScriptBlueprint(parsed, approvals, { episodeId: 'ep_test' });
+  assert.equal(finalized.ok, false);
+  assert.ok(finalized.errors.some((e) => e.includes('Chưa có quyết định')));
+});
+
+test('audit test 3: mapping to non-existent entityId fails with structured error', () => {
+  let existingRegistry = newEmptyRegistry();
+  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
+
+  const script = `${SCRIPT_HEADER_V1}
+TẬP: Test Bad Map
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Test.
+LỰA CHỌN A: Đi tiếp
+NẾU:
+- Danh vọng >= 20
+ĐẾN: Cảnh 2
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const parsed = parseAndValidateProScript(script, { episodeId: 'ep_test', existingRegistry });
+  const prop = parsed.entityProposals[0];
+  const approvals = { [prop.tempKey]: { action: 'map', targetEntityId: 'non_existent_id' } };
+
+  const finalized = finalizeProScriptBlueprint(parsed, approvals, { existingRegistry, episodeId: 'ep_test' });
+  assert.equal(finalized.ok, false);
+  assert.ok(finalized.errors.some((e) => e.includes('không tồn tại')));
+});
+
+test('audit test 4: mapping flag proposal to stat entity fails due to incompatible kind', () => {
   let existingRegistry = newEmptyRegistry();
   existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
   const uyTinId = existingRegistry.stats[0].id;
 
   const script = `${SCRIPT_HEADER_V1}
-TẬP: Test 3
-CẢNH: Cảnh 1
-LOẠI: Lựa chọn
-NỘI DUNG: Test.
-LỰA CHỌN A: Đi tiếp
-NẾU:
-- Danh vọng >= 20
-ĐẾN: Cảnh 2
-CẢNH: Cảnh 2
-LOẠI: Kể chuyện
-NỘI DUNG: Hết.`;
-
-  const result = parseAndValidateProScript(script, {
-    episodeId: 'ep_test',
-    existingRegistry,
-  });
-
-  const prop = result.entityProposals[0];
-  const approvals = {
-    [prop.tempKey]: { action: 'map', targetEntityId: uyTinId },
-  };
-
-  const finalized = finalizeProScriptBlueprint(result, approvals, {
-    existingRegistry,
-    episodeId: 'ep_test',
-  });
-
-  assert.equal(finalized.registry.stats.length, 1, 'Không tạo stat mới');
-  const cond = finalized.blueprint.scenes[0].choices[0].rules.conditions[0];
-  assert.equal(cond.entityId, uyTinId, 'Rule sử dụng đúng ID của Uy tín');
-});
-
-test('entity approval test 4: user approves create Danh vọng -> entity created ONLY at finalize step', () => {
-  let existingRegistry = newEmptyRegistry();
-  existingRegistry = addStatEntity(existingRegistry, { displayName: 'Uy tín', default: 10 });
-
-  const script = `${SCRIPT_HEADER_V1}
-TẬP: Test 4
-CẢNH: Cảnh 1
-LOẠI: Lựa chọn
-NỘI DUNG: Test.
-LỰA CHỌN A: Đi tiếp
-NẾU:
-- Danh vọng >= 20
-ĐẾN: Cảnh 2
-CẢNH: Cảnh 2
-LOẠI: Kể chuyện
-NỘI DUNG: Hết.`;
-
-  const result = parseAndValidateProScript(script, {
-    episodeId: 'ep_test',
-    existingRegistry,
-  });
-
-  assert.equal(result.registry.stats.length, 1, 'Trước finalize, registry chưa có Danh vọng');
-
-  const prop = result.entityProposals[0];
-  const approvals = {
-    [prop.tempKey]: { action: 'create', config: { displayName: 'Danh vọng', default: 5 } },
-  };
-
-  const finalized = finalizeProScriptBlueprint(result, approvals, {
-    existingRegistry,
-    episodeId: 'ep_test',
-  });
-
-  assert.equal(finalized.registry.stats.length, 2, 'Sau finalize, registry có 2 stats');
-  const danhVongStat = finalized.registry.stats.find((s) => s.displayName === 'Danh vọng');
-  assert.ok(danhVongStat);
-  assert.equal(danhVongStat.default, 5);
-
-  const cond = finalized.blueprint.scenes[0].choices[0].rules.conditions[0];
-  assert.equal(cond.entityId, danhVongStat.id, 'Rule sử dụng ID mới được tạo của Danh vọng');
-});
-
-test('entity approval test 5: flags and items work identically with approval flow', () => {
-  let existingRegistry = newEmptyRegistry();
-  const script = `${SCRIPT_HEADER_V1}
-TẬP: Test Flags & Items
+TẬP: Test Bad Kind Map
 CỜ:
 - Đã cứu Tiểu Lan
-VẬT PHẨM:
-- Ngọc bội
+CẢNH: Cảnh 1
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const parsed = parseAndValidateProScript(script, { episodeId: 'ep_test', existingRegistry });
+  const prop = parsed.entityProposals[0];
+  // Cố tình map flag sang stat "Uy tín"
+  const approvals = { [prop.tempKey]: { action: 'map', targetEntityId: uyTinId } };
+
+  const finalized = finalizeProScriptBlueprint(parsed, approvals, { existingRegistry, episodeId: 'ep_test' });
+  assert.equal(finalized.ok, false);
+  assert.ok(finalized.errors.some((e) => e.includes('Không thể ánh xạ cờ')));
+});
+
+test('audit test 5: script with proposal AND topology blueprint error -> approve still blocks import', () => {
+  const scriptWithBlueprintError = `${SCRIPT_HEADER_V1}
+TẬP: Error Script
+CHỈ SỐ:
+- Điểm mới = 10
 CẢNH: Cảnh 1
 LOẠI: Lựa chọn
-NỘI DUNG: Test.
-LỰA CHỌN A: Đi tiếp
-NẾU:
-- Có vật phẩm: Ngọc bội
-HỆ QUẢ:
-- Đặt cờ: Đã cứu Tiểu Lan
+NỘI DUNG: Cảnh mở đầu.
+LỰA CHỌN A: Lựa chọn cụt không có đích đến
+CẢNH: Cảnh 2
+LOẠI: Kể chuyện
+NỘI DUNG: Hết.`;
+
+  const parsed = parseAndValidateProScript(scriptWithBlueprintError, { episodeId: 'ep_test' });
+  assert.equal(parsed.entityProposals.length, 1);
+
+  // Người dùng approve proposal
+  const approvals = { [parsed.entityProposals[0].tempKey]: { action: 'create' } };
+
+  // Chạy finalize and full validation
+  const postValidationResult = finalizeAndValidateProScript({
+    normalizedResult: parsed,
+    approvals,
+    episodeId: 'ep_test',
+  });
+
+  // Finalize tạo entity nhưng validateSceneBlueprint phát hiện lựa chọn cụt
+  assert.equal(postValidationResult.validation.entityResolutionComplete, true);
+  assert.equal(postValidationResult.validation.finalBlueprintValid, false);
+  assert.equal(postValidationResult.validation.readyToImport, false);
+  assert.ok(postValidationResult.validation.errors.some((e) => /chưa nối tới cảnh\/kết thúc/.test(e.message)));
+});
+
+test('audit test 6: valid script with proposal -> approve -> finalize -> validate -> readyToImport is true', () => {
+  const scriptValid = `${SCRIPT_HEADER_V1}
+TẬP: Valid Script
+CHỈ SỐ:
+- Uy tín = 10
+CẢNH: Cảnh 1
+LOẠI: Lựa chọn
+NỘI DUNG: Cảnh mở đầu.
+LỰA CHỌN A: Tiếp tục
 ĐẾN: Cảnh 2
 CẢNH: Cảnh 2
 LOẠI: Kể chuyện
 NỘI DUNG: Hết.`;
 
-  const result = parseAndValidateProScript(script, {
-    episodeId: 'ep_test',
-    existingRegistry,
-  });
+  const parsed = parseAndValidateProScript(scriptValid, { episodeId: 'ep_test' });
+  assert.equal(parsed.entityProposals.length, 1);
+  assert.equal(parsed.validation.readyToImport, false);
 
-  assert.equal(result.entityProposals.length, 2);
-  assert.equal(result.registry.flags.length, 0);
-  assert.equal(result.registry.items.length, 0);
+  const approvals = { [parsed.entityProposals[0].tempKey]: { action: 'create' } };
 
-  const approvals = {};
-  for (const p of result.entityProposals) {
-    approvals[p.tempKey] = { action: 'create' };
-  }
-
-  const finalized = finalizeProScriptBlueprint(result, approvals, {
-    existingRegistry,
+  const postResult = finalizeAndValidateProScript({
+    normalizedResult: parsed,
+    approvals,
     episodeId: 'ep_test',
   });
 
-  assert.equal(finalized.registry.flags.length, 1);
-  assert.equal(finalized.registry.items.length, 1);
-  assert.equal(finalized.registry.flags[0].displayName, 'Đã cứu Tiểu Lan');
-  assert.equal(finalized.registry.items[0].displayName, 'Ngọc bội');
+  assert.equal(postResult.ok, true);
+  assert.equal(postResult.validation.readyToImport, true);
+  assert.equal(postResult.validation.finalBlueprintValid, true);
+  assert.equal(postResult.validation.errors.length, 0);
+  assert.equal(postResult.finalizedBlueprint.scenes.length, 2);
 });
 
-test('entity approval test 6: existingRegistry is NEVER mutated after parse/check/normalize', () => {
+test('audit test 7 & 8: existingRegistry and normalized blueprint are NEVER mutated by finalize', () => {
   let existingRegistry = newEmptyRegistry();
   existingRegistry = addStatEntity(existingRegistry, { displayName: 'Sinh tồn', default: 100 });
-  const snapshot = JSON.stringify(existingRegistry);
+  const regSnapshot = JSON.stringify(existingRegistry);
 
   const script = `${SCRIPT_HEADER_V1}
-TẬP: Pure Check
+TẬP: Purity Test
 CHỈ SỐ:
 - Uy tín = 10
-- Khí sắc = 50
-CỜ:
-- Cờ mới
 CẢNH: Cảnh 1
 LOẠI: Kể chuyện
 NỘI DUNG: Test.`;
 
-  parseAndValidateProScript(script, { episodeId: 'ep_1', existingRegistry });
-  assert.equal(JSON.stringify(existingRegistry), snapshot);
+  const parsed = parseAndValidateProScript(script, { episodeId: 'ep_test', existingRegistry });
+  const bpSnapshot = JSON.stringify(parsed.blueprint);
+
+  const approvals = { [parsed.entityProposals[0].tempKey]: { action: 'create' } };
+  finalizeProScriptBlueprint(parsed, approvals, { existingRegistry, episodeId: 'ep_test' });
+
+  assert.equal(JSON.stringify(existingRegistry), regSnapshot, 'existingRegistry không bị mutate');
+  assert.equal(JSON.stringify(parsed.blueprint), bpSnapshot, 'normalized blueprint không bị mutate');
 });
 
 // =========================================================================
-// 4. CONDITIONAL OUTCOME & ROUND-TRIP TESTS (HOTFIX 2)
+// 4. CONDITIONAL OUTCOME & ROUND-TRIP TESTS (19 vs 20 Regression)
 // =========================================================================
 
-test('conditional outcome round-trip: Blueprint -> Serialize -> Parse -> Finalize -> Compile preserves 19 vs 20 semantics', () => {
+test('audit test 9: conditional outcome round-trip preserves 19 vs 20 semantics', () => {
   let r = newEmptyRegistry();
   r = addStatEntity(r, { displayName: 'Uy tín', default: 10 });
   const uyTin = r.stats[0];
@@ -559,7 +540,7 @@ test('conditional outcome round-trip: Blueprint -> Serialize -> Parse -> Finaliz
 });
 
 // =========================================================================
-// 5. MANDATORY TEST SCENARIO (Section 32: Hậu Cung — Tập 1: Nhập Cung)
+// 5. MANDATORY TEST SCENARIO (Hậu Cung — Tập 1: Nhập Cung)
 // =========================================================================
 
 test('mandatory scenario: Full Hậu Cung Episode 1 script parses, approves, compiles, and verifies correctly', () => {
@@ -661,12 +642,18 @@ Do không đủ uy tín để tự bảo vệ, bạn bị Lệ Phi khép tội k
     approvals[p.tempKey] = { action: 'create' };
   }
 
-  const finalized = finalizeProScriptBlueprint(parsed, approvals, { episodeId: 'ep_haucung' });
-  assert.equal(finalized.blueprint.scenes.length, 4); // Yến tiệc, Cảnh Gặp Tiểu Lan, Cảnh Sau Yến Tiệc, Qua Ải
-  assert.equal(finalized.blueprint.endings.length, 1); // Bị xử tử
+  const postResult = finalizeAndValidateProScript({
+    normalizedResult: parsed,
+    approvals,
+    episodeId: 'ep_haucung',
+  });
+  assert.equal(postResult.ok, true);
+  assert.equal(postResult.validation.readyToImport, true);
+  assert.equal(postResult.finalizedBlueprint.scenes.length, 4); // Yến tiệc, Cảnh Gặp Tiểu Lan, Cảnh Sau Yến Tiệc, Qua Ải
+  assert.equal(postResult.finalizedBlueprint.endings.length, 1); // Bị xử tử
 
   // 3. Biên dịch sang runtime GamePlayer
-  const { nodes, meta, warnings } = compileEpisodeBlueprint(finalized.blueprint, { title: 'Tập 1 — Nhập cung' });
+  const { nodes, meta, warnings } = compileEpisodeBlueprint(postResult.finalizedBlueprint, { title: 'Tập 1 — Nhập cung' });
   assert.equal(warnings.filter((w) => /Thiếu cảnh/.test(w)).length, 0);
 
   // Kiểm tra Stats Config (Sinh tồn isVital, deathThreshold 0)

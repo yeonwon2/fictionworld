@@ -7,6 +7,7 @@
 // 1. PURE & NO SILENT CREATION: Không bao giờ tự động tạo entity mới vào existingRegistry.
 // 2. Thu thập danh sách entityProposals để người dùng duyệt/khớp trước khi import.
 // 3. Finalize step (finalizeProScriptBlueprint) là nơi DUY NHẤT tạo entity khi người dùng đã approve.
+// 4. FAIL-CLOSED: Bất kỳ proposal nào thiếu approval, sai hành động, hoặc map sai kiểu -> Báo lỗi, không tạo ngầm.
 import {
   SCENE_ROLES,
   newScene,
@@ -22,6 +23,7 @@ import {
   addFlagEntity,
   addItemEntity,
   resolveEntity,
+  findEntityByIdAnyKind,
   ENTITY_KINDS,
 } from "./entityRegistry.js";
 import {
@@ -442,24 +444,72 @@ export function normalizeProScriptAst(ast, { episodeId = "ep_1", existingRegistr
 }
 
 // =========================================================================
-// FINALIZE BLUEPRINT (Chỉ thực thi khi người dùng DUYỆT entity proposals)
+// FINALIZE BLUEPRINT (FAIL-CLOSED: Bắt buộc đủ approval, không default create)
 // =========================================================================
 export function finalizeProScriptBlueprint(
   normalizedResult,
   approvals = {}, // { [tempKey]: { action: "create" | "map", targetEntityId, config } }
   { existingRegistry = null, episodeId = "ep_1" } = {}
 ) {
-  if (!normalizedResult || !normalizedResult.blueprint) return null;
+  const errors = [];
 
+  if (!normalizedResult || !normalizedResult.blueprint) {
+    return {
+      ok: false,
+      errors: ["Dữ liệu Blueprint kịch bản không hợp lệ."],
+      blueprint: null,
+      registry: null,
+    };
+  }
+
+  const proposals = normalizedResult.entityProposals || [];
   const blueprintCopy = JSON.parse(JSON.stringify(normalizedResult.blueprint));
   let finalRegistry = existingRegistry ? ensureRegistry({ registry: existingRegistry }) : ensureRegistry(blueprintCopy);
   const idMap = new Map();
 
-  for (const proposal of normalizedResult.entityProposals || []) {
-    const approval = approvals[proposal.tempKey] || { action: "create" };
+  // Kiểm tra tính đầy đủ và hợp lệ của approvals (FAIL-CLOSED)
+  for (const proposal of proposals) {
+    if (!approvals || !approvals[proposal.tempKey]) {
+      errors.push(`Chưa có quyết định phê duyệt cho thực thể "${proposal.requestedName}" (${proposal.kind}).`);
+      continue;
+    }
 
-    if (approval.action === "map" && approval.targetEntityId) {
-      idMap.set(proposal.tempKey, approval.targetEntityId);
+    const approval = approvals[proposal.tempKey];
+    if (approval.action !== "create" && approval.action !== "map") {
+      errors.push(`Hành động không hợp lệ "${approval.action}" cho thực thể "${proposal.requestedName}".`);
+      continue;
+    }
+
+    if (approval.action === "map") {
+      if (!approval.targetEntityId) {
+        errors.push(`Thiếu targetEntityId khi ánh xạ thực thể "${proposal.requestedName}".`);
+        continue;
+      }
+
+      const target = findEntityByIdAnyKind(finalRegistry, approval.targetEntityId);
+      if (!target) {
+        errors.push(`Thực thể đích (ID: "${approval.targetEntityId}") không tồn tại trong danh mục.`);
+        continue;
+      }
+
+      // Kiểm tra tính tương thích loại thực thể (Kind Compatibility)
+      const isPropQuantity = proposal.kind === ENTITY_KINDS.STAT || proposal.kind === ENTITY_KINDS.RELATIONSHIP;
+      const isTargetQuantity = target.kind === ENTITY_KINDS.STAT || target.kind === ENTITY_KINDS.RELATIONSHIP;
+
+      if (isPropQuantity && !isTargetQuantity) {
+        errors.push(`Không thể ánh xạ chỉ số/quan hệ "${proposal.requestedName}" sang "${target.displayName}" (loại: ${target.kind}).`);
+        continue;
+      }
+      if (proposal.kind === ENTITY_KINDS.FLAG && target.kind !== ENTITY_KINDS.FLAG) {
+        errors.push(`Không thể ánh xạ cờ "${proposal.requestedName}" sang "${target.displayName}" (loại: ${target.kind}).`);
+        continue;
+      }
+      if (proposal.kind === ENTITY_KINDS.ITEM && target.kind !== ENTITY_KINDS.ITEM) {
+        errors.push(`Không thể ánh xạ vật phẩm "${proposal.requestedName}" sang "${target.displayName}" (loại: ${target.kind}).`);
+        continue;
+      }
+
+      idMap.set(proposal.tempKey, target.id);
     } else if (approval.action === "create") {
       const cfg = approval.config || {};
       const displayName = cfg.displayName || proposal.requestedName;
@@ -491,6 +541,15 @@ export function finalizeProScriptBlueprint(
         idMap.set(proposal.tempKey, created.id);
       }
     }
+  }
+
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      errors,
+      blueprint: null,
+      registry: null,
+    };
   }
 
   // Thay thế toàn bộ tempKey trong điều kiện & hệ quả sang realEntityId
@@ -525,6 +584,8 @@ export function finalizeProScriptBlueprint(
   blueprintCopy.updatedAt = new Date().toISOString();
 
   return {
+    ok: true,
+    errors: [],
     blueprint: blueprintCopy,
     registry: finalRegistry,
   };

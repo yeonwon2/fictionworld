@@ -3,7 +3,7 @@
 // Giao diện trao đổi kịch bản giữa FictionWorld và các AI bên ngoài (ChatGPT, Claude, Gemini, DeepSeek...)
 // Gồm 4 chức năng:
 // 1. Sao chép prompt (Copy Prompt)
-// 2. Nhập kịch bản (Import, Validate, Entity Approval & Preview)
+// 2. Nhập kịch bản (Import, Validate, Fail-Closed Entity Approval & Final Validation)
 // 3. Xuất kịch bản (Export Blueprint to DSL)
 // 4. Xem định dạng (Format Docs & Cheat Sheet)
 import React, { useState, useMemo } from "react";
@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import {
   parseAndValidateProScript,
-  finalizeProScriptBlueprint,
+  finalizeAndValidateProScript,
   serializeEpisodeBlueprint,
   generateExternalAiPrompt,
   generateRepairPrompt,
@@ -63,7 +63,7 @@ export default function ExternalAiBridgeModal({
   const [customInstructions, setCustomInstructions] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
-  // Tab 2: Import & Entity Approval State
+  // Tab 2: Import, Entity Approval & Final Validation State
   const [pastedScript, setPastedScript] = useState("");
   const [inspection, setInspection] = useState(null);
   const [entityApprovals, setEntityApprovals] = useState({}); // { [tempKey]: { action: "create" | "map", targetEntityId?: string } }
@@ -114,7 +114,7 @@ export default function ExternalAiBridgeModal({
     });
 
     setInspection(result);
-    setEntityApprovals({}); // Reset approvals khi re-check
+    setEntityApprovals({});
 
     if (result.entityProposals.length > 0) {
       toast({
@@ -151,20 +151,35 @@ export default function ExternalAiBridgeModal({
     setEntityApprovals((prev) => ({ ...prev, [tempKey]: decision }));
   }
 
-  // Kiểm tra xem tất cả proposals đã được duyệt hay chưa
   const pendingProposalsCount = useMemo(() => {
     if (!inspection || !inspection.entityProposals) return 0;
     return inspection.entityProposals.filter((p) => !entityApprovals[p.tempKey]).length;
   }, [inspection, entityApprovals]);
 
+  // Giai đoạn 2: Tự động tính toán Finalized Blueprint & Post-Validation khi đã duyệt hết proposals
+  const finalizationResult = useMemo(() => {
+    if (!inspection || !inspection.blueprint) return null;
+    if (pendingProposalsCount > 0) return null;
+
+    return finalizeAndValidateProScript({
+      normalizedResult: inspection,
+      approvals: entityApprovals,
+      existingRegistry: blueprint?.registry || null,
+      episodeId: episode?.id || "ep_1",
+    });
+  }, [inspection, entityApprovals, pendingProposalsCount, blueprint?.registry, episode?.id]);
+
+  const activeValidation = useMemo(() => {
+    if (finalizationResult) return finalizationResult.validation;
+    return inspection?.validation;
+  }, [finalizationResult, inspection]);
+
   const canImport = useMemo(() => {
-    if (!inspection || !inspection.blueprint) return false;
-    if (inspection.validation.errors.length > 0) return false;
-    return pendingProposalsCount === 0;
-  }, [inspection, pendingProposalsCount]);
+    return !!finalizationResult?.validation?.readyToImport;
+  }, [finalizationResult]);
 
   function handleApplyImport() {
-    if (!inspection || !inspection.blueprint || !canImport) return;
+    if (!finalizationResult || !finalizationResult.finalizedBlueprint || !canImport) return;
 
     if (blueprint?.scenes?.length > 0) {
       const confirmOverwrite = window.confirm(
@@ -173,24 +188,18 @@ export default function ExternalAiBridgeModal({
       if (!confirmOverwrite) return;
     }
 
-    // Finalize blueprint với approvals của người dùng
-    const finalized = finalizeProScriptBlueprint(inspection, entityApprovals, {
-      existingRegistry: blueprint?.registry || null,
-      episodeId: episode?.id || "ep_1",
-    });
-
-    onApplyBlueprint(finalized.blueprint);
+    onApplyBlueprint(finalizationResult.finalizedBlueprint);
     toast({
       title: "Đã nhập kịch bản vào Xưởng Game Pro!",
-      description: `Đã nạp ${finalized.blueprint.scenes.length} cảnh và ${finalized.blueprint.endings.length} kết thúc.`,
+      description: `Đã nạp ${finalizationResult.finalizedBlueprint.scenes.length} cảnh và ${finalizationResult.finalizedBlueprint.endings.length} kết thúc.`,
     });
     onClose();
   }
 
   function handleCopyRepairPrompt() {
-    if (!inspection) return;
+    if (!activeValidation) return;
     const repairPrompt = generateRepairPrompt({
-      validationIssues: inspection.validation.errors,
+      validationIssues: activeValidation.errors,
       originalScript: pastedScript,
     });
     handleCopy(repairPrompt, setCopiedRepair, "yêu cầu sửa lỗi cho AI");
@@ -352,7 +361,7 @@ export default function ExternalAiBridgeModal({
                     size="sm"
                     variant="outline"
                     onClick={handleCopyRepairPrompt}
-                    disabled={inspection.validation.errors.length === 0}
+                    disabled={!activeValidation || activeValidation.errors.length === 0}
                   >
                     {copiedRepair ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
                     {copiedRepair ? "Đã sao chép yêu cầu sửa!" : "Sao chép yêu cầu sửa lỗi cho AI"}
@@ -365,26 +374,28 @@ export default function ExternalAiBridgeModal({
                 <div className="space-y-3 rounded-xl border border-border bg-card p-3">
                   {/* Summary Bar */}
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <span className="font-semibold">Kết quả:</span>
+                    <span className="font-semibold">Trạng thái:</span>
                     <Badge variant={canImport ? "default" : "destructive"}>
                       {canImport
                         ? "✓ Sẵn sàng nhập"
                         : pendingProposalsCount > 0
                         ? `⚠ Cần duyệt ${pendingProposalsCount} thực thể`
-                        : `✕ ${inspection.validation.errors.length} lỗi`}
+                        : activeValidation?.errors?.length > 0
+                        ? `✕ ${activeValidation.errors.length} lỗi sơ đồ`
+                        : "Chưa hoàn tất"}
                     </Badge>
-                    {inspection.validation.warnings.length > 0 && (
+                    {activeValidation?.warnings?.length > 0 && (
                       <Badge variant="secondary" className="text-amber-600 bg-amber-500/10">
-                        ⚠ {inspection.validation.warnings.length} cảnh báo
+                        ⚠ {activeValidation.warnings.length} cảnh báo
                       </Badge>
                     )}
                     <span className="text-muted-foreground">
-                      {inspection.validation.stats.sceneCount} cảnh · {inspection.validation.stats.choiceCount} lựa chọn · {inspection.validation.stats.endingCount} kết thúc
+                      {activeValidation?.stats?.sceneCount || inspection.blueprint?.scenes?.length || 0} cảnh · {activeValidation?.stats?.choiceCount || 0} lựa chọn · {activeValidation?.stats?.endingCount || 0} kết thúc
                     </span>
                   </div>
 
                   {/* SECTION DUYỆT THỰC THỂ (Entity Proposals Approval) */}
-                  {inspection.entityProposals.length > 0 && (
+                  {inspection.entityProposals?.length > 0 && (
                     <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div>
@@ -483,11 +494,11 @@ export default function ExternalAiBridgeModal({
                     </div>
                   )}
 
-                  {/* Lỗi chi tiết theo dòng */}
-                  {inspection.validation.errors.length > 0 && (
+                  {/* Lỗi chi tiết (Pre-validation hoặc Post-validation) */}
+                  {activeValidation?.errors?.length > 0 && (
                     <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 space-y-1">
                       <p className="text-xs font-semibold text-destructive">Lỗi cần sửa trước khi nhập:</p>
-                      {inspection.validation.errors.map((err, i) => (
+                      {activeValidation.errors.map((err, i) => (
                         <p key={i} className="text-xs text-destructive flex items-start gap-1.5">
                           <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>{err.line > 0 ? `Dòng ${err.line}: ` : ""}{err.message}</span>
@@ -496,11 +507,11 @@ export default function ExternalAiBridgeModal({
                     </div>
                   )}
 
-                  {/* Cảnh báo chi tiết theo dòng */}
-                  {inspection.validation.warnings.length > 0 && (
+                  {/* Cảnh báo chi tiết */}
+                  {activeValidation?.warnings?.length > 0 && (
                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-1">
                       <p className="text-xs font-semibold text-amber-700">Cảnh báo:</p>
-                      {inspection.validation.warnings.map((warn, i) => (
+                      {activeValidation.warnings.map((warn, i) => (
                         <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
                           <span>{warn.line > 0 ? `Dòng ${warn.line}: ` : ""}{warn.message}</span>
