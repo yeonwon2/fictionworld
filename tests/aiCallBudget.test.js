@@ -29,3 +29,14 @@ test('identical concurrent calls dedupe and cache avoids another provider call',
  assert.deepEqual(a,b);assert.equal(fetched,1);
  await aiCall('dedupe-unique',options);assert.equal(fetched,1);
 });
+
+test('large one-call JSON jobs forward a larger output budget to each provider', async t => {
+ const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});memory.clear();
+ for (const provider of ['gemini','custom']) {
+  const profile=saveAIProfile({name:'Large',provider,key:'test-only',model:'test-model',custom:{providerId:'other',key:'test-only',model:'test-model',baseUrl:'https://example.test/v1'}});activateAIProfile(profile.id);
+  let body;
+  globalThis.fetch=async(_url, options)=>{body=JSON.parse(options.body);return {ok:true,json:async()=>provider==='gemini'?{candidates:[{content:{parts:[{text:'{"ok":true}'}]}}]}:{choices:[{message:{content:'{"ok":true}'}}]}};};
+  await aiCall(`large-${provider}`, {jsonSchema:{type:'object'},useCache:false,maxAttempts:1,maxOutputTokens:32768});
+  assert.equal(provider==='gemini'?body.generationConfig.maxOutputTokens:body.max_tokens,32768);
+ }
+});

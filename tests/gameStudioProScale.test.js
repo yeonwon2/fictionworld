@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { derivePlanningConstraints, assessBlueprintScale } from "../src/lib/gameStudioPro/planningConstraints.js";
 import { buildEpisodeBlueprintPrompt, buildBlueprintContinuationPrompt } from "../src/lib/gameStudioPro/blueprintPrompts.js";
 import { buildEpisodePlanPrompt } from "../src/lib/gameStudioPro/plannerPrompts.js";
-import { normalizeAIBlueprintResponse, applyNormalizedBlueprint } from "../src/lib/gameStudioPro/blueprintAI.js";
+import { normalizeAIBlueprintResponse, applyNormalizedBlueprint, BLUEPRINT_AI_MAX_OUTPUT_TOKENS } from "../src/lib/gameStudioPro/blueprintAI.js";
 import { MAX_SCENES_PER_EPISODE } from "../src/lib/gameStudioPro/blueprintModel.js";
 import { validateSceneBlueprint } from "../src/lib/gameStudioPro/blueprintValidator.js";
 import { compileEpisodeBlueprint } from "../src/lib/gameStudioPro/proCompiler.js";
@@ -13,6 +13,9 @@ const makeRaw = (count) => ({ scenes: Array.from({ length: count }, (_, i) => ({
 test("quy mô và mật độ lựa chọn được suy ra từ ý định", () => {
   const value = derivePlanningConstraints("Tầm 30 cảnh, mỗi cảnh 4 lựa chọn, thời hạn 6 tháng");
   assert.equal(value.targetSceneCount, 30); assert.equal(value.minimumSceneCount, 27); assert.equal(value.desiredChoicesPerDecision, 4);
+});
+test("blueprint lớn có ngân sách JSON đủ cho 30 cảnh x 4 lựa chọn", () => {
+  assert.equal(BLUEPRINT_AI_MAX_OUTPUT_TOKENS, 32768);
 });
 test("ràng buộc đi tới prompt và không còn ép gộp về 24", () => {
   const planningConstraints = derivePlanningConstraints("Khoảng 30 cảnh, mỗi cảnh 4 lựa chọn");

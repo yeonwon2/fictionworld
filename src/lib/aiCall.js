@@ -219,7 +219,7 @@ function jsonInstructionSuffix(jsonSchema, compact) {
   }`;
 }
 
-async function callGeminiNative(prompt, jsonSchema, { compact = false, onRequest = () => {} } = {}) {
+async function callGeminiNative(prompt, jsonSchema, { compact = false, onRequest = () => {}, maxOutputTokens = 8192 } = {}) {
   const key = getCustomKey();
   const model = getCustomModel();
   const finalPrompt = prompt + jsonInstructionSuffix(jsonSchema, compact);
@@ -232,7 +232,7 @@ async function callGeminiNative(prompt, jsonSchema, { compact = false, onRequest
     // giữ phản hồi trong giới hạn hợp lý của các model Gemini phổ biến.
     body.generationConfig = {
       responseMimeType: "application/json",
-      maxOutputTokens: 8192,
+      maxOutputTokens,
     };
   }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
@@ -261,7 +261,7 @@ async function callGeminiNative(prompt, jsonSchema, { compact = false, onRequest
 // Cổng API tuỳ chỉnh, chuẩn OpenAI Chat Completions — dùng cho các dịch vụ
 // như Stali, EcoAPI (chỉ cần chọn nhà cung cấp + API Key + tên model), hoặc
 // một Base URL tự nhập khác (gọi thẳng, best-effort).
-async function callOpenAICompatible(prompt, jsonSchema, { compact = false, onRequest = () => {} } = {}) {
+async function callOpenAICompatible(prompt, jsonSchema, { compact = false, onRequest = () => {}, maxOutputTokens = 8192 } = {}) {
   const { providerId, baseUrl, key, model } = getCustomProviderConfig();
   if (!key || !model || (providerId === "other" && !baseUrl)) {
     throw new Error(
@@ -272,7 +272,7 @@ async function callOpenAICompatible(prompt, jsonSchema, { compact = false, onReq
   const body = {
     model,
     messages: [{ role: "user", content: finalPrompt }],
-    max_tokens: 8192,
+    max_tokens: maxOutputTokens,
   };
   if (jsonSchema) body.response_format = { type: "json_object" };
 
@@ -353,10 +353,11 @@ export async function testGeminiConnection(key, model) {
 // Gọi AI — bắt buộc phải có cấu hình (Gemini key, hoặc Cổng API tuỳ chỉnh đầy đủ).
 /**
  * @param {string} prompt
- * @param {{ jsonSchema?: Record<string, any>, useCache?: boolean, forceRefresh?: boolean, maxAttempts?: number, onRequest?: () => void }} [options]
+ * @param {{ jsonSchema?: Record<string, any>, useCache?: boolean, forceRefresh?: boolean, maxAttempts?: number, maxOutputTokens?: number, onRequest?: () => void }} [options]
  */
-async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh = false, maxAttempts = 2, onRequest = () => {} } = {}) {
+async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh = false, maxAttempts = 2, maxOutputTokens = 8192, onRequest = () => {} } = {}) {
   if (![1, 2].includes(maxAttempts)) throw new Error('Số lần thử AI phải là 1 hoặc 2.');
+  if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 256 || maxOutputTokens > 32768) throw new Error('Ngân sách đầu ra AI phải từ 256 đến 32768 token.');
   if (!hasCustomKey()) {
     throw new Error(
       getAIProvider() === "custom"
@@ -370,7 +371,7 @@ async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh
     if (cached !== undefined) { recordCacheHit(); return cached; }
   }
   let first;
-  try { first = await callProvider(prompt, jsonSchema, { onRequest }); recordUsage(1); }
+  try { first = await callProvider(prompt, jsonSchema, { onRequest, maxOutputTokens }); recordUsage(1); }
   catch (error) {
     if (/429|quota|rate.?limit|resource_exhausted/i.test(error?.message || "")) throw new Error(`${error.message} · Tiến độ đã lưu; hãy dùng “Tiếp tục phần còn thiếu” sau khi quota được mở lại.`);
     throw error;
@@ -380,11 +381,14 @@ async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh
   try {
     const parsed = safeJsonParse(first.text); if (useCache) writeCache(cacheKey, parsed); return parsed;
   } catch (firstError) {
-    if (maxAttempts === 1) throw new Error(`${firstError.message}. Đã dừng sau 1 lượt theo ngân sách; chưa tự gọi lại AI. Hãy giảm số ô hoặc độ dài yêu cầu nếu phản hồi bị cắt.`);
+    if (maxAttempts === 1) {
+      const suffix = first.finishReason ? ` (Kết thúc: ${first.finishReason})` : "";
+      throw new Error(`${firstError.message}${suffix}. Đã dừng sau 1 lượt theo ngân sách; chưa tự gọi lại AI.`);
+    }
     // JSON có thể bị cắt vì MAX_TOKENS hoặc đôi khi model tạo ký tự JSON lỗi.
     // Thử lại một lần với yêu cầu súc tích sẽ an toàn hơn việc cố "vá" một
     // chuỗi đang dở, vì vá có thể âm thầm tạo dữ liệu sai/thiếu.
-    const retry = await callProvider(prompt, jsonSchema, { compact: true, onRequest }); recordUsage(1);
+    const retry = await callProvider(prompt, jsonSchema, { compact: true, onRequest, maxOutputTokens }); recordUsage(1);
     try {
       const parsed = safeJsonParse(retry.text); if (useCache) writeCache(cacheKey, parsed); return parsed;
     } catch {
@@ -396,8 +400,8 @@ async function executeAICall(prompt, { jsonSchema, useCache = true, forceRefresh
 }
 
 export async function aiCall(prompt, options = {}) {
-  const { jsonSchema, useCache = true, maxAttempts = 2 } = options;
-  const key = `${cacheKeyFor(prompt, jsonSchema)}|${useCache}|${maxAttempts}`;
+  const { jsonSchema, useCache = true, maxAttempts = 2, maxOutputTokens = 8192 } = options;
+  const key = `${cacheKeyFor(prompt, jsonSchema)}|${useCache}|${maxAttempts}|${maxOutputTokens}`;
   if (inFlightRequests.has(key)) return inFlightRequests.get(key);
   const request = executeAICall(prompt, options).finally(() => inFlightRequests.delete(key));
   inFlightRequests.set(key, request);

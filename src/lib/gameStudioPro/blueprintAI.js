@@ -34,6 +34,7 @@ import { ensureRegistry } from "./entityRegistry.js";
 // Dùng đúng trần cấu trúc thật; prompt topology được giữ súc tích để không
 // phải âm thầm thu nhỏ yêu cầu của người dùng theo một trần mềm khác.
 export const AI_GENERATION_SCENE_CAP = MAX_SCENES_PER_EPISODE;
+export const BLUEPRINT_AI_MAX_OUTPUT_TOKENS = 32768;
 
 function safeString(v) {
   return typeof v === "string" ? v.trim() : "";
@@ -218,7 +219,7 @@ export function emptyBlueprintBase(episode, existingBlueprint = null) {
 
 // Dựng sơ đồ tập LẦN ĐẦU (hoặc tạo lại toàn bộ, giữ nguyên các cảnh đã khoá).
 export async function generateEpisodeBlueprint(episode, gamePlan, existingBlueprint = null, { forceRefresh = false } = {}) {
-  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA, maxAttempts: 1, forceRefresh });
+  const raw = await aiCall(buildEpisodeBlueprintPrompt(gamePlan, episode), { jsonSchema: EPISODE_BLUEPRINT_SCHEMA, maxAttempts: 1, maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS, forceRefresh });
   const lockedScenes = (existingBlueprint?.scenes || []).filter((s) => s.locked);
   const rejectSceneRefs = new Set(lockedScenes.map((s) => s.id));
   const normalized = normalizeAIBlueprintResponse(raw, episode.id, { rejectSceneRefs });
@@ -243,6 +244,7 @@ export async function continueEpisodeBlueprint(episode, gamePlan, partialBluepri
   const raw = await aiCall(buildBlueprintContinuationPrompt(gamePlan, episode, partialBlueprint, missingCount), {
     jsonSchema: EPISODE_BLUEPRINT_SCHEMA,
     maxAttempts: 1,
+    maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS,
   });
   const rejectSceneRefs = new Set((partialBlueprint.scenes || []).map((scene) => scene.id));
   const rejectEndingRefs = new Set((partialBlueprint.endings || []).map((ending) => ending.id));
