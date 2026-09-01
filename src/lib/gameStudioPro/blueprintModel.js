@@ -8,6 +8,12 @@
 //
 // episode.sceneBlueprint -> (blueprintCompiler.js) -> runtime nodes, đúng
 // hướng 1 chiều PRO source -> compiler -> runtime đã dùng ở proCompiler.js.
+//
+// PRO 3: thêm `blueprint.registry` (entityRegistry.js — danh mục chỉ số/cờ/
+// vật phẩm/quan hệ) và `choice.rules`/`choice.effectIntent`/
+// `choice.conditionalOutcomes` (ruleModel.js — luật thật, dịch từ lời tự
+// nhiên). `gateIntent` VẪN giữ nguyên làm mô tả người đọc được — luật thật
+// sống ở `choice.rules`, không thay thế gateIntent (mục 6 yêu cầu PRO 3).
 export const BLUEPRINT_SCHEMA_VERSION = 1;
 
 // Loại cảnh (role) — tên kỹ thuật CHỈ dùng nội bộ, UI luôn hiển thị nhãn
@@ -81,8 +87,23 @@ export function newChoice(overrides = {}) {
     // targetType: "scene" | "ending" | null (chưa nối)
     targetType: null,
     targetId: null,
-    // Ghi chú ĐIỀU KIỆN (RULE) bằng văn bản — PRO 3 mới compile thành luật thật.
+    // Ghi chú ĐIỀU KIỆN bằng văn bản (người đọc) — mô tả song song với
+    // `rules.conditions` thật, KHÔNG phải nguồn compile (xem ruleParser.js).
     gateIntent: "",
+    // Ghi chú HỆ QUẢ bằng văn bản (người đọc) — cùng vai trò với gateIntent
+    // nhưng cho hệ quả (mục 7 yêu cầu PRO 3).
+    effectIntent: "",
+    // Luật THẬT (Canonical Rule IR — ruleModel.js) — nguồn compile duy nhất
+    // proCompiler.js dùng để sinh statRequirements/requiresFlag/... (mục 3).
+    rules: { conditions: [], effects: [] },
+    // Rẽ nhánh có điều kiện (mục 22): mỗi nhánh có điều kiện/hệ quả/đích
+    // RIÊNG; nếu không nhánh nào khớp, dùng chính rules/targetType/targetId
+    // ở trên làm nhánh "còn lại". Rỗng ([]) = không rẽ nhánh, hành vi y hệt
+    // trước PRO 3. Xem proCompiler.js để biết cách biên dịch (mở rộng thành
+    // nhiều lựa chọn cấu trúc cùng cảnh — KHÔNG dùng cơ chế automaticEnding
+    // vì cơ chế đó bắt buộc mọi đích phải là kết thúc và không cho phép hệ
+    // quả, quá hẹp cho rẽ nhánh chung).
+    conditionalOutcomes: [],
     ...overrides,
   };
 }
@@ -121,6 +142,8 @@ export function newSceneBlueprint(episode) {
     startSceneId: startId,
     scenes: [newScene(episode.id, SCENE_ROLES.STORY, { id: startId, title: episode.title || "Mở đầu" })],
     endings: [],
+    // Danh mục chỉ số/cờ/vật phẩm/quan hệ (entityRegistry.js) — PRO 3.
+    registry: { stats: [], flags: [], items: [] },
     updatedAt: new Date().toISOString(),
   };
 }
@@ -262,4 +285,38 @@ export function connectInstantEnding(blueprint, sceneId, choiceId, { title = "K�
   const ending = newEnding(blueprint.episodeId, { title, text, tone });
   const next = touch({ ...blueprint, endings: [...(blueprint.endings || []), ending] });
   return connectChoice(next, sceneId, choiceId, "ending", ending.id);
+}
+
+// ---------- PRO 3: Registry (blueprint.registry) ----------
+
+export function setRegistry(blueprint, registry) {
+  return touch({ ...blueprint, registry });
+}
+
+// ---------- PRO 3: Rule CRUD (choice.rules / effectIntent / conditionalOutcomes) ----------
+
+export function setChoiceRules(blueprint, sceneId, choiceId, rules) {
+  return updateChoice(blueprint, sceneId, choiceId, { rules });
+}
+
+export function setChoiceConditionalOutcomes(blueprint, sceneId, choiceId, conditionalOutcomes) {
+  return updateChoice(blueprint, sceneId, choiceId, { conditionalOutcomes });
+}
+
+let branchIdCounter = 0;
+export function makeOutcomeBranchId() {
+  branchIdCounter += 1;
+  return `branch_${Date.now().toString(36)}${branchIdCounter.toString(36)}`;
+}
+
+export function newOutcomeBranch(overrides = {}) {
+  return {
+    id: makeOutcomeBranchId(),
+    label: "",
+    conditions: [],
+    effects: [],
+    targetType: null,
+    targetId: null,
+    ...overrides,
+  };
 }

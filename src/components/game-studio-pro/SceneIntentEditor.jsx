@@ -4,7 +4,7 @@
 // MindMapEditor.jsx cũ của Xưởng Game, vốn lộ toàn bộ trường kỹ thuật — đây
 // là lớp Pro editor MỚI cố tình tách riêng, không fork MindMapEditor).
 import React, { useState } from "react";
-import { Lock, Unlock, Plus, X, Sparkles, Loader2 } from "lucide-react";
+import { Lock, Unlock, Plus, X, Sparkles, Loader2, GitBranch, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,37 +25,134 @@ import {
   disconnectChoice,
   connectInstantEnding,
   toggleSceneLock,
+  newOutcomeBranch,
 } from "@/lib/gameStudioPro/blueprintModel";
+import { ensureRegistry } from "@/lib/gameStudioPro/entityRegistry";
+import RuleEditor from "./RuleEditor";
+import EntityRegistryPanel from "./EntityRegistryPanel";
 
 const NONE_VALUE = "__none__";
 const NEW_DEATH_VALUE = "__new_death_ending__";
 
-function targetLabel(blueprint, choice) {
-  if (!choice.targetType || !choice.targetId) return "(chưa nối)";
-  if (choice.targetType === "scene") {
-    const s = findScene(blueprint, choice.targetId);
+function targetLabelFor(blueprint, targetType, targetId) {
+  if (!targetType || !targetId) return "(chưa nối)";
+  if (targetType === "scene") {
+    const s = findScene(blueprint, targetId);
     return s ? `→ Cảnh: ${s.title || "(chưa đặt tên)"}` : "→ Cảnh (đã bị xoá)";
   }
-  const e = (blueprint.endings || []).find((x) => x.id === choice.targetId);
+  const e = (blueprint.endings || []).find((x) => x.id === targetId);
   return e ? `→ Kết thúc: ${e.title || "(chưa đặt tên)"}${e.tone === "death" ? " ☠" : ""}` : "→ Kết thúc (đã bị xoá)";
 }
+function targetLabel(blueprint, choice) {
+  return targetLabelFor(blueprint, choice.targetType, choice.targetId);
+}
 
-function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, disabled }) {
-  const value = choice.targetType && choice.targetId ? `${choice.targetType}:${choice.targetId}` : NONE_VALUE;
+// Dùng chung cho đích của lựa chọn CHÍNH lẫn đích của mỗi NHÁNH rẽ điều kiện
+// (conditionalOutcomes) — cùng 1 kiểu chọn "cảnh/kết thúc" như nhau.
+function TargetSelect({ blueprint, sceneId, targetType, targetId, onChange, onCreateDeathEnding, disabled }) {
+  const value = targetType && targetId ? `${targetType}:${targetId}` : NONE_VALUE;
   const otherScenes = blueprint.scenes.filter((s) => s.id !== sceneId);
+  function handleChange(v) {
+    if (v === NONE_VALUE) return onChange(null, null);
+    if (v === NEW_DEATH_VALUE) return onCreateDeathEnding();
+    const [tt, ...rest] = v.split(":");
+    onChange(tt, rest.join(":"));
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={value} onValueChange={handleChange} disabled={disabled}>
+        <SelectTrigger className="h-8 text-xs w-auto min-w-[220px]"><SelectValue placeholder="Chọn đích..." /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE_VALUE}>(chưa nối)</SelectItem>
+          {onCreateDeathEnding && <SelectItem value={NEW_DEATH_VALUE}>☠ Kết thúc ngay (tạo kết thúc mới)</SelectItem>}
+          {otherScenes.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Cảnh</SelectLabel>
+              {otherScenes.map((s) => (
+                <SelectItem key={s.id} value={`scene:${s.id}`}>{s.title || "(chưa đặt tên)"} · {SCENE_ROLE_LABELS[s.role]}</SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+          {(blueprint.endings || []).length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Kết thúc có sẵn</SelectLabel>
+              {blueprint.endings.map((e) => (
+                <SelectItem key={e.id} value={`ending:${e.id}`}>{e.tone === "death" ? "☠ " : ""}{e.title || "(chưa đặt tên)"}</SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+        </SelectContent>
+      </Select>
+      <span className="text-[11px] text-muted-foreground">{targetLabelFor(blueprint, targetType, targetId)}</span>
+    </div>
+  );
+}
 
-  function handleTargetChange(v) {
-    if (v === NONE_VALUE) {
-      onBlueprintChange(disconnectChoice(blueprint, sceneId, choice.id));
-      return;
-    }
-    if (v === NEW_DEATH_VALUE) {
-      onBlueprintChange(connectInstantEnding(blueprint, sceneId, choice.id, { title: "Kết thúc", tone: "death" }));
-      return;
-    }
-    const [targetType, ...rest] = v.split(":");
-    const targetId = rest.join(":");
+// 1 nhánh rẽ có điều kiện (mục 22) — điều kiện + hệ quả RIÊNG + đích RIÊNG.
+// Nếu KHÔNG nhánh nào khớp, hành vi rơi về đúng rules/target của choice cha
+// (xem proCompiler.js#compileChoice — nhánh "còn lại").
+function OutcomeBranchEditor({ blueprint, sceneId, registry, onRegistryChange, branch, onChange, onRemove, disabled }) {
+  return (
+    <div className="rounded-lg border border-violet-400/30 bg-violet-500/5 p-2.5 space-y-2">
+      <div className="flex items-center gap-2">
+        <GitBranch className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+        <Input
+          className="h-7 text-xs flex-1"
+          placeholder="Nhãn nhánh (tuỳ chọn, để trống dùng đúng lời lựa chọn)"
+          value={branch.label}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...branch, label: e.target.value })}
+        />
+        <button type="button" onClick={onRemove} disabled={disabled} className="p-1 text-muted-foreground hover:text-destructive disabled:opacity-30"><X className="w-3.5 h-3.5" /></button>
+      </div>
+      <TargetSelect
+        blueprint={blueprint}
+        sceneId={sceneId}
+        targetType={branch.targetType}
+        targetId={branch.targetId}
+        disabled={disabled}
+        onChange={(tt, tid) => onChange({ ...branch, targetType: tt, targetId: tid })}
+      />
+      <div>
+        <Label className="text-[11px]">Chỉ đi nhánh này nếu</Label>
+        <RuleEditor registry={registry} onRegistryChange={onRegistryChange} kind="condition" items={branch.conditions || []} onItemsChange={(next) => onChange({ ...branch, conditions: next })} />
+      </div>
+      <div>
+        <Label className="text-[11px]">Hệ quả riêng của nhánh này</Label>
+        <RuleEditor registry={registry} onRegistryChange={onRegistryChange} kind="effect" items={branch.effects || []} onItemsChange={(next) => onChange({ ...branch, effects: next })} />
+      </div>
+    </div>
+  );
+}
+
+function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, registry, onRegistryChange, disabled }) {
+  const [rulesOpen, setRulesOpen] = useState(false);
+
+  function patchChoice(fields) {
+    onBlueprintChange(updateChoice(blueprint, sceneId, choice.id, fields));
+  }
+
+  function handleTargetChange(targetType, targetId) {
+    if (!targetType || !targetId) return onBlueprintChange(disconnectChoice(blueprint, sceneId, choice.id));
     onBlueprintChange(connectChoice(blueprint, sceneId, choice.id, targetType, targetId));
+  }
+  function handleCreateDeathEnding() {
+    onBlueprintChange(connectInstantEnding(blueprint, sceneId, choice.id, { title: "Kết thúc", tone: "death" }));
+  }
+
+  const rules = choice.rules || { conditions: [], effects: [] };
+  const branches = choice.conditionalOutcomes || [];
+  const ruleCount = (rules.conditions?.length || 0) + (rules.effects?.length || 0) + branches.length;
+
+  function updateBranch(i, nextBranch) {
+    const next = branches.map((b, bi) => (bi === i ? nextBranch : b));
+    patchChoice({ conditionalOutcomes: next });
+  }
+  function removeBranch(i) {
+    patchChoice({ conditionalOutcomes: branches.filter((_, bi) => bi !== i) });
+  }
+  function addBranch() {
+    patchChoice({ conditionalOutcomes: [...branches, newOutcomeBranch()] });
   }
 
   return (
@@ -67,7 +164,7 @@ function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, disab
           placeholder="Lời lựa chọn (để trống nếu chỉ là 'đi tiếp')"
           value={choice.text}
           disabled={disabled}
-          onChange={(e) => onBlueprintChange(updateChoice(blueprint, sceneId, choice.id, { text: e.target.value }))}
+          onChange={(e) => patchChoice({ text: e.target.value })}
         />
         <button
           type="button"
@@ -79,41 +176,72 @@ function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, disab
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="pl-7 flex flex-wrap items-center gap-2">
-        <Select value={value} onValueChange={handleTargetChange} disabled={disabled}>
-          <SelectTrigger className="h-8 text-xs w-auto min-w-[220px]"><SelectValue placeholder="Chọn đích..." /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE_VALUE}>(chưa nối)</SelectItem>
-            <SelectItem value={NEW_DEATH_VALUE}>☠ Kết thúc ngay (tạo kết thúc mới)</SelectItem>
-            {otherScenes.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Cảnh</SelectLabel>
-                {otherScenes.map((s) => (
-                  <SelectItem key={s.id} value={`scene:${s.id}`}>{s.title || "(chưa đặt tên)"} · {SCENE_ROLE_LABELS[s.role]}</SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-            {(blueprint.endings || []).length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Kết thúc có sẵn</SelectLabel>
-                {blueprint.endings.map((e) => (
-                  <SelectItem key={e.id} value={`ending:${e.id}`}>{e.tone === "death" ? "☠ " : ""}{e.title || "(chưa đặt tên)"}</SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-          </SelectContent>
-        </Select>
-        <span className="text-[11px] text-muted-foreground">{targetLabel(blueprint, choice)}</span>
-      </div>
       <div className="pl-7">
+        <TargetSelect
+          blueprint={blueprint}
+          sceneId={sceneId}
+          targetType={choice.targetType}
+          targetId={choice.targetId}
+          disabled={disabled}
+          onChange={handleTargetChange}
+          onCreateDeathEnding={handleCreateDeathEnding}
+        />
+        {branches.length > 0 && <p className="text-[11px] text-violet-500 mt-1">↑ đích này chỉ dùng khi KHÔNG nhánh rẽ nào bên dưới khớp</p>}
+      </div>
+      <div className="pl-7 space-y-1.5">
         <Input
           className="text-xs h-8"
-          placeholder="Điều kiện (tuỳ chọn, ghi bằng lời — vd: chỉ mở nếu trước đó đã cứu Tiểu Lan)"
+          placeholder="Ghi chú điều kiện bằng lời, chỉ để đọc (vd: chỉ mở nếu trước đó đã cứu Tiểu Lan)"
           value={choice.gateIntent}
           disabled={disabled}
-          onChange={(e) => onBlueprintChange(updateChoice(blueprint, sceneId, choice.id, { gateIntent: e.target.value }))}
+          onChange={(e) => patchChoice({ gateIntent: e.target.value })}
+        />
+        <Input
+          className="text-xs h-8"
+          placeholder="Ghi chú hệ quả bằng lời, chỉ để đọc (vd: mất 5 Uy tín, nhận Ngọc bội)"
+          value={choice.effectIntent || ""}
+          disabled={disabled}
+          onChange={(e) => patchChoice({ effectIntent: e.target.value })}
         />
       </div>
+
+      <div className="pl-7">
+        <button type="button" onClick={() => setRulesOpen((v) => !v)} className="text-xs text-primary hover:underline">
+          {rulesOpen ? "▾" : "▸"} Luật thật (điều kiện & hệ quả){ruleCount > 0 ? ` · ${ruleCount}` : ""}
+        </button>
+      </div>
+
+      {rulesOpen && (
+        <div className="pl-7 space-y-3 border-l-2 border-primary/20 ml-2">
+          <div>
+            <Label className="text-[11px]">Điều kiện — chỉ hiện/mở lựa chọn này khi</Label>
+            <RuleEditor registry={registry} onRegistryChange={onRegistryChange} kind="condition" items={rules.conditions || []} onItemsChange={(next) => patchChoice({ rules: { ...rules, conditions: next } })} />
+          </div>
+          <div>
+            <Label className="text-[11px]">Hệ quả — khi người chơi chọn đáp án này</Label>
+            <RuleEditor registry={registry} onRegistryChange={onRegistryChange} kind="effect" items={rules.effects || []} onItemsChange={(next) => patchChoice({ rules: { ...rules, effects: next } })} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[11px]">Rẽ nhánh có điều kiện (mục 22) — cùng 1 hành động, kết quả khác nhau tuỳ điều kiện</Label>
+            {branches.map((b, i) => (
+              <OutcomeBranchEditor
+                key={b.id}
+                blueprint={blueprint}
+                sceneId={sceneId}
+                registry={registry}
+                onRegistryChange={onRegistryChange}
+                branch={b}
+                disabled={disabled}
+                onChange={(next) => updateBranch(i, next)}
+                onRemove={() => removeBranch(i)}
+              />
+            ))}
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={disabled} onClick={addBranch}>
+              <Plus className="w-3 h-3 mr-1" /> Thêm rẽ nhánh có điều kiện
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -122,6 +250,8 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
   const scene = findScene(blueprint, sceneId);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
+  const [registryOpen, setRegistryOpen] = useState(false);
+  const registry = ensureRegistry(blueprint);
 
   if (!scene) return null;
   const isDecision = scene.role === SCENE_ROLES.DECISION;
@@ -130,6 +260,9 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
 
   function patch(fields) {
     onBlueprintChange(updateScene(blueprint, sceneId, fields));
+  }
+  function handleRegistryChange(nextRegistry) {
+    onBlueprintChange({ ...blueprint, registry: nextRegistry });
   }
 
   function handleChoiceCountChange(v) {
@@ -217,10 +350,25 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
               </div>
 
               <div className="space-y-2">
-                <Label>Các lựa chọn hiện tại</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Các lựa chọn hiện tại</Label>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRegistryOpen(true)}>
+                    <Library className="w-3.5 h-3.5 mr-1" /> Danh mục chỉ số/cờ/vật phẩm
+                  </Button>
+                </div>
                 {scene.choices.length === 0 && <p className="text-xs text-muted-foreground">Chưa có lựa chọn nào.</p>}
                 {scene.choices.map((c, i) => (
-                  <ChoiceRow key={c.id} blueprint={blueprint} sceneId={sceneId} choice={c} index={i} onBlueprintChange={onBlueprintChange} disabled={disabled} />
+                  <ChoiceRow
+                    key={c.id}
+                    blueprint={blueprint}
+                    sceneId={sceneId}
+                    choice={c}
+                    index={i}
+                    onBlueprintChange={onBlueprintChange}
+                    registry={registry}
+                    onRegistryChange={handleRegistryChange}
+                    disabled={disabled}
+                  />
                 ))}
                 <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => onBlueprintChange(addChoice(blueprint, sceneId))}>
                   <Plus className="w-3.5 h-3.5 mr-1" /> Thêm lựa chọn
@@ -252,6 +400,7 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
           {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         </div>
       </DialogContent>
+      {registryOpen && <EntityRegistryPanel registry={registry} onRegistryChange={handleRegistryChange} onClose={() => setRegistryOpen(false)} />}
     </Dialog>
   );
 }

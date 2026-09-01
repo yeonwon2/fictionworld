@@ -1,10 +1,14 @@
-// Xưởng Game Pro — PRO 2: kiểm tra cấu trúc (structural validation) cho Scene
-// Blueprint. Đây KHÔNG phải QA đầy đủ như PRO 7 (không mô phỏng chạy thử với
-// chỉ số/cờ thật — RULE intent chưa compile ở bước này) — chỉ bắt lỗi TOPOLOGY:
-// ID trùng, đích không tồn tại, không tới được kết thúc, v.v. Dùng thuần JS,
-// không gọi AI, để chạy được ngay khi người dùng sửa tay hoặc trước khi Apply
-// kết quả AI (xem mục 23 AI SAFETY trong yêu cầu PRO 2).
+// Xưởng Game Pro — PRO 2/3: kiểm tra cấu trúc (structural validation) cho
+// Scene Blueprint, CỘNG kiểm tra LUẬT thật (PRO 3 — xem ruleValidator.js).
+// Đây KHÔNG phải QA đầy đủ như PRO 7 (không mô phỏng chạy thử full — việc đó
+// vẫn do normalizeAndRepair's analyzeLogic/simulatePlaytest lo khi compile) —
+// chỉ bắt lỗi TOPOLOGY (ID trùng, đích không tồn tại, không tới được kết
+// thúc...) và lỗi LUẬT (entity không tồn tại, operator sai, giới hạn 1-slot
+// của engine...). Dùng thuần JS, không gọi AI, để chạy được ngay khi người
+// dùng sửa tay hoặc trước khi Apply kết quả AI (mục 23 AI SAFETY của PRO 2).
 import { SCENE_ROLES, MAX_SCENES_PER_EPISODE } from "./blueprintModel.js";
+import { ensureRegistry } from "./entityRegistry.js";
+import { validateBlueprintRules } from "./ruleValidator.js";
 
 export function validateSceneBlueprint(blueprint) {
   const errors = [];
@@ -117,6 +121,12 @@ export function validateSceneBlueprint(blueprint) {
   if (endings.length === 0 && !hasEndingRole) {
     warnings.push("Tập này chưa có kết thúc/điểm chuyển tiếp nào — người chơi có thể không bao giờ kết thúc tập.");
   }
+
+  // PRO 3: luật thật (choice.rules/conditionalOutcomes) — xem ruleValidator.js.
+  const registry = ensureRegistry(blueprint);
+  const ruleResult = validateBlueprintRules(blueprint, registry);
+  errors.push(...ruleResult.errors);
+  warnings.push(...ruleResult.warnings);
 
   return { errors, warnings };
 }
