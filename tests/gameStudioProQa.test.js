@@ -99,16 +99,40 @@ test("vital mechanic and broken milestones expose stable structured codes", () =
   for (const code of ["VITAL_MECHANIC_WITHOUT_VITAL_STAT", "MILESTONE_ENTITY_MISSING", "MILESTONE_ENTITY_WRONG_KIND", "MILESTONE_DUPLICATE_THRESHOLD", "MILESTONE_VALUE_INVALID"]) assert.ok(found.has(code), `missing ${code}`);
 });
 
-test("instant_failure intent is not satisfied by a death ending only available later", () => {
-  const doc = cleanProQaFixture(); const ep = doc.storyBlueprint.episodes[0]; const bp = ep.sceneBlueprint;
-  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
-  deathChoice.targetType = "scene"; deathChoice.targetId = "late_death";
-  bp.scenes.push({ id: "late_death", title: "Cuối tuyến dài", role: "story", choices: [{ id: "die_late", text: "Chết", targetType: "ending", targetId: "death", rules: { conditions: [], effects: [] }, conditionalOutcomes: [] }] });
-  assert.ok(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"));
-});
-
 test("direct start choice to a reachable death ending satisfies instant_failure", () => {
   assert.equal(codes(runProQa(cleanProQaFixture())).has("PLANNER_INSTANT_FAILURE_MISSING"), false);
+});
+
+test("direct death choice on a later reachable scene satisfies instant_failure", () => {
+  const doc = cleanProQaFixture(); const bp = doc.storyBlueprint.episodes[0].sceneBlueprint;
+  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
+  deathChoice.targetType = "scene"; deathChoice.targetId = "side";
+  bp.scenes.find((scene) => scene.id === "side").choices.push({ id: "die_later", text: "Chết ngay", targetType: "ending", targetId: "death", rules: { conditions: [], effects: [] }, conditionalOutcomes: [] });
+  assert.equal(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"), false);
+});
+
+test("an unconnected death ending does not satisfy instant_failure", () => {
+  const doc = cleanProQaFixture(); const bp = doc.storyBlueprint.episodes[0].sceneBlueprint;
+  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
+  deathChoice.targetType = "scene"; deathChoice.targetId = "join";
+  assert.equal(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"), true);
+});
+
+test("a direct death choice on an unreachable scene does not satisfy instant_failure", () => {
+  const doc = cleanProQaFixture(); const bp = doc.storyBlueprint.episodes[0].sceneBlueprint;
+  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
+  deathChoice.targetType = "scene"; deathChoice.targetId = "join";
+  bp.scenes.push({ id: "orphan_death", title: "Cảnh mồ côi", role: "story", choices: [{ id: "die_orphan", text: "Chết", targetType: "ending", targetId: "death", rules: { conditions: [], effects: [] }, conditionalOutcomes: [] }] });
+  assert.equal(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"), true);
+});
+
+test("a reachable conditional outcome directly targeting death satisfies instant_failure", () => {
+  const doc = cleanProQaFixture(); const bp = doc.storyBlueprint.episodes[0].sceneBlueprint;
+  const deathChoice = bp.scenes[0].choices.find((choice) => choice.targetId === "death");
+  deathChoice.targetType = "scene"; deathChoice.targetId = "join";
+  const reachableChoice = bp.scenes.find((scene) => scene.id === "side").choices[0];
+  reachableChoice.conditionalOutcomes = [{ id: "death_branch", conditions: [], effects: [], targetType: "ending", targetId: "death" }];
+  assert.equal(codes(runProQa(doc)).has("PLANNER_INSTANT_FAILURE_MISSING"), false);
 });
 
 test("PRO 7 graph engine reports reachability, incoming/outgoing and missing targets", () => {

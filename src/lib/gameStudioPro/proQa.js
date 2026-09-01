@@ -30,6 +30,19 @@ function allEffects(choice) {
 }
 function normalizedText(value) { return String(value || "").trim().toLocaleLowerCase("vi").replace(/\s+/g, " "); }
 
+function hasReachableImmediateDeath(graph, endings) {
+  const deathEndingIds = new Set((endings || []).filter((ending) => ending?.tone === "death").map((ending) => ending.id));
+  if (!deathEndingIds.size) return false;
+  for (const sceneId of graph.reachableSceneIds) {
+    const scene = graph.byId.get(sceneId);
+    for (const choice of scene?.choices || []) {
+      if (choice?.targetType === "ending" && deathEndingIds.has(choice.targetId)) return true;
+      if ((choice?.conditionalOutcomes || []).some((branch) => branch?.targetType === "ending" && deathEndingIds.has(branch.targetId))) return true;
+    }
+  }
+  return false;
+}
+
 // Tarjan over the tiny episode graph. Kept generic and linear so feasibility
 // can fail open on repeatable cross-episode gains without path simulation.
 function cyclicVertices(adjacency) {
@@ -167,16 +180,11 @@ export function runProQa(rawDoc) {
     if (expected > 0 && Math.abs(bp.scenes.length - expected) > Math.max(3, Math.ceil(expected * 0.4))) add("warning", "SCENE_COUNT_MISMATCH", "episode", epCtx, { title: "Số cảnh lệch nhiều so với kế hoạch", message: `Kế hoạch dự kiến khoảng ${expected} cảnh nhưng sơ đồ hiện có ${bp.scenes.length}.`, whyItMatters: "Nhịp độ hoặc phạm vi tập có thể đã lệch khỏi kế hoạch.", suggestedFix: "Cập nhật kế hoạch hoặc bổ sung/rút gọn cảnh." });
     const intentTypes = new Set((episode.planningIntents || []).map((i) => i?.type));
     const roleHas = (role) => [...graph.byId.values()].some((s) => s.role === role);
-    const deathEndingIds = new Set((bp.endings || []).filter((ending) => ending?.tone === "death").map((ending) => ending.id));
-    const startScene = graph.byId.get(bp.startSceneId);
-    const hasImmediateDeath = (startScene?.choices || []).some((choice) =>
-      (choice?.targetType === "ending" && deathEndingIds.has(choice.targetId)) ||
-      (choice?.conditionalOutcomes || []).some((branch) => branch?.targetType === "ending" && deathEndingIds.has(branch.targetId))
-    );
+    const hasImmediateDeath = hasReachableImmediateDeath(graph, bp.endings);
     const hasGate = [...graph.byId.values()].some((s) => (s.choices || []).some((c) => allConditions(c).some((list) => list.length)));
     const hasItemGate = [...graph.byId.values()].some((s) => (s.choices || []).some((c) => allConditions(c).some((list) => list.some((x) => x?.type === CONDITION_TYPES.ITEM_PRESENT))));
     const intentChecks = [
-      ["instant_failure", hasImmediateDeath, "PLANNER_INSTANT_FAILURE_MISSING", "Kế hoạch có thất bại tức thì nhưng cảnh bắt đầu chưa có lựa chọn/kết quả dẫn trực tiếp tới kết thúc chết."],
+      ["instant_failure", hasImmediateDeath, "PLANNER_INSTANT_FAILURE_MISSING", "Kế hoạch có thất bại tức thì nhưng chưa có lựa chọn/kết quả ở một cảnh reachable dẫn trực tiếp tới kết thúc chết."],
       ["side_branch", roleHas(SCENE_ROLES.SIDE), "PLANNER_SIDE_BRANCH_MISSING", "Kế hoạch có nhánh phụ nhưng graph chưa có cảnh Nhánh phụ."],
       ["convergence", roleHas(SCENE_ROLES.CONVERGENCE), "PLANNER_CONVERGENCE_MISSING", "Kế hoạch có hội tụ nhưng graph chưa có cảnh Hội tụ."],
       ["relationship_or_flag_gate", hasGate, "PLANNER_GATE_MISSING", "Kế hoạch có cổng điều kiện nhưng graph chưa có luật điều kiện."],
