@@ -1,0 +1,265 @@
+// Xưởng Game Pro — PRO 2: model cho "Sơ đồ cảnh" (Scene Blueprint) của MỘT
+// Tập (episode.sceneBlueprint, xem AGENTS.md/thiết kế PRO 2). Đây vẫn là một
+// tài liệu AUTHORING (giống storyBlueprint ở plannerModel.js) — KHÔNG phải
+// runtime node graph. Nó mô tả CẤU TRÚC (topology): cảnh nào, loại gì, nối
+// đi đâu — và Ý ĐỒ (Scene Intent) bằng ngôn ngữ tự nhiên. Điều kiện luật thật
+// (statRequirements/requiresFlag...) CHƯA được compile ở bước này — mỗi lựa
+// chọn chỉ giữ `gateIntent` dạng văn bản, PRO 3 mới compile thành luật.
+//
+// episode.sceneBlueprint -> (blueprintCompiler.js) -> runtime nodes, đúng
+// hướng 1 chiều PRO source -> compiler -> runtime đã dùng ở proCompiler.js.
+export const BLUEPRINT_SCHEMA_VERSION = 1;
+
+// Loại cảnh (role) — tên kỹ thuật CHỈ dùng nội bộ, UI luôn hiển thị nhãn
+// tiếng Việt ở SCENE_ROLE_LABELS bên dưới.
+export const SCENE_ROLES = {
+  STORY: "story",
+  DECISION: "decision",
+  CONSEQUENCE: "consequence",
+  CONDITION: "condition",
+  DANGER: "danger",
+  SIDE: "side",
+  CONVERGENCE: "convergence",
+  ENDING: "ending",
+};
+
+export const SCENE_ROLE_LABELS = {
+  [SCENE_ROLES.STORY]: "Kể chuyện",
+  [SCENE_ROLES.DECISION]: "Lựa chọn",
+  [SCENE_ROLES.CONSEQUENCE]: "Hệ quả",
+  [SCENE_ROLES.CONDITION]: "Điều kiện",
+  [SCENE_ROLES.DANGER]: "Nguy hiểm",
+  [SCENE_ROLES.SIDE]: "Cảnh phụ",
+  [SCENE_ROLES.CONVERGENCE]: "Hội tụ",
+  [SCENE_ROLES.ENDING]: "Kết thúc",
+};
+
+export function sceneRoleLabel(role) {
+  return SCENE_ROLE_LABELS[role] || SCENE_ROLE_LABELS[SCENE_ROLES.STORY];
+}
+
+// Vai không có lựa chọn thật (đi tiếp tự động, tối đa 1 cảnh kế) — người dùng
+// không cần chọn số lựa chọn cho các vai này.
+export const AUTO_CONTINUE_ROLES = new Set([
+  SCENE_ROLES.STORY,
+  SCENE_ROLES.CONSEQUENCE,
+  SCENE_ROLES.CONDITION,
+  SCENE_ROLES.CONVERGENCE,
+]);
+
+export const MIN_DECISION_CHOICES = 2;
+export const MAX_DECISION_CHOICES = 6;
+
+// Giới hạn an toàn tổng số cảnh/tập — Planner chỉ ước lượng approximateSceneCount,
+// không tuyệt đối, nhưng KHÔNG được để AI vô tình sinh hàng trăm cảnh cho 1 tập.
+export const MAX_SCENES_PER_EPISODE = 60;
+
+let idCounter = 0;
+function uniqueSuffix() {
+  idCounter += 1;
+  return `${Date.now().toString(36)}${idCounter.toString(36)}`;
+}
+
+// ID cảnh do HỆ THỐNG quản lý — namespaced theo episode để không đụng ID khi
+// game nhiều tập compile chung (xem blueprintCompiler.js), ổn định sau khi
+// sửa/đổi tên (không phụ thuộc order/title), và không va chạm khi AI thêm
+// cảnh phụ (dùng bộ đếm riêng trên blueprint, không đoán từ số lượng hiện có).
+export function makeSceneId(episodeId) {
+  return `${episodeId}__s_${uniqueSuffix()}`;
+}
+export function makeChoiceId() {
+  return `c_${uniqueSuffix()}`;
+}
+export function makeEndingId(episodeId) {
+  return `${episodeId}__end_${uniqueSuffix()}`;
+}
+
+export function newChoice(overrides = {}) {
+  return {
+    id: makeChoiceId(),
+    text: "",
+    // targetType: "scene" | "ending" | null (chưa nối)
+    targetType: null,
+    targetId: null,
+    // Ghi chú ĐIỀU KIỆN (RULE) bằng văn bản — PRO 3 mới compile thành luật thật.
+    gateIntent: "",
+    ...overrides,
+  };
+}
+
+export function newScene(episodeId, role = SCENE_ROLES.STORY, overrides = {}) {
+  return {
+    id: makeSceneId(episodeId),
+    title: "",
+    role,
+    // Ý ĐỒ CẢNH — phần quan trọng nhất PRO 2: mô tả tự nhiên ý đồ tác giả.
+    intent: "",
+    choices: [],
+    notes: "",
+    locked: false,
+    userEdited: false,
+    ...overrides,
+  };
+}
+
+export function newEnding(episodeId, overrides = {}) {
+  return {
+    id: makeEndingId(episodeId),
+    title: "",
+    text: "",
+    // tone chỉ để UI tô màu (ví dụ ☠ khi tone === "death") — không ảnh hưởng compiler.
+    tone: "neutral",
+    ...overrides,
+  };
+}
+
+export function newSceneBlueprint(episode) {
+  const startId = makeSceneId(episode.id);
+  return {
+    version: BLUEPRINT_SCHEMA_VERSION,
+    episodeId: episode.id,
+    startSceneId: startId,
+    scenes: [newScene(episode.id, SCENE_ROLES.STORY, { id: startId, title: episode.title || "Mở đầu" })],
+    endings: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function findScene(blueprint, sceneId) {
+  return (blueprint?.scenes || []).find((s) => s.id === sceneId) || null;
+}
+export function findEnding(blueprint, endingId) {
+  return (blueprint?.endings || []).find((e) => e.id === endingId) || null;
+}
+
+function touch(blueprint) {
+  return { ...blueprint, updatedAt: new Date().toISOString() };
+}
+
+// ---------- Graph operations (thuần — không gọi AI) ----------
+
+export function addScene(blueprint, role = SCENE_ROLES.STORY, overrides = {}) {
+  const scene = newScene(blueprint.episodeId, role, overrides);
+  return touch({ ...blueprint, scenes: [...blueprint.scenes, scene] });
+}
+
+export function updateScene(blueprint, sceneId, patch) {
+  return touch({
+    ...blueprint,
+    scenes: blueprint.scenes.map((s) => (s.id === sceneId ? { ...s, ...patch } : s)),
+  });
+}
+
+// Xoá 1 cảnh. Mọi lựa chọn (ở cảnh khác) đang trỏ tới cảnh này sẽ bị gỡ nối
+// (targetType/targetId về null) thay vì để lơ lửng — người gọi (UI) nên cảnh
+// báo trước nếu cảnh có incoming connection, nhưng hàm này luôn giữ đồ thị
+// hợp lệ về mặt cấu trúc dù không cảnh báo.
+export function removeScene(blueprint, sceneId) {
+  const scenes = blueprint.scenes
+    .filter((s) => s.id !== sceneId)
+    .map((s) => ({
+      ...s,
+      choices: s.choices.map((c) =>
+        c.targetType === "scene" && c.targetId === sceneId ? { ...c, targetType: null, targetId: null } : c
+      ),
+    }));
+  const startSceneId = blueprint.startSceneId === sceneId ? scenes[0]?.id || null : blueprint.startSceneId;
+  return touch({ ...blueprint, scenes, startSceneId });
+}
+
+export function duplicateScene(blueprint, sceneId) {
+  const source = findScene(blueprint, sceneId);
+  if (!source) return blueprint;
+  const copy = {
+    ...source,
+    id: makeSceneId(blueprint.episodeId),
+    title: source.title ? `${source.title} (bản sao)` : "",
+    locked: false,
+    choices: source.choices.map((c) => ({ ...c, id: makeChoiceId() })),
+  };
+  return touch({ ...blueprint, scenes: [...blueprint.scenes, copy] });
+}
+
+export function countIncoming(blueprint, sceneId) {
+  let n = 0;
+  for (const s of blueprint.scenes) {
+    for (const c of s.choices) {
+      if (c.targetType === "scene" && c.targetId === sceneId) n++;
+    }
+  }
+  return n;
+}
+
+export function addChoice(blueprint, sceneId, overrides = {}) {
+  return touch({
+    ...blueprint,
+    scenes: blueprint.scenes.map((s) =>
+      s.id === sceneId ? { ...s, choices: [...s.choices, newChoice(overrides)] } : s
+    ),
+  });
+}
+
+export function updateChoice(blueprint, sceneId, choiceId, patch) {
+  return touch({
+    ...blueprint,
+    scenes: blueprint.scenes.map((s) =>
+      s.id === sceneId
+        ? { ...s, choices: s.choices.map((c) => (c.id === choiceId ? { ...c, ...patch } : c)) }
+        : s
+    ),
+  });
+}
+
+export function removeChoice(blueprint, sceneId, choiceId) {
+  return touch({
+    ...blueprint,
+    scenes: blueprint.scenes.map((s) =>
+      s.id === sceneId ? { ...s, choices: s.choices.filter((c) => c.id !== choiceId) } : s
+    ),
+  });
+}
+
+export function connectChoice(blueprint, sceneId, choiceId, targetType, targetId) {
+  return updateChoice(blueprint, sceneId, choiceId, { targetType, targetId });
+}
+
+export function disconnectChoice(blueprint, sceneId, choiceId) {
+  return updateChoice(blueprint, sceneId, choiceId, { targetType: null, targetId: null });
+}
+
+export function toggleSceneLock(blueprint, sceneId) {
+  return touch({
+    ...blueprint,
+    scenes: blueprint.scenes.map((s) => (s.id === sceneId ? { ...s, locked: !s.locked } : s)),
+  });
+}
+
+export function addEnding(blueprint, overrides = {}) {
+  const ending = newEnding(blueprint.episodeId, overrides);
+  return touch({ ...blueprint, endings: [...(blueprint.endings || []), ending] });
+}
+
+export function updateEnding(blueprint, endingId, patch) {
+  return touch({
+    ...blueprint,
+    endings: (blueprint.endings || []).map((e) => (e.id === endingId ? { ...e, ...patch } : e)),
+  });
+}
+
+export function removeEnding(blueprint, endingId) {
+  const scenes = blueprint.scenes.map((s) => ({
+    ...s,
+    choices: s.choices.map((c) =>
+      c.targetType === "ending" && c.targetId === endingId ? { ...c, targetType: null, targetId: null } : c
+    ),
+  }));
+  return touch({ ...blueprint, scenes, endings: (blueprint.endings || []).filter((e) => e.id !== endingId) });
+}
+
+// Tạo nhanh 1 kết thúc "chết ngay" và nối thẳng lựa chọn tới đó — đúng UX
+// "☠ Kết thúc ngay" ở mục 16: người dùng không cần tự tạo cảnh Consequence.
+export function connectInstantEnding(blueprint, sceneId, choiceId, { title = "Kết thúc", text = "", tone = "death" } = {}) {
+  const ending = newEnding(blueprint.episodeId, { title, text, tone });
+  const next = touch({ ...blueprint, endings: [...(blueprint.endings || []), ending] });
+  return connectChoice(next, sceneId, choiceId, "ending", ending.id);
+}

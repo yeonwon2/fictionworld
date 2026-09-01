@@ -31,6 +31,7 @@ import { compileProGame } from "@/lib/gameStudioPro/proCompiler";
 import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
 import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
+import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -132,6 +133,7 @@ function ProGameEditor({ gameId, onBack }) {
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [mode, setMode] = useState("plan");
   const [playKey, setPlayKey] = useState(0);
+  const [focusEpisodeId, setFocusEpisodeId] = useState(null);
   // Bản xem trước riêng cho tab Xuất bản — ExportCenter cho phép "Import JSON"
   // để nạp lại 1 file đã xuất; nếu trỏ thẳng vào proDoc thì việc import đó sẽ
   // âm thầm ghi đè tài liệu Pro (nguồn thật) bằng dữ liệu đã biên dịch, làm 2
@@ -214,10 +216,11 @@ function ProGameEditor({ gameId, onBack }) {
           </div>
           <div className="flex gap-2 shrink-0">
             <Button size="sm" variant={mode === "plan" ? "default" : "outline"} onClick={() => setMode("plan")}>Kế hoạch</Button>
+            <Button size="sm" variant={mode === "mindmap" ? "default" : "outline"} onClick={() => setMode("mindmap")}>Sơ đồ</Button>
             <Button size="sm" variant={mode === "edit" ? "default" : "outline"} onClick={() => setMode("edit")}>Soạn</Button>
             <Button size="sm" variant={mode === "play" ? "default" : "outline"} onClick={() => setMode("play")}>Chơi thử</Button>
             <Button size="sm" variant={mode === "export" ? "default" : "outline"} onClick={() => setMode("export")}>Xuất bản</Button>
-            {(mode === "plan" || mode === "edit") && (
+            {(mode === "plan" || mode === "mindmap" || mode === "edit") && (
               <Button size="sm" onClick={handleSave} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null} Lưu
               </Button>
@@ -232,6 +235,7 @@ function ProGameEditor({ gameId, onBack }) {
             <PlannerEditor
               storyBlueprint={proDoc.storyBlueprint}
               onChange={(storyBlueprint) => updateField({ storyBlueprint })}
+              onOpenBlueprint={(episodeId) => { setFocusEpisodeId(episodeId); setMode("mindmap"); }}
             />
           ) : (
             <PlannerIntro
@@ -240,6 +244,14 @@ function ProGameEditor({ gameId, onBack }) {
               onSkip={() => setMode("edit")}
             />
           )
+        )}
+
+        {mode === "mindmap" && (
+          <SmartMindMap
+            storyBlueprint={proDoc.storyBlueprint}
+            onChange={(storyBlueprint) => updateField({ storyBlueprint })}
+            initialEpisodeId={focusEpisodeId}
+          />
         )}
 
         {mode === "edit" && (

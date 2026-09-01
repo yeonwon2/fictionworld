@@ -2,7 +2,7 @@
 // lại bằng AI (nếu chưa khoá). Chỉ hiển thị từ ngữ thường (Tập/Giai
 // đoạn/Sự kiện/Nguy hiểm/Kết thúc...), không có trường kỹ thuật nào.
 import React, { useState } from "react";
-import { Lock, Unlock, ChevronUp, ChevronDown, Trash2, RotateCcw, Plus, X, Loader2 } from "lucide-react";
+import { Lock, Unlock, ChevronUp, ChevronDown, Trash2, RotateCcw, Plus, X, Loader2, Waypoints } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -113,7 +113,7 @@ function IntentEditor({ intents, onChange }) {
   );
 }
 
-export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange, onRemove, onMoveUp, onMoveDown, onToggleLock, onRegenerate }) {
+export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange, onRemove, onMoveUp, onMoveDown, onToggleLock, onRegenerate, planApproved, onOpenBlueprint }) {
   const [expanded, setExpanded] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -202,10 +202,17 @@ export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange,
         </div>
       )}
 
-      <Button type="button" size="sm" variant="outline" onClick={handleRegenerate} disabled={episode.locked || regenerating}>
-        {regenerating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
-        Tạo lại tập này
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={handleRegenerate} disabled={episode.locked || regenerating}>
+          {regenerating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
+          Tạo lại tập này
+        </Button>
+        {onOpenBlueprint && (
+          <Button type="button" size="sm" variant="outline" onClick={onOpenBlueprint} disabled={!planApproved} title={planApproved ? undefined : "Duyệt bản thiết kế trước khi dựng sơ đồ cảnh"}>
+            <Waypoints className="w-3.5 h-3.5 mr-1.5" /> Dựng sơ đồ tập
+          </Button>
+        )}
+      </div>
     </section>
   );
 }

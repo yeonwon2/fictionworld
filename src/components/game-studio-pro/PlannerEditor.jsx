@@ -31,7 +31,7 @@ const STATUS_LABEL = {
   [PLANNER_STATUS.APPROVED]: "Đã duyệt",
 };
 
-export default function PlannerEditor({ storyBlueprint, onChange }) {
+export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprint }) {
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [progress, setProgress] = useState("");
   const [showIdea, setShowIdea] = useState(false);
@@ -194,6 +194,8 @@ export default function PlannerEditor({ storyBlueprint, onChange }) {
             onMoveDown={() => patchEpisodes(reorderEpisode(episodes, ep.id, "down"))}
             onToggleLock={() => patchEpisodes(toggleEpisodeLock(episodes, ep.id))}
             onRegenerate={() => handleRegenerateEpisode(ep.id)}
+            planApproved={storyBlueprint.status === PLANNER_STATUS.APPROVED}
+            onOpenBlueprint={onOpenBlueprint ? () => onOpenBlueprint(ep.id) : undefined}
           />
         ))}
         <Button type="button" variant="outline" onClick={() => patchEpisodes(addBlankEpisode(episodes))}>
