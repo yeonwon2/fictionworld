@@ -29,6 +29,7 @@ import {
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
 import { generateEpisodeBlueprint, regenerateScene } from "@/lib/gameStudioPro/blueprintAI";
 import { compileEpisodeBlueprint } from "@/lib/gameStudioPro/proCompiler";
+import { syncRegistryToAllEpisodes } from "@/lib/gameStudioPro/globalStateModel";
 import SceneIntentEditor from "./SceneIntentEditor";
 import ExternalAiBridgeModal from "./ExternalAiBridgeModal";
 
@@ -147,7 +148,7 @@ function EndingsPanel({ blueprint, onBlueprintChange }) {
   );
 }
 
-export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId }) {
+export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, globalState, onGlobalStateChange }) {
   const episodes = storyBlueprint?.episodes || [];
   const [selectedId, setSelectedId] = useState(initialEpisodeId || episodes[0]?.id || null);
   const [editingSceneId, setEditingSceneId] = useState(null);
@@ -161,7 +162,14 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   const blueprint = episode?.sceneBlueprint || null;
   const gamePlan = storyBlueprint?.gamePlan || null;
 
-  const validation = useMemo(() => (blueprint ? validateSceneBlueprint(blueprint) : { errors: [], warnings: [] }), [blueprint]);
+  const knownEpisodeIds = useMemo(() => new Set(episodes.map((e) => e.id)), [episodes]);
+  const episodesById = useMemo(() => Object.fromEntries(episodes.map((e) => [e.id, e])), [episodes]);
+  const otherEpisodes = useMemo(() => episodes.filter((e) => e.id !== selectedId), [episodes, selectedId]);
+
+  const validation = useMemo(
+    () => (blueprint ? validateSceneBlueprint(blueprint, { knownEpisodeIds }) : { errors: [], warnings: [] }),
+    [blueprint, knownEpisodeIds]
+  );
   const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
   function setEpisodeBlueprint(nextBlueprint) {
@@ -169,6 +177,15 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       ...storyBlueprint,
       episodes: storyBlueprint.episodes.map((e) => (e.id === episode.id ? { ...e, sceneBlueprint: nextBlueprint } : e)),
     });
+  }
+
+  // PRO 5: registry CANONICAL sống ở globalState (globalStateModel.js) —
+  // mirror ngay vào MỌI episode.sceneBlueprint.registry để mọi nơi đọc
+  // blueprint.registry cũ (compileEpisodeBlueprint, ExternalAiBridgeModal...)
+  // tự động thấy đúng dữ liệu canonical, không cần sửa.
+  function handleGlobalRegistryChange(nextRegistry) {
+    onGlobalStateChange({ ...globalState, registry: nextRegistry });
+    onChange(syncRegistryToAllEpisodes(storyBlueprint, nextRegistry));
   }
 
   async function handleGenerate() {
@@ -216,7 +233,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   let compileError = "";
   if (playtesting && blueprint) {
     try {
-      compiledPreview = compileEpisodeBlueprint(blueprint, { title: episode.title });
+      compiledPreview = compileEpisodeBlueprint(blueprint, { title: episode.title, episodesById });
     } catch (e) {
       compileError = e.message;
     }
@@ -349,6 +366,9 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
           onBlueprintChange={setEpisodeBlueprint}
           onClose={() => setEditingSceneId(null)}
           onRegenerate={(instruction) => handleRegenerateScene(editingSceneId, instruction)}
+          registry={globalState?.registry}
+          onRegistryChange={handleGlobalRegistryChange}
+          episodes={otherEpisodes}
         />
       )}
 

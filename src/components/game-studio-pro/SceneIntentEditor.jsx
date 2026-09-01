@@ -34,22 +34,28 @@ import EntityRegistryPanel from "./EntityRegistryPanel";
 const NONE_VALUE = "__none__";
 const NEW_DEATH_VALUE = "__new_death_ending__";
 
-function targetLabelFor(blueprint, targetType, targetId) {
+function targetLabelFor(blueprint, targetType, targetId, episodes = []) {
   if (!targetType || !targetId) return "(chưa nối)";
   if (targetType === "scene") {
     const s = findScene(blueprint, targetId);
     return s ? `→ Cảnh: ${s.title || "(chưa đặt tên)"}` : "→ Cảnh (đã bị xoá)";
   }
+  if (targetType === "episode") {
+    const ep = episodes.find((e) => e.id === targetId);
+    return ep ? `→ Sang tập: ${ep.title || "(chưa đặt tên)"}` : "→ Sang tập (tập đã bị xoá)";
+  }
   const e = (blueprint.endings || []).find((x) => x.id === targetId);
   return e ? `→ Kết thúc: ${e.title || "(chưa đặt tên)"}${e.tone === "death" ? " ☠" : ""}` : "→ Kết thúc (đã bị xoá)";
 }
-function targetLabel(blueprint, choice) {
-  return targetLabelFor(blueprint, choice.targetType, choice.targetId);
+function targetLabel(blueprint, choice, episodes) {
+  return targetLabelFor(blueprint, choice.targetType, choice.targetId, episodes);
 }
 
 // Dùng chung cho đích của lựa chọn CHÍNH lẫn đích của mỗi NHÁNH rẽ điều kiện
-// (conditionalOutcomes) — cùng 1 kiểu chọn "cảnh/kết thúc" như nhau.
-function TargetSelect({ blueprint, sceneId, targetType, targetId, onChange, onCreateDeathEnding, disabled }) {
+// (conditionalOutcomes) — 3 loại đích: Cảnh / Kết thúc game / Sang tập tiếp
+// (mục 20 PRO 5 — "episode" chỉ xuất hiện khi có `episodes` khác tập hiện tại,
+// tức đang chỉnh trong ngữ cảnh campaign chứ không phải blueprint đơn lẻ).
+function TargetSelect({ blueprint, sceneId, targetType, targetId, onChange, onCreateDeathEnding, disabled, episodes = [] }) {
   const value = targetType && targetId ? `${targetType}:${targetId}` : NONE_VALUE;
   const otherScenes = blueprint.scenes.filter((s) => s.id !== sceneId);
   function handleChange(v) {
@@ -75,15 +81,23 @@ function TargetSelect({ blueprint, sceneId, targetType, targetId, onChange, onCr
           )}
           {(blueprint.endings || []).length > 0 && (
             <SelectGroup>
-              <SelectLabel>Kết thúc có sẵn</SelectLabel>
+              <SelectLabel>Kết thúc game có sẵn</SelectLabel>
               {blueprint.endings.map((e) => (
                 <SelectItem key={e.id} value={`ending:${e.id}`}>{e.tone === "death" ? "☠ " : ""}{e.title || "(chưa đặt tên)"}</SelectItem>
               ))}
             </SelectGroup>
           )}
+          {episodes.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Sang tập tiếp</SelectLabel>
+              {episodes.map((ep) => (
+                <SelectItem key={ep.id} value={`episode:${ep.id}`}>Tập {ep.order} — {ep.title || "(chưa đặt tên)"}</SelectItem>
+              ))}
+            </SelectGroup>
+          )}
         </SelectContent>
       </Select>
-      <span className="text-[11px] text-muted-foreground">{targetLabelFor(blueprint, targetType, targetId)}</span>
+      <span className="text-[11px] text-muted-foreground">{targetLabelFor(blueprint, targetType, targetId, episodes)}</span>
     </div>
   );
 }
@@ -91,7 +105,7 @@ function TargetSelect({ blueprint, sceneId, targetType, targetId, onChange, onCr
 // 1 nhánh rẽ có điều kiện (mục 22) — điều kiện + hệ quả RIÊNG + đích RIÊNG.
 // Nếu KHÔNG nhánh nào khớp, hành vi rơi về đúng rules/target của choice cha
 // (xem proCompiler.js#compileChoice — nhánh "còn lại").
-function OutcomeBranchEditor({ blueprint, sceneId, registry, onRegistryChange, branch, onChange, onRemove, disabled }) {
+function OutcomeBranchEditor({ blueprint, sceneId, registry, onRegistryChange, branch, onChange, onRemove, disabled, episodes }) {
   return (
     <div className="rounded-lg border border-violet-400/30 bg-violet-500/5 p-2.5 space-y-2">
       <div className="flex items-center gap-2">
@@ -111,6 +125,7 @@ function OutcomeBranchEditor({ blueprint, sceneId, registry, onRegistryChange, b
         targetType={branch.targetType}
         targetId={branch.targetId}
         disabled={disabled}
+        episodes={episodes}
         onChange={(tt, tid) => onChange({ ...branch, targetType: tt, targetId: tid })}
       />
       <div>
@@ -125,7 +140,7 @@ function OutcomeBranchEditor({ blueprint, sceneId, registry, onRegistryChange, b
   );
 }
 
-function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, registry, onRegistryChange, disabled }) {
+function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, registry, onRegistryChange, disabled, episodes }) {
   const [rulesOpen, setRulesOpen] = useState(false);
 
   function patchChoice(fields) {
@@ -183,6 +198,7 @@ function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, regis
           targetType={choice.targetType}
           targetId={choice.targetId}
           disabled={disabled}
+          episodes={episodes}
           onChange={handleTargetChange}
           onCreateDeathEnding={handleCreateDeathEnding}
         />
@@ -232,6 +248,7 @@ function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, regis
                 onRegistryChange={onRegistryChange}
                 branch={b}
                 disabled={disabled}
+                episodes={episodes}
                 onChange={(next) => updateBranch(i, next)}
                 onRemove={() => removeBranch(i)}
               />
@@ -246,12 +263,27 @@ function ChoiceRow({ blueprint, sceneId, choice, index, onBlueprintChange, regis
   );
 }
 
-export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChange, onClose, onRegenerate }) {
+export default function SceneIntentEditor({
+  blueprint,
+  sceneId,
+  onBlueprintChange,
+  onClose,
+  onRegenerate,
+  // PRO 5: registry/onRegistryChange TOÀN CỤC (globalStateModel.js), truyền
+  // xuống từ SmartMindMap khi đang chỉnh trong ngữ cảnh campaign. Không
+  // truyền (vd nơi gọi cũ/test cũ) -> rơi về hành vi trước PRO 5 y nguyên
+  // (đọc/ghi thẳng blueprint.registry).
+  registry: registryProp,
+  onRegistryChange: onRegistryChangeProp,
+  // Các tập KHÁC trong campaign, để chọn đích "Sang tập tiếp" (mục 20) — rỗng
+  // nếu đang chỉnh 1 blueprint ngoài ngữ cảnh campaign.
+  episodes = [],
+}) {
   const scene = findScene(blueprint, sceneId);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [registryOpen, setRegistryOpen] = useState(false);
-  const registry = ensureRegistry(blueprint);
+  const registry = registryProp || ensureRegistry(blueprint);
 
   if (!scene) return null;
   const isDecision = scene.role === SCENE_ROLES.DECISION;
@@ -262,6 +294,7 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
     onBlueprintChange(updateScene(blueprint, sceneId, fields));
   }
   function handleRegistryChange(nextRegistry) {
+    if (onRegistryChangeProp) return onRegistryChangeProp(nextRegistry);
     onBlueprintChange({ ...blueprint, registry: nextRegistry });
   }
 
@@ -368,6 +401,7 @@ export default function SceneIntentEditor({ blueprint, sceneId, onBlueprintChang
                     registry={registry}
                     onRegistryChange={handleRegistryChange}
                     disabled={disabled}
+                    episodes={episodes}
                   />
                 ))}
                 <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => onBlueprintChange(addChoice(blueprint, sceneId))}>

@@ -40,7 +40,7 @@ export function ensureRegistry(blueprint) {
   };
 }
 
-function normalizeForMatch(text) {
+export function normalizeForMatch(text) {
   return String(text || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // bỏ dấu để so khớp gần đúng

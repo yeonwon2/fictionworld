@@ -7,6 +7,7 @@ import { normalizeAndRepair } from "../gameStudio/postprocess.js";
 import { SCENE_ROLES } from "./blueprintModel.js";
 import { ensureRegistry, findEntityByIdAnyKind, ENTITY_KINDS, listEntities } from "./entityRegistry.js";
 import { CONDITION_TYPES, EFFECT_TYPES, negateOperator, statCompare, flagPresent, flagAbsent } from "./ruleModel.js";
+import { ensureGlobalState } from "./globalStateModel.js";
 
 // ---------- PRO 3: dịch Canonical Rule IR -> field runtime thật ----------
 // KHÔNG có engine luật thứ hai — mọi condition/effect cuối cùng chỉ là đúng
@@ -139,6 +140,24 @@ function compileChoice(choice, registry, resolveTarget) {
   return [...compiledBranches, compiledElse];
 }
 
+// Đổi tên 1 node đã có trong rawNodes thành "start_node" — quy ước bắt buộc
+// của normalizeAndRepair/GamePlayer (chỉ có ĐÚNG 1 node bắt đầu cho MỘT đồ
+// thị runtime). Sửa mọi targetNodeId đang trỏ tới id gốc theo. Dùng chung bởi
+// compileEpisodeBlueprint (đổi tên scene bắt đầu CỦA TẬP đó) và
+// compileProCampaign (chỉ đổi tên scene bắt đầu CỦA TẬP BẮT ĐẦU CAMPAIGN —
+// mọi tập khác giữ nguyên id thật của chúng vì đã namespaced theo episode).
+function renameNodeToStartNode(rawNodes, originalId) {
+  if (!originalId || !rawNodes[originalId] || originalId === "start_node") return;
+  const start = { ...rawNodes[originalId], id: "start_node" };
+  delete rawNodes[originalId];
+  rawNodes["start_node"] = start;
+  for (const n of Object.values(rawNodes)) {
+    for (const c of n.choices || []) {
+      if (c.targetNodeId === originalId) c.targetNodeId = "start_node";
+    }
+  }
+}
+
 export function compileProGame(proDoc) {
   const rawNodes = {
     start_node: {
@@ -205,17 +224,42 @@ export function compileProGame(proDoc) {
 // namespaced theo episode.id (blueprintModel.makeSceneId/makeEndingId) ngay
 // từ đầu, việc sau này gộp nhiều blueprint tập vào 1 đồ thị lớn (PRO 5+) sẽ
 // không đụng ID — quyết định này KHÔNG cần thiết kế lại data model.
-export function compileEpisodeBlueprint(sceneBlueprint, { title } = {}) {
+export function compileEpisodeBlueprint(sceneBlueprint, { title, episodesById } = {}) {
   if (!sceneBlueprint || !sceneBlueprint.scenes?.length) {
     throw new Error("Sơ đồ cảnh trống — chưa có cảnh nào để chơi thử.");
   }
 
   const registry = ensureRegistry(sceneBlueprint);
   const rawNodes = {};
+  // PRO 5: chơi thử MỘT tập riêng lẻ không thể thật sự nhảy sang tập khác —
+  // nếu người gọi truyền episodesById (SmartMindMap có toàn bộ danh sách
+  // tập), lựa chọn "Sang tập tiếp" được biên dịch thành 1 kết thúc TỔNG HỢP
+  // giải thích rõ ràng thay vì rơi vào "broken_link_end" (nghe như lỗi kịch
+  // bản trong khi đây là hành vi đúng khi test cô lập 1 tập) — xem
+  // compileProCampaign() để biết cách nối THẬT sang tập khác trong campaign.
+  const syntheticEpisodeEndings = new Map();
 
   function resolveTarget(choice) {
     if (choice.targetType === "scene" && choice.targetId) return choice.targetId;
     if (choice.targetType === "ending" && choice.targetId) return choice.targetId;
+    if (choice.targetType === "episode" && choice.targetId) {
+      const targetEpisode = episodesById?.[choice.targetId];
+      if (!targetEpisode) return null;
+      if (syntheticEpisodeEndings.has(choice.targetId)) return syntheticEpisodeEndings.get(choice.targetId);
+      const nodeId = `__episode_transition_${choice.targetId}`;
+      rawNodes[nodeId] = {
+        id: nodeId,
+        speaker: "",
+        text: `→ Sang tập: ${targetEpisode.title || "?"} (chơi thật ở "Chơi thử toàn game").`,
+        title: `Sang tập: ${targetEpisode.title || "?"}`,
+        bgImage: "",
+        isEnding: true,
+        endingType: "NORMAL_END",
+        choices: [],
+      };
+      syntheticEpisodeEndings.set(choice.targetId, nodeId);
+      return nodeId;
+    }
     return null;
   }
 
@@ -251,16 +295,7 @@ export function compileEpisodeBlueprint(sceneBlueprint, { title } = {}) {
 
   // start_node là quy ước bắt buộc của normalizeAndRepair/GamePlayer — đổi
   // tên cảnh bắt đầu của blueprint thành đúng id đó thay vì đoán lại từ đầu.
-  if (sceneBlueprint.startSceneId && rawNodes[sceneBlueprint.startSceneId] && sceneBlueprint.startSceneId !== "start_node") {
-    const start = { ...rawNodes[sceneBlueprint.startSceneId], id: "start_node" };
-    delete rawNodes[sceneBlueprint.startSceneId];
-    rawNodes["start_node"] = start;
-    for (const n of Object.values(rawNodes)) {
-      for (const c of n.choices || []) {
-        if (c.targetNodeId === sceneBlueprint.startSceneId) c.targetNodeId = "start_node";
-      }
-    }
-  }
+  renameNodeToStartNode(rawNodes, sceneBlueprint.startSceneId);
 
   // Chỉ entity kind "stat" mới thành meta.statsConfig — "relationship" dùng
   // hẳn hệ rt.npcAffinity riêng của GamePlayer (không có statsConfig, không
@@ -292,6 +327,128 @@ export function compileEpisodeBlueprint(sceneBlueprint, { title } = {}) {
     statsConfig,
     initialStats,
     builder: "pro",
+  };
+
+  return { meta, nodes, warnings };
+}
+
+// PRO 5: biên dịch TOÀN BỘ campaign (mọi episode có sceneBlueprint) thành
+// ĐÚNG MỘT đồ thị {meta, nodes} runtime hợp nhất — không phải N game riêng
+// biệt, không phải runtime thứ hai. Đây là lý do carry-state (mục 11) và
+// save/reload xuyên tập (mục 14/24) "tự động đúng" mà không cần cơ chế mới:
+// GamePlayer/playerState.js chỉ biết MỘT `rt` runtime state di chuyển qua các
+// node, và loadPlayerState() chỉ cần `nodes[savedNodeId]` tồn tại — không
+// quan tâm node đó thuộc tập nào (xem src/lib/gameStudio/playerState.js).
+// Chuyển tập = 1 lựa chọn có targetType "episode" trỏ THẲNG sang scene bắt
+// đầu của tập kế — một CẠNH đồ thị bình thường, KHÔNG phải node/ending đặc
+// biệt (mục 7: EPISODE_COMPLETE vs GAME_END chỉ là khái niệm AUTHORING-TIME,
+// runtime hoàn toàn không biết khái niệm này). Tái dùng NGUYÊN
+// compileChoice/compileConditions/compileEffects ở trên cho từng tập —
+// KHÔNG có logic biên dịch song song nào khác.
+export function compileProCampaign(proDocRaw) {
+  const proDoc = ensureGlobalState(proDocRaw);
+  const episodes = [...(proDoc.storyBlueprint?.episodes || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const episodesWithBlueprint = episodes.filter((e) => e.sceneBlueprint?.scenes?.length);
+  if (episodesWithBlueprint.length === 0) {
+    throw new Error("Chưa có tập nào có sơ đồ cảnh — chưa có gì để biên dịch campaign.");
+  }
+
+  const episodesById = Object.fromEntries(episodes.map((e) => [e.id, e]));
+  const requestedStartId = proDoc.globalState.startEpisodeId;
+  const startEpisodeId =
+    requestedStartId && episodesById[requestedStartId]?.sceneBlueprint?.scenes?.length
+      ? requestedStartId
+      : episodesWithBlueprint[0].id;
+
+  // Registry canonical toàn campaign (mục 3) — mọi tập đọc CÙNG 1 registry
+  // này (không có bản sao lệch nhau) nên không cần hoà giải id giữa các tập.
+  const registry = ensureRegistry({ registry: proDoc.globalState.registry });
+  const startSceneIdByEpisode = new Map(episodesWithBlueprint.map((e) => [e.id, e.sceneBlueprint.startSceneId]));
+
+  function resolveTarget(choice) {
+    if (choice.targetType === "scene" && choice.targetId) return choice.targetId;
+    if (choice.targetType === "ending" && choice.targetId) return choice.targetId;
+    if (choice.targetType === "episode" && choice.targetId) {
+      // Tập đích chưa có sơ đồ (đang soạn dở) -> null, rơi vào broken_link_end
+      // sẵn có của normalizeAndRepair — an toàn, campaignValidator.js là nơi
+      // CHẶN trước khi cho chơi/xuất bản, compiler ở đây không tự chặn.
+      return startSceneIdByEpisode.get(choice.targetId) || null;
+    }
+    return null;
+  }
+
+  const rawNodes = {};
+  for (const episode of episodesWithBlueprint) {
+    const blueprint = episode.sceneBlueprint;
+    for (const scene of blueprint.scenes) {
+      const isEndingRole = scene.role === SCENE_ROLES.ENDING;
+      const choices = isEndingRole ? [] : scene.choices.flatMap((c) => compileChoice(c, registry, resolveTarget));
+      rawNodes[scene.id] = {
+        id: scene.id,
+        speaker: "",
+        text: scene.intent?.trim() || scene.title || "",
+        title: scene.title || "",
+        bgImage: "",
+        isEnding: isEndingRole,
+        endingType: isEndingRole ? "NORMAL_END" : null,
+        choices,
+      };
+    }
+    for (const ending of blueprint.endings || []) {
+      rawNodes[ending.id] = {
+        id: ending.id,
+        speaker: "",
+        text: ending.text?.trim() || ending.title || "",
+        title: ending.title || "",
+        bgImage: "",
+        isEnding: true,
+        endingType: ending.tone === "death" ? "BAD_END" : "NORMAL_END",
+        choices: [],
+      };
+    }
+  }
+
+  // CHỈ scene bắt đầu của TẬP BẮT ĐẦU CAMPAIGN được đổi thành "start_node" —
+  // mọi tập khác giữ nguyên id thật (đã namespaced theo episode từ PRO 2) nên
+  // không đụng ID khi gộp (đúng thiết kế ghi ở blueprintModel.js/makeSceneId).
+  renameNodeToStartNode(rawNodes, startSceneIdByEpisode.get(startEpisodeId));
+
+  // Chỉ entity kind "stat" mới thành meta.statsConfig — xem RUNTIME MAPPING ở
+  // entityRegistry.js. default ở đây chính là GIÁ TRỊ KHỞI ĐẦU CỦA TOÀN
+  // CAMPAIGN (mục 5.A) — chỉ áp dụng MỘT LẦN ở start_node thật (tập bắt đầu),
+  // không reset lại khi sang tập tiếp vì carry-state là tự động (mục 5/11).
+  const statsConfig = listEntities(registry, ENTITY_KINDS.STAT).map((e) => ({
+    key: e.id,
+    label: e.displayName,
+    default: e.default,
+    isVital: !!e.isVital,
+    ...(e.isVital ? { deathThreshold: Number.isFinite(e.deathThreshold) ? e.deathThreshold : 0 } : {}),
+  }));
+  const initialStats = Object.fromEntries(statsConfig.map((s) => [s.key, s.default]));
+
+  const { nodes, warnings } = normalizeAndRepair(
+    rawNodes,
+    statsConfig.map((s) => s.key),
+    0,
+    { forceNonEmptyModifiers: false, statsConfig }
+  );
+
+  const meta = {
+    title: proDoc.title || "Game Pro Mới",
+    presentation: "dialogue",
+    theme: "lily-noir",
+    archetype: "none",
+    player_name: "Nhân Vật Chính",
+    playerAvatar: "",
+    defaultNpcAvatar: "",
+    statsConfig,
+    initialStats,
+    builder: "pro",
+    proSchemaVersion: proDoc.schemaVersion || 1,
+    // Toàn bộ tài liệu Pro (kể cả globalState đã migrate/chuẩn hoá) round-trip
+    // qua đây — đúng quy ước compileProGame() đã dùng để proDoc sống lại khi
+    // mở game (xem GameStudioPro.jsx: setProDoc(row.meta?.pro || ...)).
+    pro: proDoc,
   };
 
   return { meta, nodes, warnings };

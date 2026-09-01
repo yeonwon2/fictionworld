@@ -4,7 +4,7 @@
 // việc lưu vào Supabase vẫn do nút "Lưu" chung của ProGameEditor đảm nhiệm,
 // giống mọi chỉnh sửa khác trong Xưởng Game Pro (không tách 2 kiểu lưu).
 import React, { useMemo, useState } from "react";
-import { RotateCcw, CheckCircle2, AlertTriangle, Plus, Loader2, ChevronDown } from "lucide-react";
+import { RotateCcw, CheckCircle2, AlertTriangle, Plus, Loader2, ChevronDown, Library, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,8 +22,11 @@ import {
   addBlankEpisode,
 } from "@/lib/gameStudioPro/plannerAI";
 import { validateGamePlan } from "@/lib/gameStudioPro/plannerValidator";
+import { syncRegistryToAllEpisodes, episodeTransitionSummary } from "@/lib/gameStudioPro/globalStateModel";
+import { validateCampaign } from "@/lib/gameStudioPro/campaignValidator";
 import SuggestionList from "./SuggestionList";
 import EpisodeCard from "./EpisodeCard";
+import EntityRegistryPanel from "./EntityRegistryPanel";
 
 const STATUS_LABEL = {
   [PLANNER_STATUS.DRAFT]: "Bản nháp",
@@ -31,15 +34,21 @@ const STATUS_LABEL = {
   [PLANNER_STATUS.APPROVED]: "Đã duyệt",
 };
 
-export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprint }) {
+export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprint, globalState, onGlobalStateChange }) {
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [progress, setProgress] = useState("");
   const [showIdea, setShowIdea] = useState(false);
+  const [registryOpen, setRegistryOpen] = useState(false);
   const { toast } = useToast();
 
   const gamePlan = storyBlueprint.gamePlan || {};
   const episodes = storyBlueprint.episodes || [];
   const { warnings, blockers } = useMemo(() => validateGamePlan(storyBlueprint), [storyBlueprint]);
+  const campaignValidation = useMemo(
+    () => validateCampaign({ storyBlueprint, globalState }),
+    [storyBlueprint, globalState]
+  );
+  const episodeTitleById = useMemo(() => new Map(episodes.map((e) => [e.id, e.title])), [episodes]);
 
   function patchBlueprint(fields) {
     onChange(downgradeIfApproved({ ...storyBlueprint, ...fields }));
@@ -52,6 +61,18 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
   }
   function updateEpisode(id, nextEpisode) {
     patchEpisodes(episodes.map((e) => (e.id === id ? nextEpisode : e)));
+  }
+  function handleRemoveEpisode(ep) {
+    const { incoming } = episodeTransitionSummary(storyBlueprint, ep.id);
+    if (incoming.length > 0) {
+      const titles = incoming.map((id) => episodeTitleById.get(id) || id).join(", ");
+      if (!window.confirm(`Tập "${ep.title}" đang được ${incoming.length} tập khác trỏ tới (${titles}). Xoá vẫn tiếp tục — các kết nối đó sẽ bị đứt (chưa nối). Tiếp tục?`)) return;
+    }
+    patchEpisodes(removeEpisode(episodes, ep.id));
+  }
+  function handleGlobalRegistryChange(nextRegistry) {
+    onGlobalStateChange({ ...globalState, registry: nextRegistry });
+    onChange(syncRegistryToAllEpisodes(storyBlueprint, nextRegistry));
   }
 
   async function handleRegenerateAll() {
@@ -107,6 +128,11 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
             {episodes.length > 0 && <span className="text-xs text-muted-foreground">{episodes.length} tập</span>}
           </div>
           <div className="flex flex-wrap gap-2">
+            {globalState && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setRegistryOpen(true)}>
+                <Library className="w-3.5 h-3.5 mr-1.5" /> Trạng thái toàn Game
+              </Button>
+            )}
             <Button type="button" size="sm" variant="outline" onClick={handleRegenerateAll} disabled={regeneratingAll}>
               {regeneratingAll ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
               Tạo lại toàn bộ kế hoạch
@@ -141,6 +167,20 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
           ))}
           {warnings.map((w, i) => (
             <p key={`w${i}`} className="text-xs text-muted-foreground">{w}</p>
+          ))}
+        </section>
+      )}
+
+      {globalState && (campaignValidation.errors.length > 0 || campaignValidation.warnings.length > 0) && (
+        <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-1.5">
+          <p className="text-xs font-semibold flex items-center gap-1.5 text-amber-600">
+            <AlertTriangle className="w-3.5 h-3.5" /> Trạng thái campaign (nhiều tập)
+          </p>
+          {campaignValidation.errors.map((e, i) => (
+            <p key={`ce${i}`} className="text-xs text-destructive flex items-start gap-1.5"><XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{e}</p>
+          ))}
+          {campaignValidation.warnings.map((w, i) => (
+            <p key={`cw${i}`} className="text-xs text-muted-foreground flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{w}</p>
           ))}
         </section>
       )}
@@ -189,19 +229,30 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
             canMoveUp={i > 0}
             canMoveDown={i < episodes.length - 1}
             onChange={(next) => updateEpisode(ep.id, next)}
-            onRemove={() => patchEpisodes(removeEpisode(episodes, ep.id))}
+            onRemove={() => handleRemoveEpisode(ep)}
             onMoveUp={() => patchEpisodes(reorderEpisode(episodes, ep.id, "up"))}
             onMoveDown={() => patchEpisodes(reorderEpisode(episodes, ep.id, "down"))}
             onToggleLock={() => patchEpisodes(toggleEpisodeLock(episodes, ep.id))}
             onRegenerate={() => handleRegenerateEpisode(ep.id)}
             planApproved={storyBlueprint.status === PLANNER_STATUS.APPROVED}
             onOpenBlueprint={onOpenBlueprint ? () => onOpenBlueprint(ep.id) : undefined}
+            isStartEpisode={globalState ? ep.id === globalState.startEpisodeId : undefined}
+            onSetStartEpisode={globalState ? () => onGlobalStateChange({ ...globalState, startEpisodeId: ep.id }) : undefined}
+            nextEpisodeTitles={
+              globalState
+                ? episodeTransitionSummary(storyBlueprint, ep.id).outgoing.map((id) => episodeTitleById.get(id) || id)
+                : []
+            }
           />
         ))}
         <Button type="button" variant="outline" onClick={() => patchEpisodes(addBlankEpisode(episodes))}>
           <Plus className="w-4 h-4 mr-1.5" /> Thêm tập
         </Button>
       </div>
+
+      {registryOpen && globalState && (
+        <EntityRegistryPanel registry={globalState.registry} onRegistryChange={handleGlobalRegistryChange} onClose={() => setRegistryOpen(false)} />
+      )}
     </div>
   );
 }

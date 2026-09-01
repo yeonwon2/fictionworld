@@ -2,11 +2,12 @@
 // lại bằng AI (nếu chưa khoá). Chỉ hiển thị từ ngữ thường (Tập/Giai
 // đoạn/Sự kiện/Nguy hiểm/Kết thúc...), không có trường kỹ thuật nào.
 import React, { useState } from "react";
-import { Lock, Unlock, ChevronUp, ChevronDown, Trash2, RotateCcw, Plus, X, Loader2, Waypoints } from "lucide-react";
+import { Lock, Unlock, ChevronUp, ChevronDown, Trash2, RotateCcw, Plus, X, Loader2, Waypoints, Star, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { newBlankStage, newBlankIntent, intentTypeLabel, INTENT_TYPE_LABELS } from "@/lib/gameStudioPro/plannerModel";
 
 function CommaListInput({ label, value, onChange, placeholder }) {
@@ -113,13 +114,33 @@ function IntentEditor({ intents, onChange }) {
   );
 }
 
-export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange, onRemove, onMoveUp, onMoveDown, onToggleLock, onRegenerate, planApproved, onOpenBlueprint }) {
+export default function EpisodeCard({
+  episode,
+  canMoveUp,
+  canMoveDown,
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onToggleLock,
+  onRegenerate,
+  planApproved,
+  onOpenBlueprint,
+  // PRO 5 — mục 16 (Episode Manager) — tất cả optional, không truyền vẫn ra
+  // đúng hành vi PRO 1 cũ.
+  isStartEpisode,
+  onSetStartEpisode,
+  nextEpisodeTitles = [],
+}) {
   const [expanded, setExpanded] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
   function patch(fields) {
     onChange({ ...episode, ...fields });
   }
+
+  const sceneCount = episode.sceneBlueprint?.scenes?.length || 0;
+  const hasBlueprint = !!episode.sceneBlueprint;
 
   async function handleRegenerate() {
     setRegenerating(true);
@@ -135,6 +156,17 @@ export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange,
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-muted-foreground shrink-0">Tập {episode.order}</span>
         <Input className="flex-1" value={episode.title} onChange={(e) => patch({ title: e.target.value })} />
+        {onSetStartEpisode && (
+          <button
+            type="button"
+            onClick={onSetStartEpisode}
+            disabled={isStartEpisode}
+            className={`p-1.5 rounded transition disabled:opacity-100 ${isStartEpisode ? "text-amber-500" : "text-muted-foreground hover:text-foreground"}`}
+            title={isStartEpisode ? "Tập bắt đầu campaign" : "Đặt làm tập bắt đầu campaign"}
+          >
+            <Star className="w-4 h-4" fill={isStartEpisode ? "currentColor" : "none"} />
+          </button>
+        )}
         <button type="button" onClick={onMoveUp} disabled={!canMoveUp} className="p-1.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 transition" title="Lên">
           <ChevronUp className="w-4 h-4" />
         </button>
@@ -152,6 +184,18 @@ export default function EpisodeCard({ episode, canMoveUp, canMoveDown, onChange,
         <button type="button" onClick={onRemove} className="p-1.5 rounded text-muted-foreground hover:text-destructive transition" title="Xoá tập">
           <Trash2 className="w-4 h-4" />
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {isStartEpisode && <Badge variant="secondary">★ Tập bắt đầu</Badge>}
+        <span className={hasBlueprint ? "text-emerald-500" : "text-muted-foreground"}>
+          {hasBlueprint ? `✓ Có sơ đồ · ${sceneCount} cảnh` : "Chưa dựng"}
+        </span>
+        {nextEpisodeTitles.length > 0 && (
+          <span className="text-muted-foreground flex items-center gap-1">
+            <ArrowRight className="w-3 h-3" /> {nextEpisodeTitles.join(", ")}
+          </span>
+        )}
       </div>
 
       <Textarea rows={2} placeholder="Tóm tắt tập" value={episode.summary} onChange={(e) => patch({ summary: e.target.value })} />

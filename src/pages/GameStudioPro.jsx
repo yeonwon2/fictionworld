@@ -27,11 +27,33 @@ import { useToast } from "@/components/ui/use-toast";
 import GamePlayer from "@/components/game-studio/player/GamePlayer";
 import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import { newEmptyProGame } from "@/lib/gameStudioPro/proModel";
-import { compileProGame } from "@/lib/gameStudioPro/proCompiler";
+import { compileProGame, compileProCampaign } from "@/lib/gameStudioPro/proCompiler";
+import { ensureGlobalState } from "@/lib/gameStudioPro/globalStateModel";
 import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
 import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
 import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
+
+// PRO 5: quyết định biên dịch bằng campaign (compileProCampaign) hay bằng
+// khung PRO 0 tối giản (compileProGame) — CHỈ dựa trên việc đã có ít nhất 1
+// tập có sơ đồ cảnh hay chưa. Game Pro cũ (PRO 0–4, chưa từng chạm Kế
+// hoạch/Sơ đồ) không có storyBlueprint.episodes[].sceneBlueprint nào nên vẫn
+// đi đúng đường compileProGame() như trước — không đổi hành vi (mục 9/10 LUẬT
+// BẢO TOÀN KIẾN TRÚC). Nếu campaign biên dịch lỗi (vd tập bắt đầu chưa có sơ
+// đồ), rơi về compileProGame() để "Chơi thử"/"Xuất bản"/"Lưu" không bao giờ
+// crash — validateCampaign() (campaignValidator.js) là nơi CẢNH BÁO người
+// dùng trước khi họ tới đây, không phải nơi này.
+function hasCampaignContent(proDoc) {
+  return (proDoc.storyBlueprint?.episodes || []).some((e) => e.sceneBlueprint?.scenes?.length);
+}
+function compileProDocument(proDoc) {
+  if (!hasCampaignContent(proDoc)) return { compiled: compileProGame(proDoc), campaignError: null };
+  try {
+    return { compiled: compileProCampaign(proDoc), campaignError: null };
+  } catch (e) {
+    return { compiled: compileProGame(proDoc), campaignError: e.message };
+  }
+}
 
 function ProGameLibrary({ onOpen }) {
   const [games, setGames] = useState([]);
@@ -145,7 +167,11 @@ function ProGameEditor({ gameId, onBack }) {
     setLoading(true);
     getGame(gameId)
       .then((row) => {
-        setProDoc(row.meta?.pro || newEmptyProGame());
+        // PRO 5: chuẩn hoá + (nếu cần) migrate registry PRO 3/4 cũ của từng
+        // tập thành 1 registry canonical toàn game ngay khi mở — thuần, trong
+        // bộ nhớ, không đổi gì trên server cho tới lần "Lưu" tiếp theo (giống
+        // mọi chỉnh sửa khác trong Xưởng Game Pro).
+        setProDoc(ensureGlobalState(row.meta?.pro || newEmptyProGame()));
       })
       .catch((e) => {
         toast({ variant: "destructive", title: "Không mở được Game Pro", description: e.message });
@@ -158,7 +184,7 @@ function ProGameEditor({ gameId, onBack }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const { meta, nodes } = compileProGame(proDoc);
+      const { compiled: { meta, nodes } } = compileProDocument(proDoc);
       await updateGame(gameId, { title: proDoc.title || "Game Pro Mới", meta, nodes });
       setLastSavedAt(new Date());
       setPlayKey((k) => k + 1);
@@ -194,7 +220,7 @@ function ProGameEditor({ gameId, onBack }) {
     );
   }
 
-  const compiled = compileProGame(proDoc);
+  const { compiled, campaignError } = compileProDocument(proDoc);
   const compiledGameData = { meta: compiled.meta, nodes: compiled.nodes };
 
   return (
@@ -229,6 +255,14 @@ function ProGameEditor({ gameId, onBack }) {
         </div>
       </header>
 
+      {campaignError && (
+        <div className="max-w-4xl mx-auto px-4 pt-4">
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            Không biên dịch được campaign nhiều tập — đang tạm dùng bản PRO 0 tối giản cho "Chơi thử"/"Xuất bản"/"Lưu". Lỗi: {campaignError}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4 py-6">
         {mode === "plan" && (
           proDoc.storyBlueprint?.gamePlan ? (
@@ -236,6 +270,8 @@ function ProGameEditor({ gameId, onBack }) {
               storyBlueprint={proDoc.storyBlueprint}
               onChange={(storyBlueprint) => updateField({ storyBlueprint })}
               onOpenBlueprint={(episodeId) => { setFocusEpisodeId(episodeId); setMode("mindmap"); }}
+              globalState={proDoc.globalState}
+              onGlobalStateChange={(globalState) => updateField({ globalState })}
             />
           ) : (
             <PlannerIntro
@@ -251,6 +287,8 @@ function ProGameEditor({ gameId, onBack }) {
             storyBlueprint={proDoc.storyBlueprint}
             onChange={(storyBlueprint) => updateField({ storyBlueprint })}
             initialEpisodeId={focusEpisodeId}
+            globalState={proDoc.globalState}
+            onGlobalStateChange={(globalState) => updateField({ globalState })}
           />
         )}
 

@@ -10,7 +10,7 @@ import { SCENE_ROLES, MAX_SCENES_PER_EPISODE } from "./blueprintModel.js";
 import { ensureRegistry } from "./entityRegistry.js";
 import { validateBlueprintRules } from "./ruleValidator.js";
 
-export function validateSceneBlueprint(blueprint) {
+export function validateSceneBlueprint(blueprint, { knownEpisodeIds = null } = {}) {
   const errors = [];
   const warnings = [];
   const scenes = blueprint?.scenes || [];
@@ -73,6 +73,13 @@ export function validateSceneBlueprint(blueprint) {
         if (!endingIds.has(c.targetId)) {
           errors.push(`Cảnh "${s.title || s.id}" — ${label}: trỏ tới kết thúc không tồn tại ("${c.targetId}").`);
         }
+      } else if (c.targetType === "episode") {
+        // PRO 5: "Sang tập tiếp" — chỉ kiểm tra được tồn tại nếu người gọi
+        // truyền knownEpisodeIds (ngữ cảnh campaign); nếu không (validate 1
+        // blueprint đơn lẻ ngoài ngữ cảnh campaign) thì bỏ qua, không báo lỗi oan.
+        if (knownEpisodeIds && !knownEpisodeIds.has(c.targetId)) {
+          errors.push(`Cảnh "${s.title || s.id}" — ${label}: trỏ tới tập không tồn tại ("${c.targetId}").`);
+        }
       } else {
         errors.push(`Cảnh "${s.title || s.id}" — ${label}: loại đích không hợp lệ ("${c.targetType}").`);
       }
@@ -86,10 +93,15 @@ export function validateSceneBlueprint(blueprint) {
     for (const c of s.choices) {
       if (c.targetType === "scene" && sceneIds.has(c.targetId)) outgoing.get(s.id).push({ type: "scene", id: c.targetId });
       else if (c.targetType === "ending" && endingIds.has(c.targetId)) outgoing.get(s.id).push({ type: "ending", id: c.targetId });
+      // "episode" target luôn coi là lối ra hợp lệ cho mục đích reachability
+      // của MỘT blueprint (không thể xác nhận tập đích ở đây — knownEpisodeIds
+      // đã kiểm tra tồn tại riêng ở trên nếu có).
+      else if (c.targetType === "episode" && c.targetId) outgoing.get(s.id).push({ type: "episode", id: c.targetId });
     }
   }
   const reachableScenes = new Set();
   const reachableEndings = new Set();
+  const reachableEpisodeTransitions = new Set();
   if (blueprint.startSceneId && sceneIds.has(blueprint.startSceneId)) {
     const queue = [blueprint.startSceneId];
     reachableScenes.add(blueprint.startSceneId);
@@ -101,6 +113,8 @@ export function validateSceneBlueprint(blueprint) {
           queue.push(edge.id);
         } else if (edge.type === "ending") {
           reachableEndings.add(edge.id);
+        } else if (edge.type === "episode") {
+          reachableEpisodeTransitions.add(edge.id);
         }
       }
     }
@@ -118,7 +132,7 @@ export function validateSceneBlueprint(blueprint) {
   }
 
   const hasEndingRole = scenes.some((s) => s.role === SCENE_ROLES.ENDING && reachableScenes.has(s.id));
-  if (endings.length === 0 && !hasEndingRole) {
+  if (endings.length === 0 && !hasEndingRole && reachableEpisodeTransitions.size === 0) {
     warnings.push("Tập này chưa có kết thúc/điểm chuyển tiếp nào — người chơi có thể không bao giờ kết thúc tập.");
   }
 

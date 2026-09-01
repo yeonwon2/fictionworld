@@ -6,13 +6,18 @@
 // `compileProGame()` (proCompiler.js). Tài liệu Pro được lưu trong
 // `games.meta.pro` của cùng bảng `games` mà Xưởng Game cũ dùng — không có
 // bảng/migration riêng cho Pro.
+import { newEmptyGlobalState } from "./globalStateModel.js";
+
 export const PRO_SCHEMA_VERSION = 1;
 
 // Khung PRO 0 chỉ hỗ trợ: 1 cảnh mở đầu → 2 lựa chọn → 2 kết thúc. Đây là ví
 // dụ tối giản để xác minh toàn bộ pipeline (tạo/lưu/tải lại/sửa/biên
 // dịch/chơi/xuất bản). Các trường mở rộng bên dưới (episodes, mechanics,
-// storyBlueprint, sceneIntents, externalImport, globalState) CHƯA được dùng
-// ở bước này — chỉ giữ chỗ cho các tính năng Pro sau này.
+// storyBlueprint, sceneIntents, externalImport) CHƯA được dùng ở bước này —
+// chỉ giữ chỗ cho các tính năng Pro sau này. `globalState` là ngoại lệ: PRO 5
+// dùng ngay trường này làm registry/campaign state canonical (xem
+// globalStateModel.js) — newEmptyGlobalState() ở đây tương thích ngược hoàn
+// toàn với `{}` cũ (ensureGlobalState() vẫn tự chuẩn hoá mọi giá trị cũ).
 export function newEmptyProGame() {
   return {
     schemaVersion: PRO_SCHEMA_VERSION,
@@ -34,6 +39,6 @@ export function newEmptyProGame() {
     storyBlueprint: null,
     sceneIntents: {},
     externalImport: null,
-    globalState: {},
+    globalState: newEmptyGlobalState(),
   };
 }
