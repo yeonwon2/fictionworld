@@ -100,6 +100,11 @@ function checkEffects(effects, registry) {
     }
     if (!Object.values(EFFECT_TYPES).includes(eff.type)) { errors.push(`Loại hệ quả không xác định: "${eff.type}".`); continue; }
 
+    if (eff.type === EFFECT_TYPES.SHOW_POPUP) {
+      if (!eff.title?.trim() && !eff.text?.trim()) errors.push("Hệ quả \"Thông báo\" cần ít nhất tiêu đề hoặc nội dung.");
+      continue;
+    }
+
     const entity = findEntityByIdAnyKind(registry, eff.entityId);
     if (!entity) { errors.push(`Hệ quả tham chiếu tới chỉ số/cờ/vật phẩm không tồn tại trong danh mục (id: ${eff.entityId}).`); continue; }
 

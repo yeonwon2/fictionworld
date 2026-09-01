@@ -5,6 +5,8 @@
 import { SCRIPT_HEADER_V1, SCRIPT_FORMAT_DOCS } from "./scriptFormat.js";
 import { compactGamePlanSummary } from "./plannerPrompts.js";
 import { ensureRegistry, listEntities, ENTITY_KINDS } from "./entityRegistry.js";
+import { describeMechanicsForPrompt } from "./mechanicsModel.js";
+import { findTemplate } from "./templateRegistry.js";
 
 export function generateExternalAiPrompt({
   mode = "full_episode", // "full_episode" | "continue_from_scene" | "rewrite_scene" | "repair_script"
@@ -15,6 +17,11 @@ export function generateExternalAiPrompt({
   customInstructions = "",
   validationIssues = [],
   originalScript = "",
+  // PRO 6 (mục 19 "Template → External AI"): cơ chế đã bật + template đang
+  // dùng của TOÀN GAME — optional, KHÔNG bắt buộc caller cũ phải truyền (mọi
+  // caller PRO 4 hiện có vẫn hoạt động y hệt khi bỏ trống 2 tham số này).
+  mechanics = null,
+  templateId = null,
 } = {}) {
   // Mode 4: Sửa lỗi kịch bản (Repair Mode - Requirement 23)
   if (mode === "repair_script") {
@@ -28,6 +35,18 @@ export function generateExternalAiPrompt({
   const itemsList = listEntities(registry, ENTITY_KINDS.ITEM).map((i) => i.displayName);
 
   const contextBlocks = [];
+
+  // PRO 6: cơ chế/template của game — đặt TRƯỚC danh mục thực thể để AI ngoài
+  // biết "game đã có sẵn hệ thống gì" (mục 19) và không tự bịa ra 1 hệ khác
+  // (vd tự thêm "Điểm hệ thống" riêng khi game đã có sẵn 1 chỉ số tương đương).
+  const template = templateId ? findTemplate(templateId) : null;
+  const mechanicsLines = mechanics ? describeMechanicsForPrompt(mechanics, registry) : [];
+  if (template || mechanicsLines.length) {
+    const lines = [];
+    if (template) lines.push(`Kiểu game: ${template.label}`);
+    if (mechanicsLines.length) lines.push(`Cơ chế đang bật: ${mechanicsLines.join("; ")}`);
+    contextBlocks.push(`=== 0. HỆ THỐNG/CƠ CHẾ GAME ===\n${lines.join("\n")}\nKHÔNG tự bịa thêm hệ thống/cơ chế khác — chỉ dùng những gì đã liệt kê ở trên và danh mục thực thể bên dưới.`);
+  }
 
   if (gamePlan) {
     contextBlocks.push(`=== 1. TỔNG QUAN GAME ===\n${compactGamePlanSummary(gamePlan)}`);

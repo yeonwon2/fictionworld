@@ -4,7 +4,7 @@
 // việc lưu vào Supabase vẫn do nút "Lưu" chung của ProGameEditor đảm nhiệm,
 // giống mọi chỉnh sửa khác trong Xưởng Game Pro (không tách 2 kiểu lưu).
 import React, { useMemo, useState } from "react";
-import { RotateCcw, CheckCircle2, AlertTriangle, Plus, Loader2, ChevronDown, Library, XCircle } from "lucide-react";
+import { RotateCcw, CheckCircle2, AlertTriangle, Plus, Loader2, ChevronDown, Library, XCircle, Sparkles, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +27,8 @@ import { validateCampaign } from "@/lib/gameStudioPro/campaignValidator";
 import SuggestionList from "./SuggestionList";
 import EpisodeCard from "./EpisodeCard";
 import EntityRegistryPanel from "./EntityRegistryPanel";
+import MechanicsPanel from "./MechanicsPanel";
+import TemplatePicker from "./TemplatePicker";
 
 const STATUS_LABEL = {
   [PLANNER_STATUS.DRAFT]: "Bản nháp",
@@ -34,19 +36,31 @@ const STATUS_LABEL = {
   [PLANNER_STATUS.APPROVED]: "Đã duyệt",
 };
 
-export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprint, globalState, onGlobalStateChange }) {
+export default function PlannerEditor({
+  storyBlueprint,
+  onChange,
+  onOpenBlueprint,
+  globalState,
+  onGlobalStateChange,
+  mechanics,
+  onMechanicsChange,
+  proDoc,
+  onProDocChange,
+}) {
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [progress, setProgress] = useState("");
   const [showIdea, setShowIdea] = useState(false);
   const [registryOpen, setRegistryOpen] = useState(false);
+  const [mechanicsOpen, setMechanicsOpen] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const { toast } = useToast();
 
   const gamePlan = storyBlueprint.gamePlan || {};
   const episodes = storyBlueprint.episodes || [];
   const { warnings, blockers } = useMemo(() => validateGamePlan(storyBlueprint), [storyBlueprint]);
   const campaignValidation = useMemo(
-    () => validateCampaign({ storyBlueprint, globalState }),
-    [storyBlueprint, globalState]
+    () => validateCampaign({ storyBlueprint, globalState, mechanics }),
+    [storyBlueprint, globalState, mechanics]
   );
   const episodeTitleById = useMemo(() => new Map(episodes.map((e) => [e.id, e.title])), [episodes]);
 
@@ -131,6 +145,16 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
             {globalState && (
               <Button type="button" size="sm" variant="outline" onClick={() => setRegistryOpen(true)}>
                 <Library className="w-3.5 h-3.5 mr-1.5" /> Trạng thái toàn Game
+              </Button>
+            )}
+            {mechanics && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setMechanicsOpen(true)}>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Cơ chế game
+              </Button>
+            )}
+            {proDoc && onProDocChange && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setTemplatePickerOpen(true)}>
+                <Layers className="w-3.5 h-3.5 mr-1.5" /> Đổi kiểu game
               </Button>
             )}
             <Button type="button" size="sm" variant="outline" onClick={handleRegenerateAll} disabled={regeneratingAll}>
@@ -252,6 +276,12 @@ export default function PlannerEditor({ storyBlueprint, onChange, onOpenBlueprin
 
       {registryOpen && globalState && (
         <EntityRegistryPanel registry={globalState.registry} onRegistryChange={handleGlobalRegistryChange} onClose={() => setRegistryOpen(false)} />
+      )}
+      {mechanicsOpen && mechanics && (
+        <MechanicsPanel registry={globalState?.registry} mechanics={mechanics} onMechanicsChange={onMechanicsChange} onClose={() => setMechanicsOpen(false)} />
+      )}
+      {templatePickerOpen && proDoc && onProDocChange && (
+        <TemplatePicker asDialog proDoc={proDoc} onApply={onProDocChange} onClose={() => setTemplatePickerOpen(false)} />
       )}
     </div>
   );

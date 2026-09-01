@@ -29,6 +29,7 @@ import ExportCenter from "@/components/game-studio/player/ExportCenter";
 import { newEmptyProGame } from "@/lib/gameStudioPro/proModel";
 import { compileProGame, compileProDocument } from "@/lib/gameStudioPro/proCompiler";
 import { ensureGlobalState } from "@/lib/gameStudioPro/globalStateModel";
+import { ensureMechanicsState } from "@/lib/gameStudioPro/mechanicsModel";
 import { listProGames, getGame, createGame, updateGame, deleteGame } from "@/lib/worldcrud";
 import PlannerIntro from "@/components/game-studio-pro/PlannerIntro";
 import PlannerEditor from "@/components/game-studio-pro/PlannerEditor";
@@ -158,7 +159,10 @@ function ProGameEditor({ gameId, onBack }) {
         // tập thành 1 registry canonical toàn game ngay khi mở — thuần, trong
         // bộ nhớ, không đổi gì trên server cho tới lần "Lưu" tiếp theo (giống
         // mọi chỉnh sửa khác trong Xưởng Game Pro).
-        setProDoc(ensureGlobalState(row.meta?.pro || newEmptyProGame()));
+        // PRO 6: game Pro cũ (trước PRO6) không có `mechanics`/`templateId` —
+        // ensureMechanicsState() chuẩn hoá an toàn, cùng quy ước ensureGlobalState().
+        const loaded = ensureGlobalState(row.meta?.pro || newEmptyProGame());
+        setProDoc({ ...loaded, mechanics: ensureMechanicsState(loaded.mechanics), templateId: loaded.templateId || null });
         // "Lần lưu thành công gần nhất" trước khi ta chỉnh sửa gì — sàn an
         // toàn ban đầu cho lastGoodCompiledRef (xem handleSave()).
         lastGoodCompiledRef.current = { meta: row.meta || {}, nodes: row.nodes || {} };
@@ -298,12 +302,19 @@ function ProGameEditor({ gameId, onBack }) {
               onOpenBlueprint={(episodeId) => { setFocusEpisodeId(episodeId); setMode("mindmap"); }}
               globalState={proDoc.globalState}
               onGlobalStateChange={(globalState) => updateField({ globalState })}
+              mechanics={proDoc.mechanics}
+              onMechanicsChange={(mechanics) => updateField({ mechanics })}
+              templateId={proDoc.templateId}
+              proDoc={proDoc}
+              onProDocChange={setProDoc}
             />
           ) : (
             <PlannerIntro
               storyBlueprint={proDoc.storyBlueprint}
               onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
               onSkip={() => setMode("edit")}
+              proDoc={proDoc}
+              onProDocChange={setProDoc}
             />
           )
         )}
@@ -315,6 +326,8 @@ function ProGameEditor({ gameId, onBack }) {
             initialEpisodeId={focusEpisodeId}
             globalState={proDoc.globalState}
             onGlobalStateChange={(globalState) => updateField({ globalState })}
+            mechanics={proDoc.mechanics}
+            templateId={proDoc.templateId}
           />
         )}
 

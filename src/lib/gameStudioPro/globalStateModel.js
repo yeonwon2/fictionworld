@@ -29,11 +29,32 @@ export function newEmptyGlobalState() {
     // (mục 6/29). null = chưa xác định, compileProCampaign() tự suy ra tập
     // có order nhỏ nhất mà đã có sceneBlueprint.
     startEpisodeId: null,
+    // PRO 6: "milestone toàn game" (tổng quát hoá "niên đại" của Xưởng Trọng
+    // Sinh cũ — mục 6 audit PRO6) — { id, statEntityId, thresholds: [{id, at,
+    // bonus, label}] }[]. CHỈ LÀ GHI CHÚ TÁC GIẢ (AUTHORING_ONLY): mục 24 của
+    // spec PRO 6 CẤM sửa GamePlayer/postprocess.js ở giai đoạn này, nên không
+    // có cơ chế runtime nào tự thực thi "mốc này" — proCompiler.js KHÔNG đọc
+    // trường này. Author vẫn tự tái hiện hiệu ứng bằng
+    // stat_compare+flag_absent -> stat_change+grant_flag như hiện tại nếu
+    // muốn milestone thật sự có tác dụng khi chơi (xem AGENTS.md PRO 6 mục
+    // "Global milestone rule").
+    milestones: [],
   };
 }
 
 function ensureGlobalRegistryShape(registry) {
   return ensureRegistry({ registry });
+}
+
+function ensureMilestonesShape(milestones) {
+  if (!Array.isArray(milestones)) return [];
+  return milestones
+    .filter((m) => m && typeof m === "object" && m.statEntityId)
+    .map((m) => ({
+      id: m.id || `milestone_${Date.now().toString(36)}`,
+      statEntityId: m.statEntityId,
+      thresholds: Array.isArray(m.thresholds) ? m.thresholds : [],
+    }));
 }
 
 // Blueprint tạo trước PRO 5 không có `globalState` hợp lệ — luôn trả về bản
@@ -50,6 +71,7 @@ export function ensureGlobalState(proDoc) {
   });
 
   const startEpisodeId = raw && typeof raw === "object" && raw.startEpisodeId ? raw.startEpisodeId : null;
+  const milestones = ensureMilestonesShape(raw?.milestones);
 
   // Đã có global registry (dù trống thật hay đã được migrate/soạn trước đó)
   // hoặc chưa episode nào có registry để migrate — chỉ chuẩn hoá hình dạng,
@@ -57,7 +79,7 @@ export function ensureGlobalState(proDoc) {
   if (hasGlobalData || !anyEpisodeRegistry) {
     return {
       ...proDoc,
-      globalState: { version: GLOBAL_STATE_SCHEMA_VERSION, registry: rawRegistry, startEpisodeId },
+      globalState: { version: GLOBAL_STATE_SCHEMA_VERSION, registry: rawRegistry, startEpisodeId, milestones },
     };
   }
 
@@ -66,7 +88,7 @@ export function ensureGlobalState(proDoc) {
   return {
     ...proDoc,
     storyBlueprint: syncedBlueprint,
-    globalState: { version: GLOBAL_STATE_SCHEMA_VERSION, registry: migrated.registry, startEpisodeId },
+    globalState: { version: GLOBAL_STATE_SCHEMA_VERSION, registry: migrated.registry, startEpisodeId, milestones },
   };
 }
 
@@ -302,4 +324,36 @@ export function episodeTransitionSummary(storyBlueprint, episodeId) {
     .filter((e) => e.id !== episodeId && e.sceneBlueprint && collectEpisodeTargets(e.sceneBlueprint).has(episodeId))
     .map((e) => e.id);
   return { outgoing, incoming };
+}
+
+// ---------- PRO 6: milestone CRUD (authoring-only, xem newEmptyGlobalState) ----------
+let milestoneIdCounter = 0;
+function nextMilestoneId(prefix) {
+  milestoneIdCounter += 1;
+  return `${prefix}_${Date.now().toString(36)}${milestoneIdCounter.toString(36)}`;
+}
+
+export function addMilestone(globalState, statEntityId) {
+  const milestone = { id: nextMilestoneId("milestone"), statEntityId, thresholds: [] };
+  return { ...globalState, milestones: [...ensureMilestonesShape(globalState?.milestones), milestone] };
+}
+export function removeMilestone(globalState, milestoneId) {
+  return { ...globalState, milestones: ensureMilestonesShape(globalState?.milestones).filter((m) => m.id !== milestoneId) };
+}
+export function addMilestoneThreshold(globalState, milestoneId, { at, bonus, label } = {}) {
+  const threshold = { id: nextMilestoneId("mstep"), at, bonus, label: label || "" };
+  return {
+    ...globalState,
+    milestones: ensureMilestonesShape(globalState?.milestones).map((m) =>
+      m.id === milestoneId ? { ...m, thresholds: [...m.thresholds, threshold] } : m
+    ),
+  };
+}
+export function removeMilestoneThreshold(globalState, milestoneId, thresholdId) {
+  return {
+    ...globalState,
+    milestones: ensureMilestonesShape(globalState?.milestones).map((m) =>
+      m.id === milestoneId ? { ...m, thresholds: m.thresholds.filter((t) => t.id !== thresholdId) } : m
+    ),
+  };
 }

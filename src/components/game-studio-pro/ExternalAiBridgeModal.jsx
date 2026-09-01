@@ -53,6 +53,8 @@ export default function ExternalAiBridgeModal({
   gamePlan,
   blueprint,
   onApplyBlueprint,
+  mechanics,
+  templateId,
 }) {
   const [activeTab, setActiveTab] = useState("copy_prompt");
   const { toast } = useToast();
@@ -83,8 +85,10 @@ export default function ExternalAiBridgeModal({
       blueprint,
       selectedSceneId,
       customInstructions,
+      mechanics,
+      templateId,
     });
-  }, [promptMode, gamePlan, episode, blueprint, selectedSceneId, customInstructions]);
+  }, [promptMode, gamePlan, episode, blueprint, selectedSceneId, customInstructions, mechanics, templateId]);
 
   // Tính toán Script xuất bản từ Blueprint hiện tại
   const exportedScript = useMemo(() => {

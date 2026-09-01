@@ -62,6 +62,12 @@ function compileEffects(effects, registry) {
   const fields = {};
   for (const eff of effects || []) {
     if (!eff || eff.type === EFFECT_TYPES.UNSUPPORTED) continue;
+    // SHOW_POPUP (PRO 6) không tham chiếu entity — dịch thẳng thành
+    // choice.systemPopup, field runtime GamePlayer.jsx đã đọc sẵn.
+    if (eff.type === EFFECT_TYPES.SHOW_POPUP) {
+      if (eff.title?.trim() || eff.text?.trim()) fields.systemPopup = { title: eff.title || "", text: eff.text || "" };
+      continue;
+    }
     const entity = findEntityByIdAnyKind(registry, eff.entityId);
     if (!entity) continue;
     if (eff.type === EFFECT_TYPES.STAT_CHANGE) {

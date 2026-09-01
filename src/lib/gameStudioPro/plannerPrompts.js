@@ -6,6 +6,7 @@
 // dẫn + yêu cầu output JSON hợp lệ cú pháp), nên plannerAI.js phải tự thẩm
 // định/khoan dung kết quả trả về (xem plannerAI.js).
 import { MAX_EPISODES } from "./plannerModel.js";
+import { findTemplate } from "./templateRegistry.js";
 
 function stickToIdeaRules(idea) {
   return `# QUY TẮC BẮT BUỘC — BÁM SÁT Ý TƯỞNG
@@ -26,6 +27,13 @@ function settingsBlock(settings) {
   if (settings?.episodeLength) lines.push(`- Độ dài mỗi tập mong muốn: ${settings.episodeLength}`);
   if (settings?.style) lines.push(`- Phong cách: ${settings.style}`);
   if (settings?.branchiness) lines.push(`- Mức độ phân nhánh mong muốn: ${settings.branchiness}`);
+  // PRO 6: template đã chọn (mục 18 "Template → Planner") — CHỈ thêm ngữ
+  // cảnh/gợi ý, KHÔNG ép buộc AI phải dùng đúng những gì template đề xuất
+  // (đè lên ý tưởng người dùng — mục 18 "không overwrite user idea").
+  const template = settings?.templateId ? findTemplate(settings.templateId) : null;
+  if (template?.plannerGuidance) {
+    lines.push(`- Kiểu game đã chọn: ${template.label} — ${template.plannerGuidance}`);
+  }
   return lines.length ? lines.join("\n") : "(không có tuỳ chọn thêm — tự quyết định hợp lý theo ý tưởng)";
 }
 

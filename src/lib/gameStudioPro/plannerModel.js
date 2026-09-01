@@ -54,6 +54,11 @@ export function newStoryBlueprint(idea, settings = {}) {
       episodeLength: settings.episodeLength || "",
       style: settings.style || "",
       branchiness: settings.branchiness || "",
+      // PRO 6: template đã chọn ở màn "CHỌN KIỂU GAME" (mục 22) — CHỈ để nhúng
+      // thêm ngữ cảnh vào prompt (plannerPrompts.js#settingsBlock), KHÔNG thay
+      // thế `genre` tự do đã có — người dùng vẫn có thể để trống (template
+      // "blank") hoặc override genre tự nhập.
+      templateId: settings.templateId || null,
     },
     gamePlan: null,
     episodes: [],

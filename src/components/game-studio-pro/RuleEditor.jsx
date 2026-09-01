@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseConditionText, parseEffectText } from "@/lib/gameStudioPro/ruleParser.js";
-import { explainCondition, explainEffect, statCompare, flagPresent, flagAbsent, itemPresent, statChange, grantFlag, grantItem, removeItem, OPERATORS } from "@/lib/gameStudioPro/ruleModel.js";
+import { explainCondition, explainEffect, statCompare, flagPresent, flagAbsent, itemPresent, statChange, grantFlag, grantItem, removeItem, showPopup, OPERATORS } from "@/lib/gameStudioPro/ruleModel.js";
 import { listEntities, findEntityByIdAnyKind, addStatEntity, addFlagEntity, addItemEntity, ENTITY_KINDS } from "@/lib/gameStudioPro/entityRegistry.js";
 
 function entityLabelFor(registry, entityId) {
@@ -125,20 +125,31 @@ function ManualAddRow({ registry, kind, onAdd }) {
     { value: "grant_flag", label: "Nhận cờ" },
     { value: "grant_item", label: "Nhận vật phẩm" },
     { value: "remove_item", label: "Mất vật phẩm" },
+    // PRO 6: KHÔNG tham chiếu entity — xem ruleModel.js#SHOW_POPUP.
+    { value: "show_popup", label: "Hiện thông báo (Cơ chế Hệ thống)" },
   ];
   const types = kind === "condition" ? conditionTypes : effectTypes;
   const [type, setType] = useState(types[0].value);
   const [entityId, setEntityId] = useState("");
   const [operator, setOperator] = useState(">=");
   const [value, setValue] = useState("");
+  const [popupTitle, setPopupTitle] = useState("");
+  const [popupText, setPopupText] = useState("");
 
   const needsQuantity = type === "stat_compare" || type === "stat_change";
   const needsFlag = type === "flag_present" || type === "flag_absent" || type === "grant_flag";
-  const pool = needsQuantity ? listEntities(registry, "quantity") : needsFlag ? listEntities(registry, ENTITY_KINDS.FLAG) : listEntities(registry, ENTITY_KINDS.ITEM);
+  const isPopup = type === "show_popup";
+  const pool = isPopup ? [] : needsQuantity ? listEntities(registry, "quantity") : needsFlag ? listEntities(registry, ENTITY_KINDS.FLAG) : listEntities(registry, ENTITY_KINDS.ITEM);
 
-  function reset() { setEntityId(""); setValue(""); }
+  function reset() { setEntityId(""); setValue(""); setPopupTitle(""); setPopupText(""); }
 
   function submit() {
+    if (isPopup) {
+      if (!popupTitle.trim() && !popupText.trim()) return;
+      onAdd(showPopup(popupTitle, popupText));
+      reset();
+      return;
+    }
     if (!entityId) return;
     const num = Number(value);
     if ((type === "stat_compare" || type === "stat_change") && !Number.isFinite(num)) return;
@@ -161,7 +172,12 @@ function ManualAddRow({ registry, kind, onAdd }) {
         <SelectTrigger className="h-7 text-xs w-48"><SelectValue /></SelectTrigger>
         <SelectContent>{types.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
       </Select>
-      {pool.length > 0 ? (
+      {isPopup ? (
+        <>
+          <Input className="h-7 text-xs w-32" placeholder="Tiêu đề" value={popupTitle} onChange={(e) => setPopupTitle(e.target.value)} />
+          <Input className="h-7 text-xs w-40" placeholder="Nội dung" value={popupText} onChange={(e) => setPopupText(e.target.value)} />
+        </>
+      ) : pool.length > 0 ? (
         <Select value={entityId} onValueChange={setEntityId}>
           <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Chọn..." /></SelectTrigger>
           <SelectContent>{pool.map((e) => <SelectItem key={e.id} value={e.id}>{e.displayName}{e.kind === ENTITY_KINDS.RELATIONSHIP ? " (quan hệ)" : ""}</SelectItem>)}</SelectContent>
@@ -178,7 +194,7 @@ function ManualAddRow({ registry, kind, onAdd }) {
       {(type === "stat_compare" || type === "stat_change") && (
         <Input className="h-7 text-xs w-20" type="number" placeholder="số" value={value} onChange={(e) => setValue(e.target.value)} />
       )}
-      <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={submit} disabled={!entityId}>
+      <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={submit} disabled={isPopup ? !popupTitle.trim() && !popupText.trim() : !entityId}>
         <Plus className="w-3 h-3 mr-1" /> Thêm
       </Button>
     </div>

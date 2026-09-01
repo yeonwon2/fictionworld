@@ -26,6 +26,12 @@ export const EFFECT_TYPES = {
   GRANT_FLAG: "grant_flag", // { entityId }
   GRANT_ITEM: "grant_item", // { entityId }
   REMOVE_ITEM: "remove_item", // { entityId }
+  // PRO 6: KHÔNG tham chiếu entity — { title, text }. Dịch thẳng thành
+  // choice.systemPopup (field runtime CÓ SẴN, GamePlayer.jsx đã đọc/hiện từ
+  // trước cho mọi archetype — xem postprocess.js#cleanPopup) — không phải
+  // field mới do PRO 6 phát minh, chỉ là promote nó thành hệ quả tác giả có
+  // thể chọn trong Rule Editor thay vì việc riêng của 4 Xưởng Legacy cũ.
+  SHOW_POPUP: "show_popup", // { title, text }
   UNSUPPORTED: "unsupported", // { raw, reason }
 };
 
@@ -73,6 +79,9 @@ export function grantItem(entityId) {
 export function removeItem(entityId) {
   return { type: EFFECT_TYPES.REMOVE_ITEM, entityId };
 }
+export function showPopup(title, text) {
+  return { type: EFFECT_TYPES.SHOW_POPUP, title: String(title || ""), text: String(text || "") };
+}
 export function unsupportedEffect(raw, reason) {
   return { type: EFFECT_TYPES.UNSUPPORTED, raw: String(raw || ""), reason: String(reason || "") };
 }
@@ -117,6 +126,8 @@ export function explainEffect(effect, entityLabel) {
       return `Nhận vật phẩm: ${label}`;
     case EFFECT_TYPES.REMOVE_ITEM:
       return `Mất vật phẩm: ${label}`;
+    case EFFECT_TYPES.SHOW_POPUP:
+      return `Thông báo: "${effect.title}"`;
     case EFFECT_TYPES.UNSUPPORTED:
       return `⚠ Chưa hỗ trợ: "${effect.raw}"${effect.reason ? ` (${effect.reason})` : ""}`;
     default:

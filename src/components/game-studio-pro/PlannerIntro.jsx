@@ -13,16 +13,19 @@ import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/components/ui/use-toast";
 import { generateGamePlanWithEpisodes } from "@/lib/gameStudioPro/plannerAI";
+import { applyTemplate, TEMPLATE_IDS } from "@/lib/gameStudioPro/templateRegistry.js";
+import TemplatePicker from "./TemplatePicker";
 
 const IDEA_PLACEHOLDER = `Tôi muốn làm một game hậu cung dài tập.
 Nhân vật chính bắt đầu là cung nữ mới nhập cung...
 Tôi muốn có sủng ái, uy tín, chức vị...
 Có những lựa chọn sai có thể chết ngay...`;
 
-export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip }) {
+export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip, proDoc, onProDocChange }) {
   const [idea, setIdea] = useState(storyBlueprint?.idea || "");
   const [gameLength, setGameLength] = useState(storyBlueprint?.settings?.gameLength || "long");
   const [showOptions, setShowOptions] = useState(false);
+  const [templateId, setTemplateId] = useState(storyBlueprint?.settings?.templateId || proDoc?.templateId || TEMPLATE_IDS.BLANK);
   const [genre, setGenre] = useState(storyBlueprint?.settings?.genre || "");
   const [estimatedEpisodes, setEstimatedEpisodes] = useState(storyBlueprint?.settings?.estimatedEpisodes || "");
   const [episodeLength, setEpisodeLength] = useState(storyBlueprint?.settings?.episodeLength || "");
@@ -31,6 +34,15 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip }) {
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState("");
   const { toast } = useToast();
+
+  // PRO 6 (mục 22): áp template ĐỘC LẬP với việc có gọi AI lập kế hoạch hay
+  // không — template chỉ seed registry/mechanics (globalState/mechanics),
+  // storyBlueprint (Ý tưởng/Game Plan/các Tập) hoàn toàn không bị đụng tới dù
+  // đi đường AI hay "Tự thiết kế".
+  function applyChosenTemplate() {
+    if (!proDoc || !onProDocChange || templateId === TEMPLATE_IDS.BLANK) return;
+    onProDocChange(applyTemplate(proDoc, templateId));
+  }
 
   async function handleGenerate() {
     if (!idea.trim()) {
@@ -44,7 +56,9 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip }) {
       episodeLength: episodeLength.trim(),
       style: style.trim(),
       branchiness: branchiness.trim(),
+      templateId,
     };
+    applyChosenTemplate();
     setGenerating(true);
     setProgress("Đang lập Kế hoạch Game...");
     try {
@@ -63,8 +77,19 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip }) {
     }
   }
 
+  function handleSkip() {
+    applyChosenTemplate();
+    onSkip();
+  }
+
   return (
     <div className="space-y-4">
+      <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-2">
+        <Label>Chọn kiểu game</Label>
+        <p className="text-[11px] text-muted-foreground">Chỉ đề xuất chỉ số/cơ chế khởi đầu — không phải giao diện/theme, không bắt buộc dùng đúng.</p>
+        <TemplatePicker proDoc={proDoc} selectedId={templateId} onSelect={setTemplateId} />
+      </section>
+
       <section className="glass-card rounded-2xl p-4 sm:p-5 space-y-2">
         <Label>Mô tả game bạn muốn làm</Label>
         <Textarea
@@ -146,7 +171,7 @@ export default function PlannerIntro({ storyBlueprint, onGenerated, onSkip }) {
           {generating ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
           Lập kế hoạch với AI
         </Button>
-        <Button type="button" variant="outline" onClick={onSkip} disabled={generating}>
+        <Button type="button" variant="outline" onClick={handleSkip} disabled={generating}>
           <PenLine className="w-4 h-4 mr-1.5" /> Tự thiết kế (bỏ qua kế hoạch)
         </Button>
         {generating && progress && <span className="text-xs text-muted-foreground">{progress}</span>}

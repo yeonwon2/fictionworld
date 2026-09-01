@@ -148,7 +148,7 @@ function EndingsPanel({ blueprint, onBlueprintChange }) {
   );
 }
 
-export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, globalState, onGlobalStateChange }) {
+export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, globalState, onGlobalStateChange, mechanics, templateId }) {
   const episodes = storyBlueprint?.episodes || [];
   const [selectedId, setSelectedId] = useState(initialEpisodeId || episodes[0]?.id || null);
   const [editingSceneId, setEditingSceneId] = useState(null);
@@ -401,6 +401,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
           gamePlan={gamePlan}
           blueprint={blueprint}
           onApplyBlueprint={setEpisodeBlueprint}
+          mechanics={mechanics}
+          templateId={templateId}
         />
       )}
     </div>
