@@ -8,6 +8,7 @@ import { SCENE_ROLES } from "./blueprintModel.js";
 import { ensureRegistry, findEntityByIdAnyKind, ENTITY_KINDS, listEntities } from "./entityRegistry.js";
 import { CONDITION_TYPES, EFFECT_TYPES, negateOperator, statCompare, flagPresent, flagAbsent } from "./ruleModel.js";
 import { ensureGlobalState } from "./globalStateModel.js";
+import { presentationRuntimeMeta } from "./presentationModel.js";
 
 // ---------- PRO 3: dịch Canonical Rule IR -> field runtime thật ----------
 // KHÔNG có engine luật thứ hai — mọi condition/effect cuối cùng chỉ là đúng
@@ -202,7 +203,7 @@ export function compileProGame(proDoc) {
   const meta = {
     title: proDoc.title || "Game Pro Mới",
     presentation: "dialogue",
-    theme: "lily-noir",
+    ...presentationRuntimeMeta(proDoc),
     archetype: "none",
     player_name: "Nhân Vật Chính",
     playerAvatar: "",
@@ -230,7 +231,7 @@ export function compileProGame(proDoc) {
 // namespaced theo episode.id (blueprintModel.makeSceneId/makeEndingId) ngay
 // từ đầu, việc sau này gộp nhiều blueprint tập vào 1 đồ thị lớn (PRO 5+) sẽ
 // không đụng ID — quyết định này KHÔNG cần thiết kế lại data model.
-export function compileEpisodeBlueprint(sceneBlueprint, { title, episodesById } = {}) {
+export function compileEpisodeBlueprint(sceneBlueprint, { title, episodesById, presentation } = {}) {
   if (!sceneBlueprint || !sceneBlueprint.scenes?.length) {
     throw new Error("Sơ đồ cảnh trống — chưa có cảnh nào để chơi thử.");
   }
@@ -325,7 +326,7 @@ export function compileEpisodeBlueprint(sceneBlueprint, { title, episodesById } 
   const meta = {
     title: title || "Chơi thử tập",
     presentation: "dialogue",
-    theme: "lily-noir",
+    ...presentationRuntimeMeta(presentation),
     archetype: "none",
     player_name: "Nhân Vật Chính",
     playerAvatar: "",
@@ -442,7 +443,7 @@ export function compileProCampaign(proDocRaw) {
   const meta = {
     title: proDoc.title || "Game Pro Mới",
     presentation: "dialogue",
-    theme: "lily-noir",
+    ...presentationRuntimeMeta(proDoc),
     archetype: "none",
     player_name: "Nhân Vật Chính",
     playerAvatar: "",

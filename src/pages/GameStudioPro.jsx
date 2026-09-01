@@ -37,6 +37,8 @@ import SmartMindMap from "@/components/game-studio-pro/SmartMindMap";
 import ProQaDashboard from "@/components/game-studio-pro/ProQaDashboard";
 import { runProQa } from "@/lib/gameStudioPro/proQa";
 import { deriveWorkflowState, INITIAL_SAVE_STATE, saveStateLabel, saveStateReducer, WORKFLOW_STEPS } from "@/lib/gameStudioPro/workflowState";
+import { ensureProPresentation, updateProPresentation } from "@/lib/gameStudioPro/presentationModel";
+import PresentationPicker from "@/components/game-studio-pro/PresentationPicker";
 
 function WorkflowBar({ state, mode, onNavigate }) {
   return (
@@ -184,7 +186,7 @@ function ProGameEditor({ gameId, onBack }) {
         // PRO 6: game Pro cũ (trước PRO6) không có `mechanics`/`templateId` —
         // ensureMechanicsState() chuẩn hoá an toàn, cùng quy ước ensureGlobalState().
         const loaded = ensureGlobalState(row.meta?.pro || newEmptyProGame());
-        setProDoc({ ...loaded, mechanics: ensureMechanicsState(loaded.mechanics), templateId: loaded.templateId || null });
+        setProDoc({ ...loaded, mechanics: ensureMechanicsState(loaded.mechanics), templateId: loaded.templateId || null, presentation: ensureProPresentation(loaded.presentation) });
         setFocusEpisodeId(loaded.storyBlueprint?.episodes?.[0]?.id || null);
         dispatchSave({ type: "saved", at: row.updated_at ? new Date(row.updated_at) : null });
         // "Lần lưu thành công gần nhất" trước khi ta chỉnh sửa gì — sàn an
@@ -367,6 +369,7 @@ function ProGameEditor({ gameId, onBack }) {
             onGlobalStateChange={(globalState) => updateField({ globalState })}
             mechanics={proDoc.mechanics}
             templateId={proDoc.templateId}
+            presentation={proDoc.presentation}
           />
         )}
 
@@ -407,16 +410,19 @@ function ProGameEditor({ gameId, onBack }) {
         )}
 
         {mode === "play" && (
-          campaignError ? (
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-              Chưa thể chơi thử — liên kết giữa các tập còn lỗi. Sửa ở Kế hoạch hoặc Sơ đồ rồi quay lại đây.
-              <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
-            </div>
-          ) : (
-            <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "70vh" }}>
-              <GamePlayer key={playKey} gameData={compiledGameData} gameKey={gameId} onExit={() => setMode("edit")} />
-            </div>
-          )
+          <div className="space-y-4">
+            <PresentationPicker value={proDoc.presentation} onChange={(presentation) => { dispatchSave({ type: "dirty" }); setProDoc((previous) => updateProPresentation(previous, presentation)); }} />
+            {campaignError ? (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+                Chưa thể chơi thử — liên kết giữa các tập còn lỗi. Sửa ở Kế hoạch hoặc Sơ đồ rồi quay lại đây.
+                <p className="mt-2 text-xs opacity-80">Lỗi: {campaignError}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl overflow-hidden border border-border" style={{ minHeight: "70vh" }}>
+                <GamePlayer key={playKey} gameData={compiledGameData} gameKey={gameId} onExit={() => setMode("edit")} />
+              </div>
+            )}
+          </div>
         )}
 
         {mode === "export" && (

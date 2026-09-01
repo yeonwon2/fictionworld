@@ -150,7 +150,7 @@ function EndingsPanel({ blueprint, onBlueprintChange }) {
   );
 }
 
-export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, initialSceneId, globalState, onGlobalStateChange, mechanics, templateId }) {
+export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeId, initialSceneId, globalState, onGlobalStateChange, mechanics, templateId, presentation }) {
   const episodes = storyBlueprint?.episodes || [];
   const [selectedId, setSelectedId] = useState(initialEpisodeId || episodes[0]?.id || null);
   const [editingSceneId, setEditingSceneId] = useState(initialSceneId || null);
@@ -258,7 +258,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   let compileError = "";
   if (playtesting && blueprint) {
     try {
-      compiledPreview = compileEpisodeBlueprint(blueprint, { title: episode.title, episodesById });
+      compiledPreview = compileEpisodeBlueprint(blueprint, { title: episode.title, episodesById, presentation });
     } catch (e) {
       compileError = e.message;
     }

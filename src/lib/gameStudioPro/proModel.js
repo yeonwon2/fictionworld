@@ -8,6 +8,7 @@
 // bảng/migration riêng cho Pro.
 import { newEmptyGlobalState } from "./globalStateModel.js";
 import { newEmptyMechanicsState } from "./mechanicsModel.js";
+import { ensureProPresentation } from "./presentationModel.js";
 
 export const PRO_SCHEMA_VERSION = 1;
 
@@ -42,6 +43,7 @@ export function newEmptyProGame() {
     episodes: [],
     mechanics: newEmptyMechanicsState(),
     templateId: null,
+    presentation: ensureProPresentation(),
     storyBlueprint: null,
     sceneIntents: {},
     externalImport: null,
