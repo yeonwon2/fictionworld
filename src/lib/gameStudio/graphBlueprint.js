@@ -105,6 +105,11 @@ export function enforceExplicitBlueprintRules(rawPlan,request=''){
 export function normalizeBlueprintSemantics(rawPlan,request=''){
  if(!rawPlan||!Array.isArray(rawPlan.nodes))return rawPlan;
  const plan=structuredClone(rawPlan),contract=blueprintRequestContract(request);
+ // JSON schema yêu cầu chuỗi, nhưng một số provider vẫn trả null cho trường
+ // tùy chọn không dùng. Null ở đây mang đúng nghĩa "không có", nên chuẩn hóa
+ // cục bộ thay vì loại bỏ cả graph đã tốn lượt tạo. Giá trị sai kiểu khác vẫn
+ // được applyBlueprint chặn như trước.
+ for(const node of plan.nodes)for(const choice of Array.isArray(node.choices)?node.choices:[])for(const field of ['requiresFlag','requiresFlagAbsent','requiresItem','grantFlag','grantItem'])if(choice[field]==null)choice[field]='';
  if(contract.mainSceneCount){
   let excess=plan.nodes.filter(node=>node.role==='main').length-contract.mainSceneCount;
   for(const node of plan.nodes)if(excess>0&&node.role==='main'&&/(?:nhánh\s*phụ|side\s*branch|hệ\s*quả)/i.test(`${node.title||''} ${node.text||''}`)){node.role='side';excess--;}
@@ -120,12 +125,54 @@ export function normalizeBlueprintSemantics(rawPlan,request=''){
    return plan;
   }
  }
+ // Model có xu hướng luôn đặt lựa chọn nguy hiểm ở D. Khi tác giả yêu cầu
+ // đúng một Death End ngẫu nhiên ở mỗi cảnh, ta chỉ hoán đổi vị trí của lựa
+ // chọn chết đã được AI viết (giữ nguyên toàn bộ nội dung/cơ chế của nó).
+ // Hash theo yêu cầu + ID giúp kết quả ổn định khi React render lại, nhưng
+ // phân bố khác nhau giữa các cảnh và không phụ thuộc thứ tự A/B/C/D của AI.
+ if(contract.randomDeathPerMain||contract.deathAtMainScenes.length){
+  const deathIds=new Set(plan.nodes.filter(node=>node.role==='ending'&&/death\s*end|dead\s*end|tử vong|chết|không thể cứu vãn/i.test(`${node.title||''} ${node.text||''}`)).map(node=>node.id));
+  let previous=-1;
+  const hash=value=>{let result=2166136261;for(const char of value){result^=char.charCodeAt(0);result=Math.imul(result,16777619);}return result>>>0;};
+  for(const [sceneIndex,node] of plan.nodes.filter(node=>node.role==='main').entries()){
+   if(!contract.randomDeathPerMain&&!contract.deathAtMainScenes.includes(sceneIndex+1))continue;
+   const choices=Array.isArray(node.choices)?node.choices:[];
+   const deathIndexes=choices.map((choice,index)=>deathIds.has(choice.target)?index:-1).filter(index=>index>=0);
+   if(deathIndexes.length!==1||choices.length<2)continue;
+   let desired=hash(`${request}|${node.id}|${sceneIndex}`)%choices.length;
+   if(desired===previous)desired=(desired+1+(sceneIndex%Math.max(1,choices.length-1)))%choices.length;
+   const current=deathIndexes[0];
+   if(current!==desired)[choices[current],choices[desired]]=[choices[desired],choices[current]];
+   previous=desired;
+  }
+ }
  return plan;
 }
 export function blueprintRequestContract(request=''){
- const scene=request.match(/(?:khoảng|tầm|đúng|toàn bộ)?\s*(\d+)\s*cảnh\s*chính/i);
- const choice=request.match(/mỗi\s*cảnh[\s\S]{0,50}?(\d+)\s*lựa\s*chọn/i);
- return {mainSceneCount:scene?Number(scene[1]):null,choicesPerMain:choice?Number(choice[1]):null,requiresGood:/GOOD\s*END/i.test(request),requiresBad:/BAD\s*END/i.test(request),requiresDeath:/DEATH\s*END/i.test(request)};
+ const structured=request.match(/\n?# BLUEPRINT_CONSTRAINTS_V1\n([^\n]+)/)?.[1];
+ let locked={};
+ if(structured){try{locked=JSON.parse(structured);}catch{/* Dữ liệu khóa hỏng sẽ rơi về cách đọc lời tự do bên dưới. */}}
+ const scene=request.match(/(?:khoảng|tầm|đúng|toàn bộ|tạo|có|yêu\s*cầu)?\s*(\d+)\s*cảnh(?:\s*chính)?/i);
+ const choice=request.match(/mỗi\s*cảnh[\s\S]{0,50}?(\d+)\s*(?:lựa\s*chọn|đáp\s*án)/i);
+ const mainSceneCount=Number.isInteger(locked.mainSceneCount)&&locked.mainSceneCount>0?locked.mainSceneCount:scene?Number(scene[1]):null;
+ const choicesPerMain=Number.isInteger(locked.choicesPerMain)&&locked.choicesPerMain>0?locked.choicesPerMain:choice?Number(choice[1]):null;
+ const randomDeathPerMain=locked.instantEndingPolicy==='one_random_per_main'||(Boolean(choice)&&/(?:mỗi\s*cảnh[\s\S]{0,160})?(?:random|ngẫu\s*nhiên)[\s\S]{0,100}?(?:1|một)\s*(?:lựa\s*chọn|đáp\s*án)[\s\S]{0,100}?(?:death\s*end|dead\s*end|chết\s*ngay|tử\s*vong\s*ngay)/i.test(request));
+ const numbers=value=>Array.isArray(value)?[...new Set(value.filter(Number.isInteger).filter(n=>n>0))]:[];
+ const deathAtMainScenes=locked.instantEndingPolicy==='selected_main_scenes'?numbers(locked.deathAtMainScenes):[];
+ const consequencePolicy=['surviving_choices','all_choices'].includes(locked.consequencePolicy)?locked.consequencePolicy:'as_requested';
+ const sideBranchAtMainScenes=numbers(locked.sideBranchAtMainScenes);
+ const sideBranchMin=Math.max(1,Number(locked.sideBranchMin)||1),sideBranchMax=Math.max(sideBranchMin,Number(locked.sideBranchMax)||sideBranchMin);
+ return {mainSceneCount,choicesPerMain,requiresGood:/GOOD\s*END/i.test(request),requiresBad:/BAD\s*END/i.test(request),requiresDeath:randomDeathPerMain||deathAtMainScenes.length>0||/DEATH\s*END/i.test(request),randomDeathPerMain,deathAtMainScenes,consequencePolicy,sideBranchAtMainScenes,sideBranchMin,sideBranchMax};
+}
+export function withBlueprintConstraints(request,constraints={}){
+ const clean={};
+ if(Number.isInteger(constraints.mainSceneCount)&&constraints.mainSceneCount>0)clean.mainSceneCount=constraints.mainSceneCount;
+ if(Number.isInteger(constraints.choicesPerMain)&&constraints.choicesPerMain>0)clean.choicesPerMain=constraints.choicesPerMain;
+ if(constraints.instantEndingPolicy==='one_random_per_main')clean.instantEndingPolicy=constraints.instantEndingPolicy;
+ if(constraints.instantEndingPolicy==='selected_main_scenes'&&Array.isArray(constraints.deathAtMainScenes)&&constraints.deathAtMainScenes.length){clean.instantEndingPolicy=constraints.instantEndingPolicy;clean.deathAtMainScenes=constraints.deathAtMainScenes;}
+ if(['surviving_choices','all_choices'].includes(constraints.consequencePolicy))clean.consequencePolicy=constraints.consequencePolicy;
+ if(Array.isArray(constraints.sideBranchAtMainScenes)&&constraints.sideBranchAtMainScenes.length){clean.sideBranchAtMainScenes=constraints.sideBranchAtMainScenes;clean.sideBranchMin=Math.max(1,Number(constraints.sideBranchMin)||1);clean.sideBranchMax=Math.max(clean.sideBranchMin,Number(constraints.sideBranchMax)||clean.sideBranchMin);}
+ return Object.keys(clean).length?`${request.trim()}\n# BLUEPRINT_CONSTRAINTS_V1\n${JSON.stringify(clean)}`:request;
 }
 export function validateBlueprintAgainstRequest(plan,request=''){
  const errors=[];
@@ -145,11 +192,47 @@ export function validateBlueprintAgainstRequest(plan,request=''){
   const dead=plan.nodes.filter(node=>node.role!=='ending'&&(!Array.isArray(node.choices)||node.choices.length===0||node.choices.some(choice=>!choice.target)));if(dead.length)errors.push(`${dead.length} ô có nhánh cụt hoặc đích trống: ${dead.slice(0,5).map(node=>`"${node.title||node.id}"`).join(', ')}.`);
  }
  if(/nhánh phụ/i.test(request)&&!plan.nodes.some(node=>node.role==='side'||node.role==='consequence'))errors.push('Yêu cầu có nhánh phụ/hệ quả thật nhưng graph chưa có ô side hoặc consequence nào.');
- const asksDirectDeath=/(?:lựa chọn|đáp án)[\s\S]{0,80}(?:death\s*end|dead\s*end|deađ\s*en(?:d)?|chết ngay|tử vong ngay|kết thúc tử vong)/i.test(request)||(/(?:lựa chọn|đáp án)[\s\S]{0,100}hậu quả nghiêm trọng/i.test(request)&&/DEATH\s*END/i.test(request));
+ const asksDirectDeath=contract.randomDeathPerMain||contract.deathAtMainScenes.length>0||/(?:lựa chọn|đáp án)[\s\S]{0,80}(?:death\s*end|dead\s*end|deađ\s*en(?:d)?|chết ngay|tử vong ngay|kết thúc tử vong)/i.test(request)||(/(?:lựa chọn|đáp án)[\s\S]{0,100}hậu quả nghiêm trọng/i.test(request)&&/DEATH\s*END/i.test(request));
+ const deathIds=new Set(endings.filter(node=>/death\s*end|dead\s*end|tử vong|không thể cứu vãn/i.test(`${node.title||''} ${node.text||''}`)).map(node=>node.id));
  if(asksDirectDeath){
-  const deathIds=new Set(endings.filter(node=>/death\s*end|dead\s*end|tử vong|không thể cứu vãn/i.test(`${node.title||''} ${node.text||''}`)).map(node=>node.id));
   const hasDirectDeath=plan.nodes.some(node=>node.role!=='router'&&node.role!=='ending'&&(node.choices||[]).some(choice=>deathIds.has(choice.target)));
   if(!hasDirectDeath)errors.push('Yêu cầu có đáp án dẫn thẳng tới Death End, nhưng chưa có lựa chọn từ cảnh truyện nối trực tiếp vào ô kết thúc tử vong. Ngưỡng -200 toàn cục không thay thế cấu trúc này.');
+  if(contract.randomDeathPerMain){
+   const counts=mains.map(node=>(node.choices||[]).filter(choice=>deathIds.has(choice.target)).length);
+   const wrong=counts.filter(count=>count!==1).length;
+   if(wrong)errors.push(`${wrong} cảnh chính chưa có đúng 1 đáp án dẫn thẳng tới Death End.`);
+   const positions=mains.map(node=>(node.choices||[]).findIndex(choice=>deathIds.has(choice.target))).filter(index=>index>=0);
+   if(positions.length>1&&new Set(positions).size===1)errors.push('Vị trí đáp án Death End vẫn giống nhau ở mọi cảnh; phải phân tán giữa A/B/C/D để không lộ quy luật.');
+  }
+  if(contract.deathAtMainScenes.length){
+   const invalid=contract.deathAtMainScenes.filter(number=>number>mains.length);
+   if(invalid.length)errors.push(`Mốc Death End vượt số cảnh chính: ${invalid.join(', ')}.`);
+   const wrong=mains.filter((node,index)=>contract.deathAtMainScenes.includes(index+1)!==((node.choices||[]).filter(choice=>deathIds.has(choice.target)).length===1));
+   if(wrong.length)errors.push(`${wrong.length} cảnh chưa đúng lịch Death End đã khóa (chỉ các mốc ${contract.deathAtMainScenes.join(', ')} có đúng 1 đáp án chết).`);
+  }
+ }
+ if(contract.consequencePolicy!=='as_requested'){
+  const wrong=[];
+  for(const [index,node] of mains.entries())for(const choice of node.choices||[]){
+   const isDeath=deathIds?.has(choice.target),target=byId.get(choice.target);
+   const sideException=contract.sideBranchAtMainScenes.includes(index+1)&&target?.role==='side';
+   // Ở cảnh chính cuối, router/ending chính là hệ quả kết truyện và không có
+   // "cảnh tiếp" để chèn consequence trung gian. Các cảnh trước vẫn bắt buộc
+   // phải có consequence thật như hợp đồng.
+   const terminalException=index===mains.length-1&&(target?.role==='router'||target?.role==='ending');
+   if((contract.consequencePolicy==='all_choices'||!isDeath)&&!sideException&&!terminalException&&target?.role!=='consequence')wrong.push(`${index+1}${String.fromCharCode(65+(node.choices||[]).indexOf(choice))}`);
+  }
+  if(wrong.length)errors.push(`${wrong.length} đáp án chưa dẫn qua cảnh hệ quả theo luật đã khóa: ${wrong.slice(0,8).join(', ')}${wrong.length>8?'…':''}.`);
+ }
+ if(contract.sideBranchAtMainScenes.length){
+  for(const number of contract.sideBranchAtMainScenes){
+   const main=mains[number-1];if(!main){errors.push(`Mốc nhánh phụ ${number} vượt số cảnh chính.`);continue;}
+   const starts=(main.choices||[]).map(choice=>byId.get(choice.target)).filter(node=>node?.role==='side');
+   if(starts.length!==1){errors.push(`Cảnh chính ${number} phải có đúng 1 đáp án mở nhánh phụ.`);continue;}
+   let length=0,current=starts[0],seen=new Set();
+   while(current?.role==='side'&&!seen.has(current.id)&&length<=contract.sideBranchMax){seen.add(current.id);length++;const next=(current.choices||[]).map(choice=>byId.get(choice.target)).find(Boolean);current=next;}
+   if(length<contract.sideBranchMin||length>contract.sideBranchMax||current?.role!=='main')errors.push(`Nhánh phụ tại cảnh ${number} phải dài ${contract.sideBranchMin}–${contract.sideBranchMax} cảnh rồi quay lại mạch chính.`);
+  }
  }
  if(/nhánh phụ[\s\S]{0,100}(?:quay|hội tụ|trở lại)[\s\S]{0,40}(?:mạch|tuyến|cảnh)\s*chính/i.test(request)){
   const branches=plan.nodes.filter(node=>node.role==='side'||node.role==='consequence');
@@ -259,6 +342,11 @@ summary giải thích toàn bộ ô thêm, đường sửa và luật thay đổ
 # HỢP ĐỒNG SỐ LƯỢNG (kiểm tra bằng code, không được nói suông trong summary)
 ${contract.mainSceneCount?`- nodes PHẢI có ĐÚNG ${contract.mainSceneCount} phần tử role="main"; consequence/side/router/ending không được tính vào con số này.`:'- Giữ đúng số cảnh chính người dùng yêu cầu.'}
 ${contract.choicesPerMain?`- MỖI role="main" PHẢI có ĐÚNG ${contract.choicesPerMain} choices thật, có target và hệ quả riêng.`:'- Giữ đúng số lựa chọn mỗi cảnh người dùng yêu cầu.'}
+${contract.randomDeathPerMain?'- MỖI cảnh main phải có ĐÚNG 1 choice nối trực tiếp Death End. Rải vị trí choice chết giữa A/B/C/D; cấm đặt cùng một chữ cái ở mọi cảnh. Vị trí sẽ được code kiểm tra và phân bố lại khi cần.':''}
+${contract.deathAtMainScenes.length?`- CHỈ các cảnh main số ${contract.deathAtMainScenes.join(', ')} có đúng 1 choice nối trực tiếp Death End; các cảnh main khác không có choice Death End. Rải vị trí, không cố định một chữ cái.`:''}
+${contract.consequencePolicy==='surviving_choices'?'- Mọi choice KHÔNG dẫn Death End phải đi qua một node role="consequence" trước khi tới cảnh tiếp; ngoại lệ duy nhất là choice mở side branch đã khóa.':''}
+${contract.consequencePolicy==='all_choices'?'- Mọi choice phải đi qua một node role="consequence" trước khi đi tiếp; choice mở side branch đã khóa được đi thẳng side.':''}
+${contract.sideBranchAtMainScenes.length?`- Tại mỗi cảnh main số ${contract.sideBranchAtMainScenes.join(', ')}, ĐÚNG 1 choice phải mở một nhánh role="side" dài ${contract.sideBranchMin}–${contract.sideBranchMax} cảnh, sau đó quay lại một main hợp lý. Các choice sống còn lại vẫn theo luật consequence.`:''}
 - Không được trả vài cảnh mẫu/đại diện rồi viết summary rằng đã có đủ. Mọi cảnh phải hiện diện thật trong nodes.
 - Mọi ô mới phải reachable từ connections; mọi choice phải có target; không cảnh mồ côi hoặc nhánh cụt.
 - Đây là lượt DỰNG SƠ ĐỒ, không phải lượt viết toàn bộ tiểu thuyết. Để JSON không bị cắt: title tối đa 60 ký tự; text mỗi node từ 120–240 ký tự, mô tả cô đọng tình huống/xung đột/tâm lý cụ thể; text mỗi choice tối đa 90 ký tự. Cấm "Cảnh 2", "Tiếp tục diễn biến", placeholder hoặc câu mẫu. Văn dài sẽ được viết theo lô sau khi graph đã lưu.
