@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {planWritingBudget,writeBudgetedScopes,applyProseWriting} from '../src/lib/gameStudio/writingBudget.js';
+import {planWritingBudget,writeBudgetedScopes,applyProseWriting,narrativeMinimumChars} from '../src/lib/gameStudio/writingBudget.js';
 
 const game=(count=20)=>({meta:{statsConfig:[{key:'p',label:'Điểm',default:50}],aiWorkshop:{type:'npc'}},nodes:Object.fromEntries(Array.from({length:count},(_,i)=>['s'+i,{id:'s'+i,text:'Nội dung cũ',speaker:'Người kể',systemPopup:{title:'Hệ thống',text:'Giữ'},choices:[{text:'Đi tiếp',targetNodeId:'s'+((i+1)%count),statModifiers:{p:5},statRequirements:{p:1},grantFlag:'seen',grantItem:'key',diceRoll:{successTarget:'win',failTarget:'lose'},npcCard:{name:'Tên cũ',tagline:'Thẻ',image:'art'}}]}]))});
 const keys=g=>Object.keys(g.nodes).map(id=>'scene:'+id);
@@ -49,4 +49,18 @@ test('errors and cancellation do not trigger hidden calls or lose completed prop
  assert.equal(tries,2);assert.equal(r.calls,2);assert.ok(r.keys.length);assert.ok(r.remainingKeys.length);assert.match(r.notice,/429/);
  await assert.rejects(writeBudgetedScopes(g,keys(g),'',async()=>{throw new Error('Missing key');}),/Đã dùng 0\/2/);
  await assert.rejects(writeBudgetedScopes(g,keys(g),'',async()=>{throw new Error('must not run');},()=>{},()=>false),/đã dừng/);
+});
+test('long-form mode enforces a real scene body but gives consequences a shorter threshold',()=>{
+ const g=game(2);g.nodes.s0.workshopRole='main';g.nodes.s1.workshopRole='consequence';
+ assert.equal(narrativeMinimumChars(g,'scene:s0',1500),825);
+ assert.equal(narrativeMinimumChars(g,'scene:s1',1500),450);
+ assert.equal(narrativeMinimumChars(g,'choice:s0:0',3000),0);
+ assert.equal(narrativeMinimumChars(g,'scene:s0',700),0);
+});
+test('long-form writing retries a short scene and accepts the expanded replacement',async()=>{
+ const g=game(1);g.nodes.s0.workshopRole='main';let calls=0;
+ const result=await writeBudgetedScopes(g,['scene:s0'],'',async(prompt,options)=>{
+  options.onRequest();calls++;const entry=response('scene:s0');entry.text=calls===1?'Quá ngắn.':'Một cảnh truyện đầy đủ. '.repeat(50);return {entries:[entry]};
+ },()=>{},()=>true,{maxCalls:2,targetChars:1500});
+ assert.equal(calls,2);assert.deepEqual(result.remainingKeys,[]);assert.match(result.result.entries[0].text,/Một cảnh truyện đầy đủ/);
 });

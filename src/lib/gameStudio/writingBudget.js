@@ -49,6 +49,14 @@ export function planWritingBudget(game,keys,{maxCalls=2,targetChars=700,proseOnl
  return {keys:ordered,batches,estimatedCalls:batches.length,plannedKeys:batches.slice(0,maxCalls).flat(),remainingKeys:batches.slice(maxCalls).flat(),maxCalls,targetChars,proseOnly};
 }
 
+export function narrativeMinimumChars(game,key,targetChars){
+ if(targetChars<1000)return 0;
+ const scope=selectedScopes(game,[key])[0];
+ if(!scope||scope.choiceIndex!==null)return 0;
+ const role=game.nodes[scope.id]?.workshopRole;
+ return Math.floor(targetChars*(role==='consequence'?0.3:0.55));
+}
+
 export async function writeBudgetedScopes(game,keys,instruction,requestAI,onProgress=(message)=>void message,isActive=()=>true,options={}){
  const plan=planWritingBudget(game,keys,options),entries=[],suggestions=[];
  let working=game,calls=0,attempts=0,pending=[...plan.keys],issues=[];
@@ -59,7 +67,7 @@ export async function writeBudgetedScopes(game,keys,instruction,requestAI,onProg
   if(!isActive())throw new Error('Lượt viết đã dừng.');
   const batch=planWritingBudget(working,pending,options).batches[0];
   const mode=plan.proseOnly?'CHỈ TRAU CHUỐT LỜI VĂN. Quy tắc này thay phần yêu cầu trả điểm/người nói/thông báo hệ thống: chỉ trả key, text, choices[{index,text}]. Không đề xuất thay cơ chế, không đổi sự kiện hoặc kết cục. Không trả modifiers, speaker, systemTitle, systemText, npcName, npcTagline.':'Có thể đề xuất điểm trong schema; không đổi đường nối hay điều kiện.';
-  const prompt=workshopPrompt(working,batch,instruction)+`\n${mode}\nĐộ dài mục tiêu khoảng ${plan.targetChars} ký tự/cảnh, giữ ý chính và nhịp truyện. entries phải có đúng ${batch.length} ô, mỗi key một lần: ${JSON.stringify(batch)}. Chỉ viết các ô này. ${issues.length?'Bổ sung/sửa phần thiếu: '+issues.join('; '):''}`;
+  const prompt=workshopPrompt(working,batch,instruction)+`\n${mode}\nĐộ dài mục tiêu khoảng ${plan.targetChars} ký tự cho phần thân của MỖI cảnh thường. Đây là độ dài từng cảnh, không phải tổng cả nhóm. Với cảnh hệ quả có thể ngắn hơn nhưng phải thành một nhịp truyện hoàn chỉnh. Không rút mỗi cảnh còn vài câu để trả đủ nhiều entries. entries phải có đúng ${batch.length} ô, mỗi key một lần: ${JSON.stringify(batch)}. Chỉ viết các ô này. ${issues.length?'Bổ sung/sửa phần thiếu: '+issues.join('; '):''}`;
   attempts++;
   const progress=()=>onProgress(`Lượt xử lý ${attempts}/${plan.maxCalls} · đã gọi ${calls} lần · đang viết ${batch.length} ô · đã nhận ${entries.length}/${plan.keys.length} ô.`);
   progress();let sent=0;
@@ -75,6 +83,8 @@ export async function writeBudgetedScopes(game,keys,instruction,requestAI,onProg
    const matches=Array.isArray(response?.entries)?response.entries.filter(e=>e?.key===key):[];
    try{
     if(matches.length!==1)throw new Error(`${key}: ${matches.length?'trùng ô':'chưa trả ô'}`);
+    const minimum=narrativeMinimumChars(working,key,plan.targetChars);
+    if(minimum&&typeof matches[0].text==='string'&&matches[0].text.trim().length<minimum)throw new Error(`${key}: cảnh quá ngắn (${matches[0].text.trim().length}/${minimum} ký tự tối thiểu); cần viết thành một phân đoạn truyện có mở cảnh, diễn biến và dư âm`);
     const valid=plan.proseOnly?normalizeProseEntries(working,[key],{entries:matches}):matches;
     working=apply(working,[key],{entries:valid});entries.push(...valid);accepted.push(key);
    }catch(e){issues.push(e.message);}

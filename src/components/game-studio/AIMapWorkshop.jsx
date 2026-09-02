@@ -99,7 +99,7 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
   const [afterId, setAfterId] = useState('');
   const [ending, setEnding] = useState(false);
   const [instruction, setInstruction] = useState('');
-  const [maxCalls, setMaxCalls] = useState(2), [targetChars, setTargetChars] = useState(700), [proseOnly, setProseOnly] = useState(true);
+  const [maxCalls, setMaxCalls] = useState(2), [targetChars, setTargetChars] = useState(1500), [proseOnly, setProseOnly] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [proposal, setProposal] = useState(null);
@@ -199,10 +199,10 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
         <Textarea aria-label="Yêu cầu viết nhóm ô" rows={2} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Yêu cầu cho lượt viết này: nhịp chậm, chưa tiết lộ thân phận, lựa chọn B tăng uy tín…" />
         <div className="studio-writing-options text-sm">
           <label>Ngân sách viết <select aria-label="Ngân sách viết AI" className={selectClass} value={maxCalls} onChange={e=>setMaxCalls(Number(e.target.value))}><option value={1}>Tối đa 1 lượt</option><option value={2}>Tối đa 2 lượt</option></select></label>
-          <label>Độ dài/cảnh <select aria-label="Độ dài viết lại" className={selectClass} value={targetChars} onChange={e=>setTargetChars(Number(e.target.value))}><option value={400}>Ngắn · ~400 ký tự</option><option value={700}>Vừa · ~700 ký tự</option><option value={1500}>Dài · ~1.500 ký tự</option><option value={3000}>Rất dài · ~3.000 ký tự</option></select></label>
+          <label>Độ dài/cảnh <select aria-label="Độ dài viết lại" className={selectClass} value={targetChars} onChange={e=>setTargetChars(Number(e.target.value))}><option value={400}>Phác nhanh · ~400 ký tự</option><option value={700}>Ngắn · ~700 ký tự</option><option value={1500}>Cảnh truyện · ~1.500 ký tự</option><option value={3000}>Điện ảnh · ~3.000 ký tự</option></select></label>
           <label className="studio-prose-option flex gap-2 items-center"><input type="checkbox" checked={proseOnly} onChange={e=>setProseOnly(e.target.checked)}/>Chỉ trau chuốt lời văn (khóa cơ chế)</label>
         </div>
-        <p className="text-xs text-muted-foreground">Ước tính {writingEstimate.estimatedCalls} lượt cho {scopes.length} ô; lượt bấm này tối đa {maxCalls} cuộc gọi, kể cả sửa phản hồi lỗi. {writingEstimate.remainingKeys.length?`Dự kiến xử lý ${writingEstimate.plannedKeys.length} ô trước, ${writingEstimate.remainingKeys.length} ô để lần tiếp theo.`:'Dự kiến đủ ngân sách; không bảo đảm AI trả đủ nếu nội dung dài hoặc lỗi.'} Mỗi lượt vẫn có giới hạn token; ít lượt không đồng nghĩa ít phí token. Không tự rút gọn toàn bộ truyện.</p>
+        <p className="text-xs text-muted-foreground">Ước tính {writingEstimate.estimatedCalls} lượt cho {scopes.length} ô; lượt bấm này tối đa {maxCalls} cuộc gọi, kể cả sửa phản hồi lỗi. {writingEstimate.remainingKeys.length?`Dự kiến xử lý ${writingEstimate.plannedKeys.length} ô trước, ${writingEstimate.remainingKeys.length} ô để lần tiếp theo.`:'Dự kiến đủ ngân sách; không bảo đảm AI trả đủ nếu nội dung dài hoặc lỗi.'} Chế độ 1.500/3.000 ký tự có kiểm tra độ dài tối thiểu; cảnh quá ngắn sẽ được coi là chưa hoàn tất. Nên chọn ít cảnh mỗi lượt để giữ chất lượng. Mỗi lượt vẫn có giới hạn token.</p>
         <Button disabled={!scopes.length} onClick={() => ask('write')}>AI viết {scopes.length} ô đã chọn</Button><p className="text-xs text-muted-foreground">Chọn ô cảnh sẽ viết cả nội dung và các lựa chọn của cảnh. Chọn riêng ô lựa chọn chỉ viết lựa chọn đó. Các ô đã có nội dung chỉ bị thay khi bạn duyệt.</p>
         {!!scopes.length && <details><summary className="text-xs cursor-pointer">Xem phạm vi đã chọn</summary><p className="text-xs mt-1">{scopes.map((s) => `${s.id}${s.choiceIndex !== null ? ` / lựa chọn ${s.choiceIndex + 1}` : ' (cả cảnh)'}`).join(' · ')}</p></details>}
       </div></details>
