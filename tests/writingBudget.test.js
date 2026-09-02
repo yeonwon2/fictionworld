@@ -64,3 +64,11 @@ test('long-form writing retries a short scene and accepts the expanded replaceme
  },()=>{},()=>true,{maxCalls:2,targetChars:1500});
  assert.equal(calls,2);assert.deepEqual(result.remainingKeys,[]);assert.match(result.result.entries[0].text,/Một cảnh truyện đầy đủ/);
 });
+test('prose-only mode can fill a marked edict popup without changing mechanics',()=>{
+ const g=game(1);g.nodes.s0.workshopPopupKind='edict';g.nodes.s0.systemPopup={title:'Thánh chỉ',text:''};
+ const proposed=response('scene:s0');proposed.systemTitle='THÁNH CHỈ';proposed.systemText='Nữ đế ban chỉ triệu kiến.';
+ const written=applyProseWriting(g,['scene:s0'],{entries:[proposed]});
+ assert.deepEqual(written.nodes.s0.systemPopup,{title:'THÁNH CHỈ',text:'Nữ đế ban chỉ triệu kiến.'});
+ assert.equal(written.nodes.s0.choices[0].grantFlag,'seen');
+ assert.throws(()=>applyProseWriting(g,['scene:s0'],{entries:[response('scene:s0')]}),/thiếu nội dung thông báo/);
+});

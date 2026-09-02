@@ -1,7 +1,7 @@
 import {selectedScopes, orderedWritingKeys, workshopPrompt, WRITE_SCHEMA, applyWriting} from './aiMindMap.js';
 
 const text = {type:'string'};
-export const PROSE_SCHEMA = {type:'object',properties:{entries:{type:'array',items:{type:'object',properties:{key:text,text,choices:{type:'array',items:{type:'object',properties:{index:{type:'integer'},text},required:['index','text']}}},required:['key','text','choices']}},suggestions:text},required:['entries','suggestions']};
+export const PROSE_SCHEMA = {type:'object',properties:{entries:{type:'array',items:{type:'object',properties:{key:text,text,systemTitle:text,systemText:text,choices:{type:'array',items:{type:'object',properties:{index:{type:'integer'},text},required:['index','text']}}},required:['key','text','choices']}},suggestions:text},required:['entries','suggestions']};
 
 // Only the two prose fields may change, even if AI or the review form sends mechanics.
 export function normalizeProseEntries(game,keys,result) {
@@ -20,7 +20,9 @@ export function normalizeProseEntries(game,keys,result) {
    const old=node.choices[c.index];
    return {index:c.index,text:c.text,modifiers:Object.entries(old.statModifiers||{}).map(([key,value])=>({key,value})),npcName:old.npcCard?.name||'',npcTagline:old.npcCard?.tagline||''};
   });
-  return {key:entry.key,text:entry.text,speaker:node.speaker||'',systemTitle:'',systemText:'',choices};
+  const popupMarked=scope.choiceIndex===null&&node.workshopPopupKind;
+  if(popupMarked&&(!entry.systemText||typeof entry.systemText!=='string'||!entry.systemText.trim()))throw new Error(`${entry.key}: thiếu nội dung thông báo nổi đã được đánh dấu.`);
+  return {key:entry.key,text:entry.text,speaker:node.speaker||'',systemTitle:popupMarked?(entry.systemTitle||node.systemPopup?.title||'Thông báo'):'',systemText:popupMarked?entry.systemText:'',choices};
  });
 }
 
@@ -29,6 +31,7 @@ export function applyProseWriting(game,keys,result){
  for(const entry of entries){
   const scope=selectedScopes(game,[entry.key])[0],node=next.nodes[scope.id];
   if(scope.choiceIndex===null)node.text=entry.text;
+  if(scope.choiceIndex===null&&node.workshopPopupKind&&entry.systemText)node.systemPopup={title:entry.systemTitle||node.systemPopup?.title||'Thông báo',text:entry.systemText};
   for(const choice of entry.choices)node.choices[choice.index].text=choice.text;
  }
  next.meta.sourceScriptOutdated=!!next.meta.sourceScript;
@@ -66,7 +69,7 @@ export async function writeBudgetedScopes(game,keys,instruction,requestAI,onProg
  while(pending.length&&attempts<plan.maxCalls){
   if(!isActive())throw new Error('Lượt viết đã dừng.');
   const batch=planWritingBudget(working,pending,options).batches[0];
-  const mode=plan.proseOnly?'CHỈ TRAU CHUỐT LỜI VĂN. Quy tắc này thay phần yêu cầu trả điểm/người nói/thông báo hệ thống: chỉ trả key, text, choices[{index,text}]. Không đề xuất thay cơ chế, không đổi sự kiện hoặc kết cục. Không trả modifiers, speaker, systemTitle, systemText, npcName, npcTagline.':'Có thể đề xuất điểm trong schema; không đổi đường nối hay điều kiện.';
+  const mode=plan.proseOnly?'CHỈ TRAU CHUỐT LỜI VĂN. Chỉ trả key, text, choices[{index,text}]; riêng cảnh có workshopPopupKind phải trả thêm systemTitle/systemText cho bảng thông báo đã đánh dấu. Không đề xuất thay cơ chế, không đổi sự kiện hoặc kết cục. Không trả modifiers, speaker, npcName, npcTagline.':'Có thể đề xuất điểm trong schema; không đổi đường nối hay điều kiện.';
   const prompt=workshopPrompt(working,batch,instruction)+`\n${mode}\nĐộ dài mục tiêu khoảng ${plan.targetChars} ký tự cho phần thân của MỖI cảnh thường. Đây là độ dài từng cảnh, không phải tổng cả nhóm. Với cảnh hệ quả có thể ngắn hơn nhưng phải thành một nhịp truyện hoàn chỉnh. Không rút mỗi cảnh còn vài câu để trả đủ nhiều entries. entries phải có đúng ${batch.length} ô, mỗi key một lần: ${JSON.stringify(batch)}. Chỉ viết các ô này. ${issues.length?'Bổ sung/sửa phần thiếu: '+issues.join('; '):''}`;
   attempts++;
   const progress=()=>onProgress(`Lượt xử lý ${attempts}/${plan.maxCalls} · đã gọi ${calls} lần · đang viết ${batch.length} ô · đã nhận ${entries.length}/${plan.keys.length} ô.`);

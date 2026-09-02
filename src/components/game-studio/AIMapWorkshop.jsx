@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import MapConnectDialog from './MapConnectDialog';
 import MindMapTab from './MindMapTab';
 import { aiCall } from '@/lib/aiCall';
-import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, orderedWritingKeys, SETUP_SCHEMA, applySetup, setupReviewError, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
+import { WORKSHOP_TYPES, POPUP_KINDS, makeWorkshopTemplate, addSceneChain, removeWorkshopScene, selectedScopes, orderedWritingKeys, SETUP_SCHEMA, applySetup, setupReviewError, applyWriting, workshopPrompt, touchWorkshop, unfinishedWorkshop } from '@/lib/gameStudio/aiMindMap';
 
 const selectClass = 'rounded-md border bg-background px-3 py-2 text-sm max-w-full';
 const caption = (id, node) => `${id === 'start_node' ? 'Lời dẫn' : id}${node?.workshopHint ? ` · ${node.workshopHint.slice(0, 65)}` : ''}`;
@@ -36,6 +36,7 @@ function StructureEditor({ id, gameData, onChange, onClose }) {
       setDraft(next);
     }}><option value="scene">Cảnh thường</option><option value="ending">Kết thúc</option></select></label>}
     {draft.isEnding ? <label className="text-sm">Loại kết thúc<select className={`${selectClass} block w-full`} value={draft.endingType || 'NORMAL_END'} onChange={(e) => setDraft({ ...draft, endingType: e.target.value })}>{['GOOD_END', 'NORMAL_END', 'BAD_END', 'TRUE_END'].map((v) => <option key={v}>{v}</option>)}</select></label> : <>
+      <div className="rounded-lg border border-cyan-500/40 bg-cyan-500/5 p-3 space-y-2"><label className="text-sm">Bảng thông báo hiện khi vào cảnh<select className={`${selectClass} block w-full mt-1`} value={draft.workshopPopupKind || 'none'} onChange={(e) => {const kind=e.target.value;if(kind==='none'){const next={...draft};delete next.workshopPopupKind;delete next.systemPopup;setDraft(next);}else setDraft({...draft,workshopPopupKind:kind,systemPopup:{title:draft.systemPopup?.title||POPUP_KINDS[kind],text:draft.systemPopup?.text||''}});}}><option value="none">Không có · chỉ hiển thị văn cảnh</option>{Object.entries(POPUP_KINDS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{draft.workshopPopupKind&&<label className="text-xs">Tiêu đề bảng<Input value={draft.systemPopup?.title||''} onChange={(e)=>setDraft({...draft,systemPopup:{...draft.systemPopup,title:e.target.value}})} placeholder={POPUP_KINDS[draft.workshopPopupKind]}/></label>}<p className="text-xs text-muted-foreground">AI sẽ viết phần này thành popup riêng, không biến nó thành nhân vật hoặc lời thoại trong văn cảnh.</p></div>
       <p className="text-xs text-muted-foreground">Mỗi lựa chọn nối tới bất kỳ cảnh nào, kể cả cảnh này hoặc cảnh trước. Nhiều lựa chọn có thể cùng về một cảnh.</p>
       {(draft.choices || []).map((choice, index) => <div key={index} className="rounded-lg border p-3 space-y-2">
         <div className="flex items-center justify-between"><strong className="text-sm">Lựa chọn {index + 1}</strong><Button size="sm" variant="ghost" onClick={() => setDraft({ ...draft, choices: draft.choices.filter((_, i) => i !== index) })}>Xóa lựa chọn</Button></div>

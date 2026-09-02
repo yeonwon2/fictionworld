@@ -103,6 +103,13 @@ test('system messages are restricted to system workshop and do not alter other m
   assert.equal(applyWriting(game, keys, result).nodes.scene_1.systemPopup.text, 'Hãy khám phá thế giới');
   assert.equal(applyWriting(ready(), keys, result).nodes.scene_1.systemPopup, undefined);
 });
+test('a palace scene explicitly marked as an edict writes a real popup, not a character',()=>{
+  const game=ready('palace'),keys=['scene:scene_1'];game.nodes.scene_1.workshopPopupKind='edict';game.nodes.scene_1.systemPopup={title:'Thánh chỉ',text:''};
+  const result=response(game,keys);Object.assign(result.entries[0],{systemTitle:'THÁNH CHỈ',systemText:'Phụng thiên thừa vận, Nữ đế chiếu viết...'});
+  const written=applyWriting(game,keys,result);
+  assert.deepEqual(written.nodes.scene_1.systemPopup,{title:'THÁNH CHỈ',text:'Phụng thiên thừa vận, Nữ đế chiếu viết...'});
+  assert.match(workshopPrompt(game,keys,''),/KHÔNG phải lời thoại của nhân vật/);
+});
 test('consequence prompts describe incoming decision and application rejects extra continuation rewards', () => {
  const game=ready(); game.nodes.scene_2.workshopRole='consequence'; game.nodes.scene_2.choices=[{text:'Tiếp tục',targetNodeId:'scene_3',statModifiers:{},workshopContinuation:true}];
  game.nodes.scene_1.choices[0].text='Giúp cô ấy';
