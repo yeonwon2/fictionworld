@@ -239,6 +239,12 @@ export function applyNormalizedBlueprint(blueprint, normalized, { replaceIds = n
 export function refreshBlueprintEffects(blueprint, registry) {
   return {
     ...blueprint,
+    // Hiệu ứng vừa chấm lại theo `registry` (canonical) ở trên — nếu không
+    // cũng ghi `registry` này vào chính blueprint, mọi nơi tự suy ra registry
+    // TỪ blueprint (vd validateSceneBlueprint() gọi ensureRegistry(blueprint))
+    // sẽ đọc lại bản registry CŨ (rỗng/thiếu) của blueprint và báo sai
+    // "không tồn tại trong danh mục" cho chính entity vừa mới resolve đúng.
+    registry: registry ? ensureRegistry({ registry }) : blueprint.registry,
     scenes: (blueprint.scenes || []).map((s) => ({
       ...s,
       choices: (s.choices || []).map((c) => {

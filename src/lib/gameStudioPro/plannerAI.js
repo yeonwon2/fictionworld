@@ -19,7 +19,7 @@ import {
   EPISODE_PLAN_SCHEMA,
 } from "./plannerPrompts.js";
 import { MAX_EPISODES, PLANNER_STATUS, makePlannerId, newStoryBlueprint, newBlankEpisode } from "./plannerModel.js";
-import { derivePlanningConstraints } from "./planningConstraints.js";
+import { derivePlanningConstraints, derivePerEpisodeConstraints } from "./planningConstraints.js";
 
 // Kế hoạch là dữ liệu nền bắt buộc của cả xưởng. Một JSON bị cắt không nên
 // làm người dùng mất toàn bộ lần bấm chỉ vì chính sách tiết kiệm request của
@@ -213,18 +213,19 @@ export async function generateGamePlanWithEpisodes(idea, settings, { onProgress 
   onProgress?.({ stage: "gameplan" });
   const raw = await aiCall(buildGamePlanPrompt(idea, settings, [], desiredCount), { jsonSchema: GAME_PLAN_SCHEMA, ...PLANNER_OPTIONS });
   const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
+  const perEpisodeConstraints = derivePerEpisodeConstraints(planningConstraints, episodeSummaries.length);
 
   const episodes = [];
   for (let i = 0; i < episodeSummaries.length; i++) {
     onProgress?.({ stage: "episode", index: i, total: episodeSummaries.length, title: episodeSummaries[i].title });
     const neighbors = { prev: compactNeighbor(episodes[i - 1]), next: episodeSummaries[i + 1] || null };
-    const episodeSeed = { ...episodeSummaries[i], planningConstraints };
+    const episodeSeed = { ...episodeSummaries[i], planningConstraints: perEpisodeConstraints };
     const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, episodeSeed, neighbors), {
       jsonSchema: EPISODE_PLAN_SCHEMA,
       ...PLANNER_OPTIONS,
     });
     const epValidated = validateAIEpisodePlanResponse(epRaw);
-    episodes.push({ id: makePlannerId("ep"), order: i + 1, locked: false, ...epValidated, planningConstraints });
+    episodes.push({ id: makePlannerId("ep"), order: i + 1, locked: false, ...epValidated, planningConstraints: perEpisodeConstraints });
   }
 
   return {
@@ -247,18 +248,19 @@ export async function regenerateFullPlan(storyBlueprint, idea, settings, { onPro
     ...PLANNER_OPTIONS,
   });
   const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
+  const perEpisodeConstraints = derivePerEpisodeConstraints(planningConstraints, lockedEpisodes.length + episodeSummaries.length);
 
   const newEpisodes = [];
   for (let i = 0; i < episodeSummaries.length; i++) {
     onProgress?.({ stage: "episode", index: i, total: episodeSummaries.length, title: episodeSummaries[i].title });
     const prev = newEpisodes[i - 1] ? compactNeighbor(newEpisodes[i - 1]) : compactNeighbor(lockedEpisodes[lockedEpisodes.length - 1]);
     const next = episodeSummaries[i + 1] || null;
-    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, { ...episodeSummaries[i], planningConstraints }, { prev, next }), {
+    const epRaw = await aiCall(buildEpisodePlanPrompt(gamePlan, { ...episodeSummaries[i], planningConstraints: perEpisodeConstraints }, { prev, next }), {
       jsonSchema: EPISODE_PLAN_SCHEMA,
       ...PLANNER_OPTIONS,
     });
     const epValidated = validateAIEpisodePlanResponse(epRaw);
-    newEpisodes.push({ id: makePlannerId("ep"), locked: false, ...epValidated, planningConstraints });
+    newEpisodes.push({ id: makePlannerId("ep"), locked: false, ...epValidated, planningConstraints: perEpisodeConstraints });
   }
 
   return { ...mergeGamePlanRegeneration(storyBlueprint, idea, settings, gamePlan, newEpisodes), planningConstraints };

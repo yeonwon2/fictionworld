@@ -169,18 +169,26 @@ function resolveSuggestedEntity(registry, suggested) {
 }
 
 // Preview THUẦN (không mutate gì) — spec mục 15: hiển thị "Sẽ thêm / Đã tồn
-// tại / Xung đột" trước khi cho người dùng bấm Áp dụng.
-export function previewTemplate(registry, templateId) {
-  const template = findTemplate(templateId);
-  if (!template) return { template: null, toAdd: [], existing: [], conflicts: [] };
+// tại / Xung đột" trước khi cho người dùng bấm Áp dụng. Tách khỏi
+// previewTemplate() để dùng lại cho MỌI danh sách suggested {kind,
+// displayName,...} thô, không chỉ danh sách cố định của 1 template (vd
+// suggestedStats/suggestedRelationships/... của chính Game Plan — xem
+// PlannerEditor.jsx handleApprove()).
+export function previewSuggestedEntities(registry, suggestedList) {
   const r = ensureRegistry({ registry });
-  const resolved = template.suggestedEntities.map((s) => resolveSuggestedEntity(r, s));
+  const resolved = (suggestedList || []).map((s) => resolveSuggestedEntity(r, s));
   return {
-    template,
     toAdd: resolved.filter((x) => x.status === "new").map((x) => x.suggested),
     existing: resolved.filter((x) => x.status === "existing"),
     conflicts: resolved.filter((x) => x.status === "conflict"),
   };
+}
+
+export function previewTemplate(registry, templateId) {
+  const template = findTemplate(templateId);
+  if (!template) return { template: null, toAdd: [], existing: [], conflicts: [] };
+  const { toAdd, existing, conflicts } = previewSuggestedEntities(registry, template.suggestedEntities);
+  return { template, toAdd, existing, conflicts };
 }
 
 function instantiateEntity(suggested) {

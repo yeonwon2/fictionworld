@@ -97,8 +97,19 @@ Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 
 export function buildBlueprintContinuationPrompt(gamePlan, episode, blueprint, missingCount) {
   const constraints = resolveEpisodeConstraints(episode);
-  const existing = (blueprint.scenes || []).map((scene) => `- ${scene.id} [${scene.role}] ${scene.title}`).join("\n");
+  // Kèm `intent` (không chỉ title) — CHỈ có title rất dễ khiến model (nhất
+  // là model rẻ/nhanh) không nhận ra 1 tình huống đã kể rồi và viết lại
+  // GẦN NHƯ NGUYÊN VẸN dưới cái tên khác (vd "Khoảnh khắc đối đầu" rồi lại
+  // "Đối diện với sự căm hận" cùng 1 xung đột, cùng 4 lựa chọn tương tự) —
+  // vừa lãng phí lượt gọi vừa tạo cảnh mồ côi vì không cảnh nào trỏ tới.
+  const dangling = (blueprint.scenes || []).filter((scene) => scene.role !== "ending" && (scene.choices || []).length === 0);
+  const existing = (blueprint.scenes || [])
+    .map((scene) => `- ${scene.id} [${scene.role}] "${scene.title}" — ${scene.intent || "(không có ý đồ)"}`)
+    .join("\n");
   const endings = (blueprint.endings || []).map((ending) => `- ${ending.id}: ${ending.title}`).join("\n");
+  const danglingBlock = dangling.length
+    ? `\n# CẢNH CHƯA CÓ LỐI ĐI TIẾP (ưu tiên nối tiếp mạch truyện từ ĐÂY trước khi mở tình huống mới)\n${dangling.map((s) => `- ${s.id} "${s.title}"`).join("\n")}\n`
+    : "";
   return `Bạn là NHÀ THIẾT KẾ GAME. Hãy TIẾP TỤC phần sơ đồ còn thiếu, chỉ THÊM nội dung mới và không viết lại cảnh đã có.
 
 ${episodeContextBlock(gamePlan, episode)}
@@ -107,9 +118,9 @@ ${episodeContextBlock(gamePlan, episode)}
 ${existing}
 # KẾT THÚC ĐÃ CÓ
 ${endings || "(chưa có)"}
-
+${danglingBlock}
 # PHẦN CÒN THIẾU
-Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết. Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
+Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết. Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. KHÔNG được tạo một cảnh mới kể lại/diễn giải lại cùng 1 tình huống xung đột đã có ở mục "ĐÃ CÓ" bằng tên khác — mỗi cảnh mới phải đưa câu chuyện tiến lên (thời điểm/tình huống thật sự mới), không lặp lại ý đồ cảnh đã tồn tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
 ${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, constraints)}
 Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }

@@ -250,6 +250,53 @@ export function disconnectChoice(blueprint, sceneId, choiceId) {
   return updateChoice(blueprint, sceneId, choiceId, { targetType: null, targetId: null });
 }
 
+// AI dựng sơ đồ CHỈ biết "scene"/"ending" làm đích lựa chọn (xem
+// blueprintPrompts.js) — nối SANG TẬP KHÁC là 1 thao tác tác giả làm thủ công
+// trong Scene Intent Editor (targetType "episode", xem SceneIntentEditor.jsx
+// mục 20 PRO 5). Kết quả: cảnh "chốt tập" mà AI vừa dựng thường rơi vào 1
+// trong 2 dạng — (a) cụt hẳn (0 lựa chọn, đúng lỗi QA "Cảnh cụt không phải
+// kết thúc"), hoặc (b) có 1 lựa chọn "đi tiếp" trỏ tới 1 kết thúc CỤC BỘ
+// (placeholder "hết tập", KHÔNG phải kết cục thật của campaign) — cả hai đều
+// khiến tập sau "không thể đi tới" (proQa.js UNREACHABLE_EPISODE) ngay sau
+// MỖI lần Xưởng tự sản xuất. Tự nối 1 trong các cảnh đó sang tập kế tiếp
+// ngay khi Xưởng vừa dựng xong — tác giả vẫn có thể vào sửa lại nếu muốn.
+export function autoLinkDanglingScenesToEpisode(blueprint, nextEpisodeId) {
+  if (!nextEpisodeId) return blueprint;
+  const hasEpisodeEdge = (blueprint.scenes || []).some((s) => (s.choices || []).some((c) => c.targetType === "episode"));
+  if (hasEpisodeEdge) return blueprint;
+
+  const danglingScenes = (blueprint.scenes || []).filter((s) => s.role !== SCENE_ROLES.ENDING && (s.choices || []).length === 0);
+  if (danglingScenes.length) {
+    let next = blueprint;
+    for (const scene of danglingScenes) next = addChoice(next, scene.id, { targetType: "episode", targetId: nextEpisodeId });
+    return next;
+  }
+
+  // Không cảnh nào cụt hẳn (0 lựa chọn) — tìm 1 cảnh "chốt tập" (mọi vai trò
+  // NGOÀI "ending"/"decision" — decision là nhánh rẽ thật, không phải điểm
+  // chốt tuyến) mà MỌI lựa chọn hiện tại đều KHÔNG mở rộng campaign: chưa nối
+  // được đích nào (AI trả ref hỏng — vẫn "có lựa chọn" theo nghĩa mảng không
+  // rỗng, nhưng vô dụng), tự trỏ lại CHÍNH cảnh này (bug thường gặp ở cảnh
+  // "Kể chuyện" kết tập — AI định ý "đi tiếp" nhưng lại tự tham chiếu, tạo
+  // đúng lỗi QA "Cảnh tự quay lại chính nó"/"Vòng lặp không có lối thoát"),
+  // hoặc chỉ trỏ tới 1 kết thúc CỤC BỘ không-tử-vong (placeholder "hết tập").
+  // Ưu tiên cảnh có nhiều lối vào nhất (đầu mối chốt tập tự nhiên nhất), rồi
+  // CHUYỂN HƯỚNG lựa chọn đầu tiên của nó sang tập kế tiếp.
+  const endingById = new Map((blueprint.endings || []).map((e) => [e.id, e]));
+  const isEpisodeExtendable = (c, sceneId) =>
+    !c.targetType ||
+    (c.targetType === "scene" && c.targetId === sceneId) ||
+    (c.targetType === "ending" && endingById.get(c.targetId)?.tone !== "death");
+  const candidates = (blueprint.scenes || []).filter((s) => {
+    if (s.role === SCENE_ROLES.ENDING || s.role === SCENE_ROLES.DECISION) return false;
+    const choices = s.choices || [];
+    return choices.length > 0 && choices.every((c) => isEpisodeExtendable(c, s.id));
+  });
+  if (!candidates.length) return blueprint;
+  const target = candidates.reduce((best, s) => (countIncoming(blueprint, s.id) > countIncoming(blueprint, best.id) ? s : best), candidates[0]);
+  return connectChoice(blueprint, target.id, target.choices[0].id, "episode", nextEpisodeId);
+}
+
 export function toggleSceneLock(blueprint, sceneId) {
   return touch({
     ...blueprint,

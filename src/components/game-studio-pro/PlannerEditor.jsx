@@ -24,11 +24,34 @@ import {
 import { validateGamePlan } from "@/lib/gameStudioPro/plannerValidator";
 import { syncRegistryToAllEpisodes, episodeTransitionSummary } from "@/lib/gameStudioPro/globalStateModel";
 import { validateCampaign } from "@/lib/gameStudioPro/campaignValidator";
+import { previewSuggestedEntities, mergeNamedEntitiesIntoRegistry } from "@/lib/gameStudioPro/templateRegistry";
+import { ENTITY_KINDS } from "@/lib/gameStudioPro/entityRegistry";
 import SuggestionList from "./SuggestionList";
 import EpisodeCard from "./EpisodeCard";
 import EntityRegistryPanel from "./EntityRegistryPanel";
 import MechanicsPanel from "./MechanicsPanel";
 import TemplatePicker from "./TemplatePicker";
+
+// Game Plan đề xuất Chỉ số/Quan hệ/Cờ/Vật phẩm (vd "Thiện cảm") chỉ để HIỂN
+// THỊ + đưa vào prompt lập kế hoạch tập — KHÔNG tự động có mặt trong
+// globalState.registry (danh mục thật mà rule/hiệu ứng cảnh phải tham
+// chiếu). Nếu bỏ qua bước này, AI dựng cảnh sẽ không tìm thấy "Thiện cảm"
+// trong registry và đành gán hệ quả vào chỉ số khác (vd của template) hoặc
+// để hệ quả treo "chưa giải quyết" — đúng lỗi người dùng gặp phải. Duyệt kế
+// hoạch là mốc tự nhiên để đồng bộ 1 lần trước khi Xưởng bắt đầu sản xuất.
+function suggestedEntitiesFromGamePlan(gamePlan) {
+  const named = (list, kind, extra = (_displayName) => ({})) =>
+    (list || [])
+      .map((item) => (item?.name || "").trim())
+      .filter(Boolean)
+      .map((displayName) => ({ kind, displayName, ...extra(displayName) }));
+  return [
+    ...named(gamePlan?.suggestedStats, ENTITY_KINDS.STAT),
+    ...named(gamePlan?.suggestedRelationships, ENTITY_KINDS.RELATIONSHIP, (displayName) => ({ npc: displayName })),
+    ...named(gamePlan?.suggestedFlags, ENTITY_KINDS.FLAG),
+    ...named(gamePlan?.suggestedItems, ENTITY_KINDS.ITEM),
+  ];
+}
 
 const STATUS_LABEL = {
   [PLANNER_STATUS.DRAFT]: "Bản nháp",
@@ -121,10 +144,17 @@ export default function PlannerEditor({
 
   function handleApprove() {
     if (blockers.length > 0) return;
+    // Đưa các Chỉ số/Quan hệ/Cờ/Vật phẩm Game Plan đã đề xuất (vd "Thiện cảm")
+    // vào registry thật trước khi sản xuất — nếu không, chỉ số cốt lõi người
+    // dùng yêu cầu sẽ "không tồn tại" với AI dựng cảnh (xem
+    // suggestedEntitiesFromGamePlan ở trên).
+    const { toAdd } = previewSuggestedEntities(globalState?.registry, suggestedEntitiesFromGamePlan(gamePlan));
+    const { registry: mergedRegistry } = mergeNamedEntitiesIntoRegistry(globalState?.registry, toAdd);
+    onGlobalStateChange({ ...globalState, registry: mergedRegistry });
     // Bypass patchBlueprint() on purpose — it auto-downgrades APPROVED back to
     // PLANNED on every change (so a real edit un-approves the plan), which
     // would immediately undo the very status this action sets.
-    onChange({ ...storyBlueprint, status: PLANNER_STATUS.APPROVED });
+    onChange(syncRegistryToAllEpisodes({ ...storyBlueprint, status: PLANNER_STATUS.APPROVED }, mergedRegistry));
     toast({
       title: "Đã duyệt — Xưởng bắt đầu sản xuất",
       description: "Hệ thống sẽ tự dựng, kiểm tra, hoàn thiện và lưu sơ đồ; bạn không cần xử lý lỗi kỹ thuật.",

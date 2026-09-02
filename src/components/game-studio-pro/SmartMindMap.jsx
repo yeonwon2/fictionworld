@@ -25,6 +25,7 @@ import {
   addEnding,
   updateEnding,
   removeEnding,
+  autoLinkDanglingScenesToEpisode,
 } from "@/lib/gameStudioPro/blueprintModel";
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
 import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint, refreshBlueprintEffects, repairBlueprintEffects } from "@/lib/gameStudioPro/blueprintAI";
@@ -288,6 +289,15 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     return { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
   }
 
+  // Tập kế tiếp theo THỨ TỰ (order) của TẬP ĐANG DỰNG — dùng để tự nối cảnh
+  // cụt cuối tập sang tập sau (xem autoLinkDanglingScenesToEpisode). null nếu
+  // đây đã là tập cuối cùng của campaign.
+  function resolveNextEpisodeId() {
+    const ordered = [...episodes].sort((a, b) => a.order - b.order);
+    const idx = ordered.findIndex((e) => e.id === episode.id);
+    return idx >= 0 && idx < ordered.length - 1 ? ordered[idx + 1].id : null;
+  }
+
   // Người dùng THƯỜNG (không rành kỹ thuật) không được để tự đọc/hiểu lỗi
   // validate kỹ thuật (vd "phải có hệ quả luật thật khác nhau") — bước này
   // chạy NGAY sau khi sơ đồ đủ cảnh, tự sửa những gì suy luận được cục bộ rồi
@@ -309,6 +319,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       } catch (e) {
         toast({ variant: "destructive", title: "Sơ đồ đã được giữ lại nhưng chưa hoàn thiện", description: `${e.message} — bạn có thể bấm "Thử hoàn thiện lại" khi sẵn sàng.` });
       }
+      finalBlueprint = autoLinkDanglingScenesToEpisode(finalBlueprint, resolveNextEpisodeId());
     }
     const finalValidation = validateSceneBlueprint(finalBlueprint, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
     if (!scale.underGenerated && finalValidation.errors.length === 0) {

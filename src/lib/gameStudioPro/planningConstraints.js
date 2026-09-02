@@ -37,6 +37,24 @@ export function derivePlanningConstraints(idea = "", stages = []) {
   };
 }
 
+// Ý tưởng người dùng mô tả quy mô cho TOÀN BỘ game (vd "khoảng 30 cảnh"), nhưng
+// mỗi tập lại tự dựng sơ đồ RIÊNG và so số cảnh của CHÍNH NÓ với targetSceneCount
+// (xem getBlueprintScaleStatus ở blueprintAI.js). Nếu gán y nguyên targetSceneCount
+// toàn game cho từng tập, game 5 tập sẽ bị hiểu thành 5×30 = 150 cảnh — AI cứ dựng
+// mãi không đủ, sinh tràn lan cảnh đệm/hội tụ trùng lặp để cố đạt số. Chia đều
+// target (và dung sai) cho số tập trước khi gắn vào từng episode.
+export function derivePerEpisodeConstraints(globalConstraints, episodeCount) {
+  if (!globalConstraints || !Number.isFinite(episodeCount) || episodeCount <= 1) return globalConstraints;
+  const target = clampScenes(globalConstraints.targetSceneCount / episodeCount);
+  const tolerance = globalConstraints.precision === "exact" ? Math.max(1, Math.round(target * 0.05)) : Math.max(2, Math.round(target * 0.1));
+  return {
+    ...globalConstraints,
+    targetSceneCount: target,
+    minimumSceneCount: Math.max(1, target - tolerance),
+    maximumSceneCount: Math.min(MAX_SCENES_PER_EPISODE, target + tolerance),
+  };
+}
+
 export function resolveEpisodeConstraints(episode = {}, fallbackIdea = "") {
   const saved = episode.planningConstraints;
   if (saved?.targetSceneCount) return { ...derivePlanningConstraints("", episode.stages), ...saved };
