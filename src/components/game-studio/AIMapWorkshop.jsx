@@ -14,6 +14,7 @@ import { WORKSHOP_TYPES, makeWorkshopTemplate, addSceneChain, removeWorkshopScen
 
 const selectClass = 'rounded-md border bg-background px-3 py-2 text-sm max-w-full';
 const caption = (id, node) => `${id === 'start_node' ? 'Lời dẫn' : id}${node?.workshopHint ? ` · ${node.workshopHint.slice(0, 65)}` : ''}`;
+const isPlaceholderScene = (id, node) => !node?.automaticEnding && (!node?.text?.trim() || /^(?:nội dung\.{0,3}|tiếp tục diễn biến\.{0,3})$/i.test(node.text.trim()) || /^main_\d+$/i.test((node.workshopTitle || '').trim()) || (node.choices || []).some(choice => !choice.text?.trim() || choice.text.trim() === '-'));
 
 function StructureEditor({ id, gameData, onChange, onClose }) {
   const original = useRef(JSON.stringify(gameData.nodes[id]));
@@ -193,7 +194,8 @@ export default function AIMapWorkshop({ gameData, setGameData, onGenerated, requ
           try { const result = addSceneChain(gameData, afterId, ending ? 1 : count, choiceCount, ending); change(result.game); setKeys([]); setStructureId(result.firstId); setError(''); } catch (e) { setError(e.message); }
         }}>+ Thêm {ending ? 'kết thúc' : 'chuỗi cảnh'}</Button></div>
         <p className="text-xs text-muted-foreground">Chuỗi mới cùng đi tới cảnh kế; cảnh cuối để trống đích cho bạn nối. “Nối thêm từ” giữ nguyên các lựa chọn cũ.</p></div></details>
-      <details ref={writingPanel} className="studio-panel"><summary>Viết lại với AI · {scopes.length} ô đã chọn · Tối đa {maxCalls} lượt</summary><div className="studio-panel-body space-y-3">
+      <details open ref={writingPanel} className="studio-panel"><summary>Viết lại với AI · {scopes.length} ô đã chọn · Tối đa {maxCalls} lượt</summary><div className="studio-panel-body space-y-3">
+        <Button variant="outline" onClick={() => setKeys(Object.entries(gameData.nodes).filter(([id,node]) => isPlaceholderScene(id,node)).map(([id]) => `scene:${id}`))}>Chọn cảnh mẫu/chưa viết</Button>
         <Textarea aria-label="Yêu cầu viết nhóm ô" rows={2} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Yêu cầu cho lượt viết này: nhịp chậm, chưa tiết lộ thân phận, lựa chọn B tăng uy tín…" />
         <div className="studio-writing-options text-sm">
           <label>Ngân sách viết <select aria-label="Ngân sách viết AI" className={selectClass} value={maxCalls} onChange={e=>setMaxCalls(Number(e.target.value))}><option value={1}>Tối đa 1 lượt</option><option value={2}>Tối đa 2 lượt</option></select></label>

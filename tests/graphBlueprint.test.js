@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {makeSkeletonPlan,applyBlueprint,blueprintPrompt} from '../src/lib/gameStudio/graphBlueprint.js';
+import {makeSkeletonPlan,applyBlueprint,blueprintPrompt,normalizeBlueprintIds,normalizeBlueprintConnections,normalizeBlueprintEntry,normalizeBlueprintSemantics,verifyUnsupportedClaims,enforceExplicitBlueprintRules,blueprintRequestContract,validateBlueprintAgainstRequest} from '../src/lib/gameStudio/graphBlueprint.js';
 import {resolveAutomaticEnding} from '../src/lib/gameStudio/automaticEnding.js';
 import {gameOverReasons} from '../src/lib/gameStudio/playerState.js';
 import {createCanvasScene,setCardPosition} from '../src/lib/gameStudio/canvasEditing.js';
@@ -22,6 +22,113 @@ test('blueprint rejects missing targets and unsupported mechanics atomically',()
  plan.nodes[0].choices[0].target='not_real';assert.throws(()=>applyBlueprint(game,plan),/Đích/);assert.deepEqual(game,before);
  plan.nodes[0].choices[0].target='';plan.unsupported=['Thua ở ngưỡng trên toàn cục'];assert.throws(()=>applyBlueprint(game,plan),/Chưa thể/);
  plan.unsupported=[];plan.stats=[{key:'favor',label:'Sủng ái',initial:0,isVital:true,deathThreshold:10}];assert.throws(()=>applyBlueprint(game,plan),/thua ngay/);
+});
+test('AI node IDs are normalized locally and all internal targets follow the new IDs',()=>{
+ const plan=makeSkeletonPlan({count:2,choices:1});
+ plan.nodes[0].id='scene 1';
+ plan.nodes[1].id='scene 1';
+ plan.nodes[0].choices[0].target='scene 1';
+ plan.connections=[{sourceId:'start_node',choiceIndex:-1,target:'scene 1'}];
+ const source=structuredClone(plan),normalized=normalizeBlueprintIds(base(),plan);
+ assert.deepEqual(plan,source);
+ assert.equal(new Set(normalized.nodes.map(node=>node.id)).size,2);
+ assert.ok(normalized.nodes.every(node=>/^new_[a-zA-Z0-9_]+$/.test(node.id)));
+ assert.equal(normalized.nodes[0].choices[0].target,normalized.nodes[0].id);
+ assert.equal(normalized.connections[0].target,normalized.nodes[0].id);
+ const built=applyBlueprint(base(),plan);
+ assert.equal(built.ids.length,2);
+ assert.equal(built.game.nodes.start_node.choices[0].targetNodeId,built.ids[0]);
+});
+test('false AI capability warnings are removed but genuine unsupported rules stay blocking',()=>{
+ const plan=makeSkeletonPlan({count:2,choices:1});
+ plan.unsupported=[
+  'Cơ chế giới hạn 6 tháng thực tế chỉ có thể mô phỏng bằng cách đếm số bước (cảnh) thay vì thời gian thực; Engine không hỗ trợ kiểm tra AND/OR phức tạp cho nhiều chỉ số ngoài hệ thống min/max',
+  'So sánh động giữa hai chỉ số chưa được hỗ trợ',
+ ];
+ const checked=verifyUnsupportedClaims(plan,'Câu chuyện diễn ra trong 6 tháng, kết thúc sau cảnh cuối');
+ assert.deepEqual(checked.unsupported,['So sánh động giữa hai chỉ số chưa được hỗ trợ']);
+ assert.equal(plan.unsupported.length,2);
+ const narrativeOnly=verifyUnsupportedClaims({...plan,unsupported:[plan.unsupported[0]]},'Kể câu chuyện 6 tháng với ending theo điểm');
+ assert.deepEqual(narrativeOnly.unsupported,[]);
+ assert.doesNotThrow(()=>applyBlueprint(base(),narrativeOnly));
+ const realTime=verifyUnsupportedClaims({...plan,unsupported:[plan.unsupported[0]]},'Game phải đếm ngược real-time trong 6 tháng');
+ assert.equal(realTime.unsupported.length,1);
+});
+test('AI connections and explicit fatal threshold are normalized without another request',()=>{
+ const game=base(),plan=makeSkeletonPlan({count:1,choices:1});
+ plan.connections=[{sourceId:'start_node',choiceIndex:0,target:plan.nodes[0].id},{sourceId:plan.nodes[0].id,choiceIndex:0,target:plan.nodes[0].id}];
+ plan.stats=[{key:'thien_cam',label:'Thiện cảm',initial:-90,isVital:true,deathThreshold:-199}];
+ const connected=normalizeBlueprintConnections(game,plan);
+ assert.equal(connected.connections.length,1);
+ assert.equal(connected.connections[0].choiceIndex,-1);
+ const enforced=enforceExplicitBlueprintRules(connected,'Thiện cảm khởi đầu: -100. Nếu Thiện cảm giảm xuống -200 hoặc thấp hơn, kết thúc ngay.');
+ assert.deepEqual(enforced.stats[0],{key:'thien_cam',label:'Thiện cảm',initial:-100,isVital:true,deathThreshold:-200});
+ const built=applyBlueprint(game,enforced);
+ assert.equal(built.game.nodes.start_node.choices[0].targetNodeId,built.firstId);
+ assert.equal(built.game.meta.statsConfig[0].deathThreshold,-200);
+});
+test('duplicate AI edits for one source port keep only the final destination',()=>{
+ const game=base(),plan=makeSkeletonPlan({count:2,choices:1});
+ plan.connections=[{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[0].id},{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[1].id}];
+ const fixed=normalizeBlueprintConnections(game,plan);
+ assert.deepEqual(fixed.connections,[{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[1].id}]);
+});
+test('new-game entry always starts at the first authored main scene',()=>{
+ const plan=makeSkeletonPlan({count:2,choices:1});plan.nodes[0].title='Xuyên không';plan.connections=[{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[1].id}];
+ const fixed=normalizeBlueprintEntry(base(),plan);assert.equal(fixed.connections[0].target,plan.nodes[0].id);assert.deepEqual(validateBlueprintAgainstRequest(fixed,'2 cảnh chính, mỗi cảnh 1 lựa chọn'),[]);
+});
+test('full-game regeneration rewires an occupied opening to the new first main scene',()=>{
+ const game=base();game.nodes.start_node.choices=[{text:'Bản thử cũ',targetNodeId:'old_scene'}];game.nodes.old_scene={id:'old_scene',text:'Cũ',choices:[]};
+ const plan=makeSkeletonPlan({count:30,choices:4});plan.connections=[];
+ const fixed=normalizeBlueprintEntry(game,plan,'Game khoảng 30 cảnh chính.');
+ assert.deepEqual(fixed.connections,[{sourceId:'start_node',choiceIndex:0,target:plan.nodes[0].id}]);
+ assert.doesNotMatch(blueprintPrompt(game,'Game khoảng 30 cảnh chính.'),/Bản thử cũ/);
+});
+test('request contract rejects representative samples and accepts the complete reachable graph',()=>{
+ const request='Game khoảng 30 cảnh chính. Mỗi cảnh có 4 lựa chọn. GOOD END, BAD END, DEATH END.';
+ assert.deepEqual(blueprintRequestContract(request),{mainSceneCount:30,choicesPerMain:4,requiresGood:true,requiresBad:true,requiresDeath:true});
+ const sample=makeSkeletonPlan({count:2,choices:4});sample.connections=[{sourceId:'start_node',choiceIndex:-1,target:sample.nodes[0].id}];
+ assert.match(validateBlueprintAgainstRequest(sample,request).join(' '),/30 cảnh chính.*chỉ có 2/);
+ const complete=makeSkeletonPlan({count:30,choices:4});complete.connections=[{sourceId:'start_node',choiceIndex:-1,target:complete.nodes[0].id}];
+ for(const [id,title,endingType] of [['new_good','GOOD END','GOOD_END'],['new_bad','BAD END','BAD_END'],['new_death','DEATH END','BAD_END']])complete.nodes.push({id,title,text:title,role:'ending',endingType,choices:[]});
+ complete.nodes.at(-4).choices.forEach((choice,index)=>{choice.target=['new_good','new_bad','new_death','new_good'][index];});
+ assert.deepEqual(validateBlueprintAgainstRequest(complete,request),[]);
+ const prompt=blueprintPrompt(base(),request);assert.match(prompt,/ĐÚNG 30/);assert.match(prompt,/ĐÚNG 4 choices/);assert.match(prompt,/Không được trả vài cảnh mẫu/);
+});
+test('quality gate allows outline prose but still reports fake branching and mathematically impossible Good End',()=>{
+ const plan=makeSkeletonPlan({count:30,choices:4});plan.connections=[{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[0].id}];
+ plan.stats=[{key:'thien_cam',label:'Thiện cảm',initial:-100,isVital:true,deathThreshold:-200}];
+ for(const node of plan.nodes){node.title=`Cảnh ${node.id}`;node.text='Tiếp tục diễn biến...';node.choices.forEach((choice,index)=>{choice.text=`Lựa chọn ${index+1}`;choice.modifiers=[{key:'thien_cam',value:[5,2,-2,-10][index]}];});}
+ const request='30 cảnh chính, mỗi cảnh có 4 lựa chọn. Văn phải đủ dài, không viết cảnh ngắn. Có nhánh phụ. Quyết định trong quá khứ phải ảnh hưởng cảnh sau. Không được thiết kế theo kiểu lựa chọn nào cũng cộng. Thiện cảm khởi đầu -100 và phải vượt 100.';
+ const errors=validateBlueprintAgainstRequest(plan,request).join(' ');
+ assert.doesNotMatch(errors,/quá ngắn/);assert.match(errors,/nhánh phụ/);assert.match(errors,/cờ sự kiện/);assert.match(errors,/bất khả thi/);
+});
+test('local semantic repair converts a mislabeled side branch and wires its past-decision flag',()=>{
+ const plan=makeSkeletonPlan({count:30,choices:4});
+ const side={id:'new_side_wrong',title:'Nhánh phụ: Thuốc chữa trị',text:'Tìm thuốc',role:'main',endingType:'NORMAL_END',choices:[{text:'Quay lại',target:plan.nodes[1].id,min:[],max:[],modifiers:[],requiresFlag:'',requiresFlagAbsent:'',requiresItem:'',grantFlag:'',grantItem:''}]};
+ plan.nodes.push(side);plan.nodes[0].choices[0].target=side.id;
+ const fixed=normalizeBlueprintSemantics(plan,'30 cảnh chính. Có nhánh phụ. Quyết định trong quá khứ phải ảnh hưởng cảnh sau.');
+ assert.equal(fixed.nodes.find(node=>node.id===side.id).role,'side');
+ assert.match(fixed.nodes[0].choices[0].grantFlag,/da_di_nhanh/);
+ assert.equal(fixed.nodes[1].choices[0].requiresFlag,fixed.nodes[0].choices[0].grantFlag);
+});
+test('quality gate requires direct choice Death End and a side branch that rejoins the main route',()=>{
+ const request='Có lựa chọn là DeađEn ngay. Một số cảnh chọn xong dẫn tới nhánh phụ, rồi mới quay ngược lại mạch chính.';
+ const plan=makeSkeletonPlan({count:2,choices:2});
+ plan.connections=[{sourceId:'start_node',choiceIndex:-1,target:plan.nodes[0].id}];
+ let errors=validateBlueprintAgainstRequest(plan,request).join(' ');
+ assert.match(errors,/nối trực tiếp vào ô kết thúc tử vong/);
+ assert.match(errors,/Nhánh phụ chưa hoàn chỉnh/);
+ const returnChoice={text:'Trở lại chính điện',target:plan.nodes[1].id,min:[],max:[],modifiers:[],requiresFlag:'',requiresFlagAbsent:'',requiresItem:'',grantFlag:'',grantItem:''};
+ plan.nodes.push(
+  {id:'new_side',title:'Giấu thuốc giải',text:'Một hậu quả riêng có nội dung.',role:'side',endingType:'NORMAL_END',choices:[returnChoice]},
+  {id:'new_death',title:'DEATH END — Trúng độc',text:'Nàng chết ngay vì lựa chọn liều lĩnh.',role:'ending',endingType:'BAD_END',choices:[]},
+ );
+ plan.nodes[0].choices[0].target='new_side';
+ plan.nodes[0].choices[1].target='new_death';
+ assert.deepEqual(validateBlueprintAgainstRequest(plan,request),[]);
+ const originalWording='Có lựa chọn có thể gây hậu quả nghiêm trọng. DEATH END — KHÔNG THỂ CỨU VÃN.';
+ assert.match(validateBlueprintAgainstRequest(makeSkeletonPlan({count:1,choices:1}),originalWording).join(' '),/nối trực tiếp vào ô kết thúc tử vong/);
 });
 test('canvas positions persist independently from content and choices',()=>{
  const original=base(),created=createCanvasScene(original,{x:1200,y:700},{count:4,title:'Cảnh tại chuột'});
