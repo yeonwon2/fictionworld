@@ -291,6 +291,20 @@ function ProGameEditor({ gameId, onBack }) {
     markDirty();
     setProDoc((prev) => ({ ...prev, ...patch }));
   }
+  // AI đặt tên game ngay ở bước lập kế hoạch (gamePlan.title, vd "Hệ Thống
+  // Sửa Chữa Ác Nữ") nhưng tên đó trước nay chỉ nằm trong nội dung kế hoạch —
+  // proDoc.title (tên hiển thị ở thư viện) không có nơi nào đồng bộ theo, nên
+  // mọi game AI tạo đều mãi mãi là "Game Pro Mới" trừ khi vào đúng màn hình
+  // "Tên game" cũ (không nằm trong luồng AI). Tự đồng bộ 1 lần duy nhất khi
+  // tên đó vừa xuất hiện và tác giả CHƯA tự đặt tên gì khác.
+  function updateStoryBlueprint(storyBlueprint) {
+    markDirty();
+    setProDoc((prev) => {
+      const gamePlanTitle = storyBlueprint?.gamePlan?.title?.trim();
+      const shouldSyncTitle = gamePlanTitle && (!prev.title || prev.title === "Game Pro Mới");
+      return { ...prev, storyBlueprint, ...(shouldSyncTitle ? { title: gamePlanTitle } : {}) };
+    });
+  }
   function updateChoice(index, patch) {
     markDirty();
     setProDoc((prev) => ({
@@ -348,7 +362,13 @@ function ProGameEditor({ gameId, onBack }) {
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-bold text-base leading-tight truncate">{proDoc.title || "Game Pro Mới"}</h1>
+            <input
+              value={proDoc.title || ""}
+              onChange={(e) => updateField({ title: e.target.value })}
+              placeholder="Game Pro Mới"
+              aria-label="Tên game"
+              className="w-full min-w-0 bg-transparent font-bold text-base leading-tight truncate rounded px-1 -mx-1 hover:bg-white/5 focus:bg-white/5 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
             <p role={saveState.status === "error" ? "alert" : "status"} className={`text-[11px] leading-tight ${saveState.status === "error" ? "text-destructive font-medium" : "text-muted-foreground"}`}>
               {saveStateLabel(saveState)}
             </p>
@@ -382,7 +402,7 @@ function ProGameEditor({ gameId, onBack }) {
           proDoc.storyBlueprint?.gamePlan ? (
             <PlannerEditor
               storyBlueprint={proDoc.storyBlueprint}
-              onChange={(storyBlueprint) => updateField({ storyBlueprint })}
+              onChange={updateStoryBlueprint}
               onOpenBlueprint={(episodeId) => { setFocusEpisodeId(episodeId); setMode("mindmap"); }}
               globalState={proDoc.globalState}
               onGlobalStateChange={(globalState) => updateField({ globalState })}
@@ -394,8 +414,8 @@ function ProGameEditor({ gameId, onBack }) {
           ) : (
             <PlannerIntro
               storyBlueprint={proDoc.storyBlueprint}
-              onChange={(storyBlueprint) => updateField({ storyBlueprint })}
-              onGenerated={(storyBlueprint) => updateField({ storyBlueprint })}
+              onChange={updateStoryBlueprint}
+              onGenerated={updateStoryBlueprint}
               onSkip={() => setMode("edit")}
               proDoc={proDoc}
               onProDocChange={(next) => { markDirty(); setProDoc(next); }}
