@@ -8,12 +8,18 @@ const response=k=>({key:k,text:'Lời văn mới',speaker:'Đổi trái phép',c
 const expectedKeys=prompt=>JSON.parse(prompt.match(/mỗi key một lần: (\[[^\n]+?\])/)[1]);
 
 test('adaptive budget groups more than four short scopes and predicts overflow before calls',()=>{
- const g=game(),short=planWritingBudget(g,keys(g),{maxCalls:1,targetChars:400});
+ const g=game(50),short=planWritingBudget(g,keys(g),{maxCalls:1,targetChars:400});
  assert.ok(short.batches[0].length>4);assert.ok(short.remainingKeys.length>0);
  const long=planWritingBudget(g,keys(g),{maxCalls:1,targetChars:3000});
  assert.ok(long.batches[0].length<short.batches[0].length);
- assert.throws(()=>planWritingBudget(g,keys(g),{maxCalls:3}),/1–2/);
+ assert.doesNotThrow(()=>planWritingBudget(g,keys(g),{maxCalls:5}));
+ assert.throws(()=>planWritingBudget(g,keys(g),{maxCalls:6}),/1–5/);
  const dupe=planWritingBudget(g,['scene:s0','choice:s0:0','scene:s0']);assert.equal(dupe.keys.length,1);
+});
+test('expanded batches write substantially more than five medium scenes per request',()=>{
+ const g=game(30),plan=planWritingBudget(g,keys(g),{maxCalls:3,targetChars:1500});
+ assert.ok(plan.batches[0].length>5);
+ assert.ok(plan.plannedKeys.length>10);
 });
 test('prose-only application locks every mechanical field, NPC identity and unselected content',()=>{
  const g=game(2),before=structuredClone(g);
@@ -24,9 +30,9 @@ test('prose-only application locks every mechanical field, NPC identity and unse
  assert.throws(()=>applyProseWriting(g,['scene:s0'],{entries:[{...response('scene:s0'),choices:[]}]}),/Sai số/);
 });
 test('one-call budget makes exactly one request, returns partial and leaves source unchanged',async()=>{
- const g=game(),before=structuredClone(g);let calls=0;
+ const g=game(50),before=structuredClone(g);let calls=0;
  const r=await writeBudgetedScopes(g,keys(g),'',async(prompt,options)=>{
-  assert.equal(options.maxAttempts,1);options.onRequest();calls++;
+  assert.equal(options.maxAttempts,1);assert.equal(options.maxOutputTokens,16384);options.onRequest();calls++;
   return {entries:expectedKeys(prompt).map(response)};
  },()=>{},()=>true,{maxCalls:1,targetChars:400});
  assert.equal(calls,1);assert.equal(r.calls,1);assert.ok(r.keys.length>4);assert.ok(r.remainingKeys.length);assert.deepEqual(g,before);
@@ -42,7 +48,7 @@ test('two calls complete a moderate selection and preserve completed results dur
  assert.match(prompts[1],/Lời văn mới/);
 });
 test('errors and cancellation do not trigger hidden calls or lose completed proposals',async()=>{
- const g=game(20);let tries=0;
+ const g=game(50);let tries=0;
  const r=await writeBudgetedScopes(g,keys(g),'',async(prompt,options)=>{
   options.onRequest();tries++;if(tries===2)throw new Error('HTTP 429');return {entries:expectedKeys(prompt).map(response)};
  },()=>{},()=>true,{maxCalls:2,targetChars:400});

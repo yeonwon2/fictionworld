@@ -40,12 +40,15 @@ export function applyProseWriting(game,keys,result){
 
 // Conservative heuristic, not a tokenizer or a promise of completion.
 export function planWritingBudget(game,keys,{maxCalls=2,targetChars=700,proseOnly=true}={}){
- if(![1,2].includes(maxCalls)||!Number.isInteger(targetChars)||targetChars<200||targetChars>6000)throw new Error('Chọn 1–2 lượt và độ dài 200–6000 ký tự/cảnh.');
+ if(!Number.isInteger(maxCalls)||maxCalls<1||maxCalls>5||!Number.isInteger(targetChars)||targetChars<200||targetChars>6000)throw new Error('Chọn 1–5 lượt và độ dài 200–6000 ký tự/cảnh.');
  const ordered=orderedWritingKeys(game,keys),scopes=selectedScopes(game,ordered),batches=[];
  let batch=[],tokens=0;
  for(const scope of scopes){
   const estimate=200+(scope.choiceIndex===null?Math.ceil(targetChars/1.5):0)+scope.choiceIndexes.length*(proseOnly?180:240);
-  if(batch.length&&tokens+estimate>6000){batches.push(batch);batch=[];tokens=0;}
+  // Khoảng 16k đơn vị đầu ra vẫn nằm an toàn trong cửa sổ JSON của provider
+  // hiện tại, đồng thời cho phép ~8 cảnh 1.500 ký tự hoặc ~5 cảnh 3.000 ký tự
+  // trong một lượt. Cảnh có nhiều đáp án tự chiếm ngân sách lớn hơn.
+  if(batch.length&&tokens+estimate>16000){batches.push(batch);batch=[];tokens=0;}
   batch.push(scope.key);tokens+=estimate;
  }
  if(batch.length)batches.push(batch);
@@ -75,7 +78,7 @@ export async function writeBudgetedScopes(game,keys,instruction,requestAI,onProg
   const progress=()=>onProgress(`Lượt xử lý ${attempts}/${plan.maxCalls} · đã gọi ${calls} lần · đang viết ${batch.length} ô · đã nhận ${entries.length}/${plan.keys.length} ô.`);
   progress();let sent=0;
   let response;
-  try{response=await requestAI(prompt,{jsonSchema:plan.proseOnly?PROSE_SCHEMA:WRITE_SCHEMA,useCache:false,maxAttempts:1,onRequest:()=>{
+  try{response=await requestAI(prompt,{jsonSchema:plan.proseOnly?PROSE_SCHEMA:WRITE_SCHEMA,useCache:false,maxAttempts:1,maxOutputTokens:16384,onRequest:()=>{
    if(!isActive()||sent||calls>=plan.maxCalls)throw new Error('Đã dừng theo ngân sách, không gọi thêm.');
    sent++;calls++;progress();
   }});}
