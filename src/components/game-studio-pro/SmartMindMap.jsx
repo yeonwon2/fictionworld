@@ -1,11 +1,9 @@
 // Xưởng Game Pro — PRO 2: Smart Mind Map — sơ đồ cảnh CỦA MỘT TẬP đã duyệt.
 // Nguồn thật là episode.sceneBlueprint (blueprintModel.js), KHÔNG phải node
 // graph runtime — xem compileEpisodeBlueprint (proCompiler.js) cho hướng
-// biên dịch 1 chiều blueprint -> nodes. Cố tình KHÔNG tái dùng
-// MindMapTab/useMapCanvas (bản pan/zoom SVG của Xưởng Game cũ, gắn chặt vào
-// node graph runtime + trường kỹ thuật) — đây là 1 renderer MỚI, đơn giản
-// hơn (cột theo độ sâu, không phải canvas tự do), đủ để người dùng "nhìn
-// graph và hiểu được đường đi" mà không phải viết lại toàn bộ map engine.
+// biên dịch 1 chiều blueprint -> nodes. Renderer bên dưới giữ blueprint làm
+// nguồn thật nhưng trình bày giống Xưởng Game thường: Cảnh → Lựa chọn → Cảnh
+// đích, với đường nối SVG thật thay vì danh sách chữ theo cột.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sparkles, Loader2, PlayCircle, AlertTriangle, XCircle, Lock, Flag, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,9 +44,14 @@ const ROLE_STYLES = {
   [SCENE_ROLES.ENDING]: "border-zinc-400/50 bg-zinc-500/10",
 };
 
-// Cột theo độ sâu (BFS từ start scene) — chỉ để XẾP HÌNH cho dễ nhìn, không
-// phải dữ liệu lưu trữ. Cảnh không tới được xếp riêng cột cuối "Mồ côi".
-function groupScenesByDepth(blueprint) {
+const GRAPH_SCENE_WIDTH = 264;
+const GRAPH_SCENE_HEIGHT = 190;
+const GRAPH_CHOICE_WIDTH = 224;
+const GRAPH_CHOICE_HEIGHT = 82;
+const GRAPH_COLUMN_GAP = 96;
+const GRAPH_ROW_GAP = 28;
+
+function buildConnectedGraphLayout(blueprint) {
   const byId = new Map(blueprint.scenes.map((s) => [s.id, s]));
   const depth = new Map();
   if (blueprint.startSceneId && byId.has(blueprint.startSceneId)) {
@@ -59,21 +62,102 @@ function groupScenesByDepth(blueprint) {
       const scene = byId.get(id);
       for (const c of scene.choices) {
         if (c.targetType === "scene" && byId.has(c.targetId) && !depth.has(c.targetId)) {
-          depth.set(c.targetId, depth.get(id) + 1);
+          depth.set(c.targetId, depth.get(id) + 2);
           queue.push(c.targetId);
         }
       }
     }
   }
-  const columns = [];
-  const orphans = [];
+  const layers = [];
   for (const scene of blueprint.scenes) {
-    const d = depth.get(scene.id);
-    if (d === undefined) { orphans.push(scene); continue; }
-    columns[d] = columns[d] || [];
-    columns[d].push(scene);
+    const d = depth.get(scene.id) ?? Math.max(2, ...depth.values()) + 2;
+    layers[d] = layers[d] || [];
+    layers[d].push({ id: scene.id, kind: "scene", scene });
+    scene.choices.forEach((choice, index) => {
+      layers[d + 1] = layers[d + 1] || [];
+      layers[d + 1].push({ id: choice.id, kind: "choice", choice, scene, index });
+    });
   }
-  return { columns: columns.filter(Boolean), orphans };
+
+  const endingDepth = Math.max(2, ...layers.map((items, index) => items?.length ? index : 0)) + 1;
+  for (const ending of blueprint.endings || []) {
+    layers[endingDepth] = layers[endingDepth] || [];
+    layers[endingDepth].push({ id: ending.id, kind: "ending", ending });
+  }
+
+  const nodes = [];
+  const positions = new Map();
+  let width = 0;
+  let height = 0;
+  layers.forEach((items, layer) => {
+    if (!items?.length) return;
+    const isChoiceLayer = items[0].kind === "choice";
+    const cardWidth = isChoiceLayer ? GRAPH_CHOICE_WIDTH : GRAPH_SCENE_WIDTH;
+    const x = 24 + layer * (GRAPH_SCENE_WIDTH + GRAPH_COLUMN_GAP);
+    items.forEach((item, row) => {
+      const cardHeight = item.kind === "choice" ? GRAPH_CHOICE_HEIGHT : GRAPH_SCENE_HEIGHT;
+      const y = 24 + row * (GRAPH_SCENE_HEIGHT + GRAPH_ROW_GAP);
+      const positioned = { ...item, x, y, width: cardWidth, height: cardHeight };
+      nodes.push(positioned);
+      positions.set(item.id, positioned);
+      width = Math.max(width, x + cardWidth + 24);
+      height = Math.max(height, y + cardHeight + 24);
+    });
+  });
+
+  const edges = [];
+  for (const scene of blueprint.scenes) {
+    const source = positions.get(scene.id);
+    for (const choice of scene.choices) {
+      const middle = positions.get(choice.id);
+      const target = positions.get(choice.targetId);
+      if (source && middle) edges.push({ id: `${scene.id}-${choice.id}`, from: source, to: middle, tone: "choice" });
+      if (middle && target) edges.push({ id: `${choice.id}-${choice.targetId}`, from: middle, to: target, tone: choice.targetType === "ending" ? "ending" : "path" });
+    }
+  }
+  return { nodes, edges, width: Math.max(width, 720), height: Math.max(height, 360) };
+}
+
+function edgePath(from, to) {
+  const x1 = from.x + from.width;
+  const y1 = from.y + from.height / 2;
+  const x2 = to.x;
+  const y2 = to.y + to.height / 2;
+  const bend = Math.max(42, Math.abs(x2 - x1) * 0.45);
+  return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
+}
+
+function ConnectedBlueprintGraph({ blueprint, onOpenScene, onDeleteScene }) {
+  const layout = useMemo(() => buildConnectedGraphLayout(blueprint), [blueprint]);
+  return (
+    <div className="rounded-2xl border border-border bg-muted/10 overflow-auto max-h-[72vh]">
+      <div className="relative" style={{ width: layout.width, height: layout.height }}>
+        <svg className="absolute inset-0 pointer-events-none" width={layout.width} height={layout.height} aria-hidden="true">
+          <defs><marker id="pro-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" className="fill-muted-foreground/60" /></marker></defs>
+          {layout.edges.map((edge) => <path key={edge.id} d={edgePath(edge.from, edge.to)} fill="none" className={edge.tone === "ending" ? "stroke-red-500/60" : "stroke-muted-foreground/45"} strokeWidth="2" markerEnd="url(#pro-graph-arrow)" />)}
+        </svg>
+        {layout.nodes.map((node) => (
+          <div key={node.id} className="absolute" style={{ left: node.x, top: node.y, width: node.width }}>
+            {node.kind === "scene" && <SceneCard blueprint={blueprint} scene={node.scene} isStart={node.scene.id === blueprint.startSceneId} onOpen={() => onOpenScene(node.scene.id)} onDelete={() => onDeleteScene(node.scene.id)} />}
+            {node.kind === "choice" && (
+              <button type="button" onClick={() => onOpenScene(node.scene.id)} className="w-full min-h-[82px] rounded-xl border border-primary/35 bg-background p-2.5 text-left shadow-sm hover:border-primary">
+                <span className="text-[10px] font-bold text-primary">LỰA CHỌN {String.fromCharCode(65 + node.index)}</span>
+                <p className="mt-1 text-xs line-clamp-2">{node.choice.text || "(chưa viết lựa chọn)"}</p>
+                <p className="mt-1 truncate text-[10px] text-muted-foreground">Từ: {node.scene.title}</p>
+              </button>
+            )}
+            {node.kind === "ending" && (
+              <div className={`min-h-[110px] rounded-xl border p-3 shadow-sm ${node.ending.tone === "death" ? "border-red-500/60 bg-red-500/10" : "border-emerald-500/50 bg-emerald-500/10"}`}>
+                <span className="text-[10px] font-bold">{node.ending.tone === "death" ? "☠ DEATH END" : "KẾT THÚC"}</span>
+                <p className="mt-1 text-sm font-semibold">{node.ending.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-3">{node.ending.text}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function SceneCard({ blueprint, scene, isStart, onOpen, onDelete }) {
@@ -200,9 +284,8 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     () => (blueprint && episode ? getBlueprintScaleStatus(blueprint, resolveGenerationEpisode()) : null),
     // resolveGenerationEpisode only derives from these authored values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [blueprint, episode, storyBlueprint.planningConstraints, storyBlueprint.idea]
+    [blueprint, episode, storyBlueprint.planningConstraints, storyBlueprint.idea, storyBlueprint.settings?.gameLength, gamePlan?.coreGameplayLoop]
   );
-  const grouped = useMemo(() => (blueprint ? groupScenesByDepth(blueprint) : { columns: [], orphans: [] }), [blueprint]);
 
   // HOTFIX PRO 5: funnel DUY NHẤT ghi blueprint vào 1 episode — MỌI nơi gọi
   // (applyPending/handleRegenerateScene/handleAddScene/handleDeleteScene/"Tạo
@@ -286,7 +369,13 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
   }
 
   function resolveGenerationEpisode() {
-    return { ...episode, planningConstraints: episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages) };
+    // Game ngắn luôn lấy lại quy mô từ ý tưởng gốc. Dữ liệu cũ có thể từng
+    // bị chia 3 tập và lưu target 8 vào episode; ưu tiên giá trị stale đó sẽ
+    // khiến bản đã gộp vẫn dừng ở 8 thay vì 25.
+    const planningConstraints = episodes.length === 1 || storyBlueprint.settings?.gameLength !== "long"
+      ? derivePlanningConstraints(`${storyBlueprint.idea || ""}\n${gamePlan?.coreGameplayLoop || ""}\n${episode.summary || ""}`, episode.stages)
+      : episode.planningConstraints || storyBlueprint.planningConstraints || derivePlanningConstraints(storyBlueprint.idea, episode.stages);
+    return { ...episode, planningConstraints };
   }
 
   // Tập kế tiếp theo THỨ TỰ (order) của TẬP ĐANG DỰNG — dùng để tự nối cảnh
@@ -653,37 +742,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
 
       {blueprint && (
         <div className="space-y-4">
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {grouped.columns.map((col, ci) => (
-              <div key={ci} className="flex flex-col gap-3 w-64 shrink-0">
-                {col.map((scene) => (
-                  <SceneCard
-                    key={scene.id}
-                    blueprint={blueprint}
-                    scene={scene}
-                    isStart={scene.id === blueprint.startSceneId}
-                    onOpen={() => setEditingSceneId(scene.id)}
-                    onDelete={() => handleDeleteScene(scene.id)}
-                  />
-                ))}
-              </div>
-            ))}
-            {grouped.orphans.length > 0 && (
-              <div className="flex flex-col gap-3 w-64 shrink-0">
-                <span className="text-xs font-semibold text-destructive">Mồ côi (không tới được)</span>
-                {grouped.orphans.map((scene) => (
-                  <SceneCard
-                    key={scene.id}
-                    blueprint={blueprint}
-                    scene={scene}
-                    isStart={false}
-                    onOpen={() => setEditingSceneId(scene.id)}
-                    onDelete={() => handleDeleteScene(scene.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <ConnectedBlueprintGraph blueprint={blueprint} onOpenScene={setEditingSceneId} onDeleteScene={handleDeleteScene} />
 
           <EndingsPanel blueprint={blueprint} onBlueprintChange={setEpisodeBlueprint} />
         </div>

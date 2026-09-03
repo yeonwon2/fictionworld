@@ -20,6 +20,7 @@ import {
   toggleEpisodeLock,
   removeEpisode,
   addBlankEpisode,
+  collapseShortGameEpisodes,
 } from "@/lib/gameStudioPro/plannerAI";
 import { validateGamePlan } from "@/lib/gameStudioPro/plannerValidator";
 import { syncRegistryToAllEpisodes, episodeTransitionSummary } from "@/lib/gameStudioPro/globalStateModel";
@@ -154,12 +155,16 @@ export default function PlannerEditor({
     // Bypass patchBlueprint() on purpose — it auto-downgrades APPROVED back to
     // PLANNED on every change (so a real edit un-approves the plan), which
     // would immediately undo the very status this action sets.
-    onChange(syncRegistryToAllEpisodes({ ...storyBlueprint, status: PLANNER_STATUS.APPROVED }, mergedRegistry));
+    const normalizedBlueprint = collapseShortGameEpisodes(storyBlueprint);
+    onChange(syncRegistryToAllEpisodes({ ...normalizedBlueprint, status: PLANNER_STATUS.APPROVED }, mergedRegistry));
     toast({
       title: "Đã duyệt — Xưởng bắt đầu sản xuất",
       description: "Hệ thống sẽ tự dựng, kiểm tra, hoàn thiện và lưu sơ đồ; bạn không cần xử lý lỗi kỹ thuật.",
     });
-    onOpenBlueprint?.(episodes[0]?.id);
+    // Chờ React nhận blueprint đã gộp trước khi SmartMindMap tự dựng. Nếu mở
+    // ngay trong cùng event, nó còn thấy props 3 tập cũ và dùng nhầm quota
+    // 25/3 ≈ 8 cảnh cho tập đầu.
+    setTimeout(() => onOpenBlueprint?.(normalizedBlueprint.episodes[0]?.id), 0);
   }
 
   return (

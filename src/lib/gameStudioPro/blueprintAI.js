@@ -325,6 +325,9 @@ export async function continueEpisodeBlueprint(episode, gamePlan, partialBluepri
     jsonSchema: EPISODE_BLUEPRINT_SCHEMA,
     maxAttempts: 1,
     maxOutputTokens: BLUEPRINT_AI_MAX_OUTPUT_TOKENS,
+    // Nếu model trả một lô không thêm được scene hợp lệ, bấm “Tiếp tục” phải
+    // xin phương án khác thay vì lấy lại chính phản hồi kẹt từ cache.
+    forceRefresh: true,
   });
   const rejectSceneRefs = new Set((partialBlueprint.scenes || []).map((scene) => scene.id));
   const rejectEndingRefs = new Set((partialBlueprint.endings || []).map((ending) => ending.id));

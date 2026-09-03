@@ -120,7 +120,9 @@ ${existing}
 ${endings || "(chưa có)"}
 ${danglingBlock}
 # PHẦN CÒN THIẾU
-Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết. Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. KHÔNG được tạo một cảnh mới kể lại/diễn giải lại cùng 1 tình huống xung đột đã có ở mục "ĐÃ CÓ" bằng tên khác — mỗi cảnh mới phải đưa câu chuyện tiến lên (thời điểm/tình huống thật sự mới), không lặp lại ý đồ cảnh đã tồn tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
+${constraints.desiredChoicesPerDecision
+    ? `Thêm ĐÚNG ${missingCount} cảnh CHƠI mới role="decision"; MỖI cảnh có ĐÚNG ${constraints.desiredChoicesPerDecision} lựa chọn. Có thể thêm nút hệ quả/nối phụ thật sự cần thiết nhưng chúng KHÔNG thay thế ${missingCount} cảnh decision này.`
+    : `Thêm khoảng ${missingCount} cảnh có ý nghĩa, cùng số nút nối thật sự cần thiết.`} Nối phần mới vào các ref đã có; giữ các nhánh/kết thúc hiện tại. KHÔNG được tạo một cảnh mới kể lại/diễn giải lại cùng 1 tình huống xung đột đã có ở mục "ĐÃ CÓ" bằng tên khác — mỗi cảnh mới phải đưa câu chuyện tiến lên (thời điểm/tình huống thật sự mới), không lặp lại ý đồ cảnh đã tồn tại. Trả scenes/endings CHỈ gồm phần mới. Không đặt isStart=true.
 ${sceneShapeInstructions(MAX_SCENES_PER_EPISODE, constraints)}
 Trả JSON đúng schema: { scenes: [...], endings: [...] }.`;
 }

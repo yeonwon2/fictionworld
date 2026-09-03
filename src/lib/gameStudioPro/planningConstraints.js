@@ -6,12 +6,18 @@ const clampScenes = (value) => Math.max(1, Math.min(MAX_SCENES_PER_EPISODE, Math
 
 export function derivePlanningConstraints(idea = "", stages = []) {
   const text = String(idea || "");
+  // Số cảnh CHÍNH/CHƠI là quy mô toàn game; các dải như “nhánh phụ 1–2
+  // cảnh” chỉ mô tả một nhánh con và không được phép ghi đè mục tiêu đó.
+  const mainScene = text.match(/(?:(đúng|khoảng|tầm|xấp xỉ|gần)\s*)?(\d+)\s*cảnh\s*(?:chính|chơi)/i);
   const range = text.match(/(\d+)\s*[-–—]\s*(\d+)\s*cảnh/i);
   const single = text.match(/(?:(khoảng|tầm|xấp xỉ|gần)\s*)?(\d+)\s*cảnh/i);
   const stageTotal = (stages || []).reduce((sum, stage) => sum + (Number(stage?.approximateSceneCount) || 0), 0);
   let target;
   let precision = "default";
-  if (range) {
+  if (mainScene) {
+    target = clampScenes(Number(mainScene[2]));
+    precision = mainScene[1] && !/^đúng$/i.test(mainScene[1]) ? "approximate" : "exact";
+  } else if (range) {
     const low = clampScenes(Number(range[1]));
     const high = clampScenes(Number(range[2]));
     target = clampScenes((low + high) / 2);

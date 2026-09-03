@@ -24,12 +24,28 @@ const USAGE_STORAGE = "fiction_ai_daily_usage_v1";
 const PROFILES_STORAGE = "fiction_ai_profiles_v1";
 const ACTIVE_PROFILE_STORAGE = "fiction_ai_active_profile_v1";
 const inFlightRequests = new Map();
+const AI_REQUEST_TIMEOUT_MS = 120000;
 
 const PROVIDER_STORAGE = "fiction_ai_provider";
 const CUSTOM_PROVIDER_ID_STORAGE = "fiction_ai_custom_provider_id";
 const CUSTOM_BASEURL_STORAGE = "fiction_ai_custom_baseurl";
 const CUSTOM_KEY_STORAGE = "fiction_ai_custom_key";
 const CUSTOM_MODEL_STORAGE = "fiction_ai_custom_model";
+
+async function fetchAI(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("AI phản hồi quá 2 phút nên lượt này đã được dừng. Nội dung đang có vẫn được giữ; hãy thử lại hoặc đổi model.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Nhà cung cấp đã xác minh không bật CORS trình duyệt — bắt buộc đi qua relay.
 export const KNOWN_RELAY_PROVIDERS = {
@@ -239,7 +255,7 @@ async function callGeminiNative(prompt, jsonSchema, { compact = false, onRequest
     model
   )}:generateContent?key=${encodeURIComponent(key)}`;
   onRequest();
-  const res = await fetch(url, {
+  const res = await fetchAI(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -279,7 +295,7 @@ async function callOpenAICompatible(prompt, jsonSchema, { compact = false, onReq
   const isKnownRelay = KNOWN_RELAY_PROVIDERS[providerId];
   const url = isKnownRelay ? `/api/ai-relay?provider=${providerId}` : `${baseUrl}/chat/completions`;
   onRequest();
-  const res = await fetch(url, {
+  const res = await fetchAI(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -311,7 +327,7 @@ export async function testAIConnection({ provider, key, model, baseUrl, provider
     if (!key || !model || (providerId === "other" && !baseUrl)) throw new Error("Chưa nhập đủ Nhà cung cấp/Base URL / API Key / Model.");
     const isKnownRelay = KNOWN_RELAY_PROVIDERS[providerId];
     const url = isKnownRelay ? `/api/ai-relay?provider=${providerId}` : `${baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
-    const res = await fetch(url, {
+    const res = await fetchAI(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, messages: [{ role: "user", content: "ping, hãy trả: ok" }], max_tokens: 32 }),
@@ -330,7 +346,7 @@ export async function testAIConnection({ provider, key, model, baseUrl, provider
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
   )}:generateContent?key=${encodeURIComponent(key)}`;
-  const res = await fetch(url, {
+  const res = await fetchAI(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping, hãy trả: ok" }] }] }),

@@ -201,6 +201,60 @@ export function desiredEpisodeCount(settings, existingNonLockedCount = 0) {
   return 5;
 }
 
+// Schema của aiCall chỉ là chỉ dẫn nên model đôi lúc vẫn trả sai số tập.
+// Chuẩn hoá ở biên dữ liệu để lựa chọn của người dùng luôn thắng. Với game
+// ngắn, gộp toàn bộ ý chính model đã nghĩ ra thay vì cắt mất hồi giữa/cuối.
+export function normalizeEpisodeSummaries(episodeSummaries, desiredCount, gameTitle = "") {
+  const items = safeArray(episodeSummaries).filter(Boolean);
+  const count = Math.max(1, Math.min(Number(desiredCount) || 1, MAX_EPISODES));
+  if (count === 1 && items.length > 1) {
+    return [{
+      title: gameTitle || items[0].title || "Tập duy nhất",
+      summary: items.map((item) => `${item.title}: ${item.summary}`).join(" "),
+    }];
+  }
+  return items.slice(0, count);
+}
+
+export function collapseShortGameEpisodes(storyBlueprint) {
+  const episodes = storyBlueprint?.episodes || [];
+  if (storyBlueprint?.settings?.gameLength === "long" || episodes.length === 0) return storyBlueprint;
+  const shortConstraints = derivePlanningConstraints(storyBlueprint.idea, episodes.flatMap((episode) => safeArray(episode.stages)));
+  if (episodes.length === 1) {
+    return {
+      ...storyBlueprint,
+      planningConstraints: shortConstraints,
+      episodes: [{
+        ...episodes[0],
+        planningConstraints: shortConstraints,
+      }],
+    };
+  }
+  const first = episodes[0];
+  const unique = (key) => [...new Set(episodes.flatMap((episode) => safeArray(episode[key])).filter(Boolean))];
+  const joined = (key) => episodes.map((episode) => safeString(episode[key])).filter(Boolean).join(" ");
+  const episode = {
+    ...first,
+    order: 1,
+    title: storyBlueprint.gamePlan?.title || first.title,
+    summary: episodes.map((item) => `${item.title}: ${item.summary}`).join(" "),
+    startState: first.startState,
+    goal: joined("goal"),
+    stages: episodes.flatMap((item) => safeArray(item.stages)),
+    keyCharacters: unique("keyCharacters"),
+    relevantStats: unique("relevantStats"),
+    relevantFlags: unique("relevantFlags"),
+    relevantItems: unique("relevantItems"),
+    majorConflict: joined("majorConflict"),
+    climax: episodes.map((item) => safeString(item.climax)).filter(Boolean).at(-1) || "",
+    possibleFailure: joined("possibleFailure"),
+    transitionToNextEpisode: "",
+    planningIntents: episodes.flatMap((item) => safeArray(item.planningIntents)),
+    planningConstraints: shortConstraints,
+  };
+  return { ...storyBlueprint, planningConstraints: shortConstraints, episodes: [episode] };
+}
+
 function compactNeighbor(episode) {
   if (!episode) return null;
   return { title: episode.title, summary: episode.summary, goal: episode.goal };
@@ -212,7 +266,10 @@ export async function generateGamePlanWithEpisodes(idea, settings, { onProgress 
   const desiredCount = desiredEpisodeCount(settings, 0);
   onProgress?.({ stage: "gameplan" });
   const raw = await aiCall(buildGamePlanPrompt(idea, settings, [], desiredCount), { jsonSchema: GAME_PLAN_SCHEMA, ...PLANNER_OPTIONS });
-  const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
+  const validated = validateAIGamePlanResponse(raw);
+  const episodeSummaries = normalizeEpisodeSummaries(validated.episodeSummaries, desiredCount, validated.title);
+  const gamePlan = { ...validated };
+  delete gamePlan.episodeSummaries;
   const perEpisodeConstraints = derivePerEpisodeConstraints(planningConstraints, episodeSummaries.length);
 
   const episodes = [];
@@ -247,7 +304,10 @@ export async function regenerateFullPlan(storyBlueprint, idea, settings, { onPro
     jsonSchema: GAME_PLAN_SCHEMA,
     ...PLANNER_OPTIONS,
   });
-  const { episodeSummaries, ...gamePlan } = validateAIGamePlanResponse(raw);
+  const validated = validateAIGamePlanResponse(raw);
+  const episodeSummaries = normalizeEpisodeSummaries(validated.episodeSummaries, desiredCount, validated.title);
+  const gamePlan = { ...validated };
+  delete gamePlan.episodeSummaries;
   const perEpisodeConstraints = derivePerEpisodeConstraints(planningConstraints, lockedEpisodes.length + episodeSummaries.length);
 
   const newEpisodes = [];

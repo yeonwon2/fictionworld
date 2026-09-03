@@ -18,8 +18,11 @@ import {
   removeEpisode,
   addBlankEpisode,
   desiredEpisodeCount,
+  normalizeEpisodeSummaries,
+  collapseShortGameEpisodes,
 } from '../src/lib/gameStudioPro/plannerAI.js';
 import { validateGamePlan } from '../src/lib/gameStudioPro/plannerValidator.js';
+import { derivePlanningConstraints } from '../src/lib/gameStudioPro/planningConstraints.js';
 
 // ---------- PRO 0 regression: PRO 1 must not touch the compiler/runtime shape ----------
 
@@ -178,6 +181,53 @@ test('desiredEpisodeCount: short game is always 1, long game respects estimate a
   assert.equal(desiredEpisodeCount({ gameLength: 'long', estimatedEpisodes: 999 }), 12);
   assert.equal(desiredEpisodeCount({ gameLength: 'long' }, 3), 3);
   assert.equal(desiredEpisodeCount({ gameLength: 'long' }, 0), 5);
+});
+
+test('short-game episode normalization keeps the whole AI arc in exactly one episode', () => {
+  const result = normalizeEpisodeSummaries([
+    { title: 'Nhập cung', summary: 'Mở đầu' },
+    { title: 'Sóng ngầm', summary: 'Xung đột' },
+    { title: 'Đế hậu', summary: 'Kết thúc' },
+  ], 1, 'Cửu Trùng Phiêu Linh');
+  assert.equal(result.length, 1);
+  assert.equal(result[0].title, 'Cửu Trùng Phiêu Linh');
+  assert.match(result[0].summary, /Nhập cung: Mở đầu/);
+  assert.match(result[0].summary, /Đế hậu: Kết thúc/);
+});
+
+test('approving a legacy short plan can collapse detailed episodes without losing stages or intents', () => {
+  const source = {
+    ...newStoryBlueprint('25 cảnh'),
+    settings: { gameLength: 'short' },
+    planningConstraints: { targetSceneCount: 25 },
+    gamePlan: { title: 'Cửu Trùng Phiêu Linh' },
+    episodes: [
+      { ...newBlankEpisode(1), id: 'ep-1', title: 'Nhập cung', summary: 'Mở đầu', stages: [{ title: 'A' }], planningIntents: [{ type: 'multi_choice', description: '4 đáp án' }] },
+      { ...newBlankEpisode(2), id: 'ep-2', title: 'Sóng ngầm', summary: 'Xung đột', stages: [{ title: 'B' }], planningIntents: [{ type: 'side_branch', description: 'nhánh phụ' }] },
+    ],
+  };
+  const result = collapseShortGameEpisodes(source);
+  assert.equal(result.episodes.length, 1);
+  assert.equal(result.episodes[0].title, 'Cửu Trùng Phiêu Linh');
+  assert.deepEqual(result.episodes[0].stages.map((stage) => stage.title), ['A', 'B']);
+  assert.equal(result.episodes[0].planningIntents.length, 2);
+  assert.equal(result.episodes[0].planningConstraints.targetSceneCount, 25);
+});
+
+test('a one-episode short plan refreshes stale per-episode scale back to the global target', () => {
+  const source = {
+    ...newStoryBlueprint('25 cảnh'),
+    settings: { gameLength: 'short' },
+    planningConstraints: { targetSceneCount: 25, minimumSceneCount: 25, maximumSceneCount: 26, precision: 'exact' },
+    episodes: [{ ...newBlankEpisode(1), planningConstraints: { targetSceneCount: 8 } }],
+  };
+  assert.equal(collapseShortGameEpisodes(source).episodes[0].planningConstraints.targetSceneCount, 25);
+});
+
+test('main scene count wins over a smaller side-branch range in natural Vietnamese', () => {
+  const result = derivePlanningConstraints('Đúng 25 cảnh chính; ở cảnh 5 có nhánh phụ dài 1–2 cảnh.');
+  assert.equal(result.targetSceneCount, 25);
+  assert.equal(result.precision, 'exact');
 });
 
 // ---------- Approve status downgrade ----------
