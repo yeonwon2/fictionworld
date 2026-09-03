@@ -37,8 +37,12 @@ test("non-repeatable stat gain keeps a finite conservative upper bound", () => {
 
 test("scene-count QA compares requested playable scenes, not consequence helpers", () => {
   const doc = cleanProQaFixture();
+  doc.storyBlueprint.episodes = [doc.storyBlueprint.episodes[0]];
+  doc.storyBlueprint.planningConstraints = { targetSceneCount: 1, minimumSceneCount: 1, maximumSceneCount: 1, precision: "exact", desiredChoicesPerDecision: 2 };
   const episode = doc.storyBlueprint.episodes[0];
-  episode.planningConstraints = { targetSceneCount: 1, minimumSceneCount: 1, maximumSceneCount: 1, precision: "exact", desiredChoicesPerDecision: 2 };
+  // Mô phỏng dữ liệu cũ: tập từng bị chia nhỏ nên còn target sai, QA phải ưu
+  // tiên ràng buộc toàn game sau khi đã gộp về một tập.
+  episode.planningConstraints = { targetSceneCount: 99, minimumSceneCount: 99, maximumSceneCount: 99, precision: "exact", desiredChoicesPerDecision: 2 };
   episode.stages = [{ approximateSceneCount: 1 }];
   episode.sceneBlueprint.scenes.push(
     { id: "helper_1", title: "Hệ quả một", role: "consequence", choices: [], locked: false },

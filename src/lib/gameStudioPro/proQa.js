@@ -178,8 +178,13 @@ export function runProQa(rawDoc) {
       else if ((orderById.get(edge.targetId) || 0) < (orderById.get(episode.id) || 0)) add("warning", "BACKWARD_EPISODE_TRANSITION", "scene", { ...epCtx, sceneId: edge.sceneId, choiceId: edge.choiceId }, { title: "Chuyển ngược về tập trước", message: `Tập “${episode.title}” chuyển ngược về một tập có thứ tự trước đó.`, whyItMatters: "Có thể tạo vòng lặp campaign hoặc lặp trạng thái.", suggestedFix: "Xác nhận đây là chủ đích; nếu không, chọn tập kế tiếp." });
     }
     const stageExpected = (episode.stages || []).reduce((n, s) => n + (Number.isFinite(s?.approximateSceneCount) ? s.approximateSceneCount : 0), 0);
-    const constraints = resolveEpisodeConstraints(episode);
-    const expected = episode.planningConstraints?.targetSceneCount || stageExpected;
+    // Game ngắn từng có thể được AI chia thành nhiều tập rồi gộp lại. Khi đó
+    // ràng buộc trên episode còn giữ con số đã chia nhỏ (vd. 2), trong khi
+    // ràng buộc toàn game vẫn là yêu cầu thật của người dùng (vd. 25).
+    const constraints = episodes.length === 1 && doc.storyBlueprint?.planningConstraints?.targetSceneCount
+      ? doc.storyBlueprint.planningConstraints
+      : resolveEpisodeConstraints(episode);
+    const expected = constraints?.targetSceneCount || stageExpected;
     const actual = constraints?.desiredChoicesPerDecision ? countPlayableScenes(bp) : countMeaningfulScenes(bp);
     if (expected > 0 && Math.abs(actual - expected) > Math.max(3, Math.ceil(expected * 0.4))) add("warning", "SCENE_COUNT_MISMATCH", "episode", epCtx, { title: "Số cảnh lệch nhiều so với kế hoạch", message: `Kế hoạch dự kiến khoảng ${expected} cảnh chơi nhưng sơ đồ hiện có ${actual}.`, whyItMatters: "Nhịp độ hoặc phạm vi tập có thể đã lệch khỏi kế hoạch.", suggestedFix: "Cập nhật kế hoạch hoặc bổ sung/rút gọn cảnh chơi; cảnh hệ quả và cảnh nối không tính vào chỉ tiêu này." });
     const intentTypes = new Set((episode.planningIntents || []).map((i) => i?.type));
