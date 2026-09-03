@@ -7,7 +7,7 @@ import { CONDITION_TYPES, EFFECT_TYPES } from "./ruleModel.js";
 import { validateChoiceRules } from "./ruleValidator.js";
 import { compileProCampaign } from "./proCompiler.js";
 import { validateProConfiguration } from "./configurationValidator.js";
-import { countMeaningfulScenes, countPlayableScenes, resolveEpisodeConstraints } from "./planningConstraints.js";
+import { countMeaningfulScenes, countPlayableScenes, derivePlanningConstraints, resolveEpisodeConstraints } from "./planningConstraints.js";
 
 export const QA_SEVERITIES = { ERROR: "error", WARNING: "warning", INFO: "info" };
 
@@ -181,8 +181,8 @@ export function runProQa(rawDoc) {
     // Game ngắn từng có thể được AI chia thành nhiều tập rồi gộp lại. Khi đó
     // ràng buộc trên episode còn giữ con số đã chia nhỏ (vd. 2), trong khi
     // ràng buộc toàn game vẫn là yêu cầu thật của người dùng (vd. 25).
-    const constraints = episodes.length === 1 && doc.storyBlueprint?.planningConstraints?.targetSceneCount
-      ? doc.storyBlueprint.planningConstraints
+    const constraints = episodes.length === 1
+      ? derivePlanningConstraints(`${doc.storyBlueprint?.idea || ""}\n${doc.storyBlueprint?.gamePlan?.coreGameplayLoop || ""}\n${episode.summary || ""}`, episode.stages)
       : resolveEpisodeConstraints(episode);
     const expected = constraints?.targetSceneCount || stageExpected;
     const actual = constraints?.desiredChoicesPerDecision ? countPlayableScenes(bp) : countMeaningfulScenes(bp);
