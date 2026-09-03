@@ -20,6 +20,8 @@ import {
   addEnding,
   countIncoming,
   findScene,
+  autoLinkDanglingChoices,
+  autoStitchUnreachableComponents,
 } from '../src/lib/gameStudioPro/blueprintModel.js';
 import { validateSceneBlueprint } from '../src/lib/gameStudioPro/blueprintValidator.js';
 import { normalizeAIBlueprintResponse, applyNormalizedBlueprint, emptyBlueprintBase } from '../src/lib/gameStudioPro/blueprintAI.js';
@@ -37,6 +39,36 @@ test('newSceneBlueprint creates a single namespaced start scene', () => {
   assert.equal(bp.startSceneId, bp.scenes[0].id);
   assert.ok(bp.scenes[0].id.startsWith(`${episode.id}__s_`));
   assert.equal(bp.episodeId, episode.id);
+});
+
+test('autoLinkDanglingChoices repairs only empty targets using the next scene or a matching ending', () => {
+  const episode = makeEpisode();
+  let bp = newSceneBlueprint(episode);
+  const firstId = bp.scenes[0].id;
+  bp = addChoice(bp, firstId, { text: 'Đi tiếp' });
+  bp = addScene(bp, SCENE_ROLES.DECISION, { title: 'Cảnh cuối' });
+  const lastId = bp.scenes[1].id;
+  bp = addChoice(bp, lastId, { text: 'Khẳng định tình cảm với Nữ đế' });
+  bp = addEnding(bp, { title: 'HE', tone: 'good' });
+  const fixed = autoLinkDanglingChoices(bp);
+  assert.equal(fixed.scenes[0].choices[0].targetId, lastId);
+  assert.equal(fixed.scenes[1].choices[0].targetId, fixed.endings[0].id);
+});
+
+test('autoStitchUnreachableComponents connects an added cluster through a living ending without touching death', () => {
+  const episode = makeEpisode();
+  let bp = newSceneBlueprint(episode);
+  const start = bp.scenes[0].id;
+  bp = addEnding(bp, { title: 'Sống', tone: 'good' });
+  bp = addEnding(bp, { title: 'Chết', tone: 'death' });
+  bp = addChoice(bp, start, { text: 'Sống', targetType: 'ending', targetId: bp.endings[0].id });
+  bp = addChoice(bp, start, { text: 'Chết', targetType: 'ending', targetId: bp.endings[1].id });
+  bp = addScene(bp, SCENE_ROLES.DECISION, { title: 'Cụm bổ sung' });
+  const orphan = bp.scenes[1].id;
+  bp = addChoice(bp, orphan, { text: 'Kết', targetType: 'ending', targetId: bp.endings[0].id });
+  const fixed = autoStitchUnreachableComponents(bp);
+  assert.equal(fixed.scenes[0].choices[0].targetId, orphan);
+  assert.equal(fixed.scenes[0].choices[1].targetId, bp.endings[1].id);
 });
 
 test('scene/choice/ending IDs are unique even across many rapid creations', () => {

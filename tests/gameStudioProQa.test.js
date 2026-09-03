@@ -35,6 +35,20 @@ test("non-repeatable stat gain keeps a finite conservative upper bound", () => {
   assert.equal(codes(result).has("STAT_REQUIREMENT_IMPOSSIBLE"), true);
 });
 
+test("scene-count QA compares requested playable scenes, not consequence helpers", () => {
+  const doc = cleanProQaFixture();
+  const episode = doc.storyBlueprint.episodes[0];
+  episode.planningConstraints = { targetSceneCount: 1, minimumSceneCount: 1, maximumSceneCount: 1, precision: "exact", desiredChoicesPerDecision: 2 };
+  episode.stages = [{ approximateSceneCount: 1 }];
+  episode.sceneBlueprint.scenes.push(
+    { id: "helper_1", title: "Hệ quả một", role: "consequence", choices: [], locked: false },
+    { id: "helper_2", title: "Hệ quả hai", role: "consequence", choices: [], locked: false },
+    { id: "helper_3", title: "Hệ quả ba", role: "consequence", choices: [], locked: false },
+    { id: "helper_4", title: "Hệ quả bốn", role: "consequence", choices: [], locked: false },
+  );
+  assert.equal(codes(runProQa(doc)).has("SCENE_COUNT_MISMATCH"), false);
+});
+
 test("start -100 can exceed success >100 only when generated gains make it viable", () => {
   const viable = statFeasibilityDoc({ repeatable: false });
   const stat = viable.globalState.registry.stats[0]; stat.default = -100;

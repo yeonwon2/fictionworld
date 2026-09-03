@@ -65,7 +65,7 @@ test("AI consequence intents resolve to four canonical existing-rule effects", (
 });
 test("normalization giữ 30 cảnh và áp trần cấu trúc thật", () => {
   assert.equal(normalizeAIBlueprintResponse(makeRaw(30), "ep").scenes.length, 30);
-  assert.equal(normalizeAIBlueprintResponse(makeRaw(75), "ep").scenes.length, MAX_SCENES_PER_EPISODE);
+  assert.equal(normalizeAIBlueprintResponse(makeRaw(MAX_SCENES_PER_EPISODE + 15), "ep").scenes.length, MAX_SCENES_PER_EPISODE);
 });
 test("áp dụng preview chỉ biến đổi dữ liệu cục bộ", () => {
   const normalized = normalizeAIBlueprintResponse(makeRaw(30), "ep");

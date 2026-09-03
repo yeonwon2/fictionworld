@@ -7,6 +7,7 @@ import { CONDITION_TYPES, EFFECT_TYPES } from "./ruleModel.js";
 import { validateChoiceRules } from "./ruleValidator.js";
 import { compileProCampaign } from "./proCompiler.js";
 import { validateProConfiguration } from "./configurationValidator.js";
+import { countMeaningfulScenes, countPlayableScenes, resolveEpisodeConstraints } from "./planningConstraints.js";
 
 export const QA_SEVERITIES = { ERROR: "error", WARNING: "warning", INFO: "info" };
 
@@ -176,8 +177,11 @@ export function runProQa(rawDoc) {
       if (!episodeIds.has(edge.targetId)) add("error", "BROKEN_EPISODE_TRANSITION", "scene", { ...epCtx, sceneId: edge.sceneId, choiceId: edge.choiceId }, { title: "Chuyển tới tập không tồn tại", message: `Một lựa chọn trong cảnh “${sceneName(edge.sceneId)}” trỏ tới tập đã mất.`, whyItMatters: "Campaign không thể tiếp tục qua lựa chọn này.", suggestedFix: "Chọn lại tập đích hoặc tạo tập còn thiếu." });
       else if ((orderById.get(edge.targetId) || 0) < (orderById.get(episode.id) || 0)) add("warning", "BACKWARD_EPISODE_TRANSITION", "scene", { ...epCtx, sceneId: edge.sceneId, choiceId: edge.choiceId }, { title: "Chuyển ngược về tập trước", message: `Tập “${episode.title}” chuyển ngược về một tập có thứ tự trước đó.`, whyItMatters: "Có thể tạo vòng lặp campaign hoặc lặp trạng thái.", suggestedFix: "Xác nhận đây là chủ đích; nếu không, chọn tập kế tiếp." });
     }
-    const expected = (episode.stages || []).reduce((n, s) => n + (Number.isFinite(s?.approximateSceneCount) ? s.approximateSceneCount : 0), 0);
-    if (expected > 0 && Math.abs(bp.scenes.length - expected) > Math.max(3, Math.ceil(expected * 0.4))) add("warning", "SCENE_COUNT_MISMATCH", "episode", epCtx, { title: "Số cảnh lệch nhiều so với kế hoạch", message: `Kế hoạch dự kiến khoảng ${expected} cảnh nhưng sơ đồ hiện có ${bp.scenes.length}.`, whyItMatters: "Nhịp độ hoặc phạm vi tập có thể đã lệch khỏi kế hoạch.", suggestedFix: "Cập nhật kế hoạch hoặc bổ sung/rút gọn cảnh." });
+    const stageExpected = (episode.stages || []).reduce((n, s) => n + (Number.isFinite(s?.approximateSceneCount) ? s.approximateSceneCount : 0), 0);
+    const constraints = resolveEpisodeConstraints(episode);
+    const expected = episode.planningConstraints?.targetSceneCount || stageExpected;
+    const actual = constraints?.desiredChoicesPerDecision ? countPlayableScenes(bp) : countMeaningfulScenes(bp);
+    if (expected > 0 && Math.abs(actual - expected) > Math.max(3, Math.ceil(expected * 0.4))) add("warning", "SCENE_COUNT_MISMATCH", "episode", epCtx, { title: "Số cảnh lệch nhiều so với kế hoạch", message: `Kế hoạch dự kiến khoảng ${expected} cảnh chơi nhưng sơ đồ hiện có ${actual}.`, whyItMatters: "Nhịp độ hoặc phạm vi tập có thể đã lệch khỏi kế hoạch.", suggestedFix: "Cập nhật kế hoạch hoặc bổ sung/rút gọn cảnh chơi; cảnh hệ quả và cảnh nối không tính vào chỉ tiêu này." });
     const intentTypes = new Set((episode.planningIntents || []).map((i) => i?.type));
     const roleHas = (role) => [...graph.byId.values()].some((s) => s.role === role);
     const hasImmediateDeath = hasReachableImmediateDeath(graph, bp.endings);

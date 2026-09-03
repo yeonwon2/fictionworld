@@ -58,7 +58,9 @@ export const MAX_DECISION_CHOICES = 6;
 
 // Giới hạn an toàn tổng số cảnh/tập — Planner chỉ ước lượng approximateSceneCount,
 // không tuyệt đối, nhưng KHÔNG được để AI vô tình sinh hàng trăm cảnh cho 1 tập.
-export const MAX_SCENES_PER_EPISODE = 60;
+// 25 cảnh chơi × 4 lựa chọn có thể cần 100 cảnh hệ quả, cộng nhánh phụ và
+// hội tụ. Trần 60 cũ khiến một game đúng yêu cầu bị chặn giữa chừng.
+export const MAX_SCENES_PER_EPISODE = 180;
 
 let idCounter = 0;
 function uniqueSuffix() {
@@ -248,6 +250,78 @@ export function connectChoice(blueprint, sceneId, choiceId, targetType, targetId
 
 export function disconnectChoice(blueprint, sceneId, choiceId) {
   return updateChoice(blueprint, sceneId, choiceId, { targetType: null, targetId: null });
+}
+
+// Vá an toàn trường hợp AI trả đủ cảnh nhưng bỏ trống đích của 1–2 lựa chọn.
+// Chỉ đụng lựa chọn thật sự chưa nối: ưu tiên cảnh kế tiếp theo thứ tự bản
+// thảo; nếu đã ở cuối thì chọn ending theo sắc thái câu chữ.
+export function autoLinkDanglingChoices(blueprint) {
+  const scenes = blueprint.scenes || [];
+  const endings = blueprint.endings || [];
+  let changed = false;
+  const nextScenes = scenes.map((scene, index) => ({
+    ...scene,
+    choices: (scene.choices || []).map((choice) => {
+      if (choice.targetType && choice.targetId) return choice;
+      const nextScene = scenes[index + 1];
+      if (nextScene) {
+        changed = true;
+        return { ...choice, targetType: "scene", targetId: nextScene.id };
+      }
+      const words = `${choice.text || ""} ${choice.effectIntent || ""}`.toLowerCase();
+      const tone = /chết|tử|death|game over|độc/.test(words) ? "death" : /tình cảm|bên nhau|yêu|tha thứ|trung thành/.test(words) ? "good" : "neutral";
+      const ending = endings.find((item) => item.tone === tone) || endings.find((item) => item.tone !== "death") || endings[0];
+      if (!ending) return choice;
+      changed = true;
+      return { ...choice, targetType: "ending", targetId: ending.id };
+    }),
+  }));
+  return changed ? touch({ ...blueprint, scenes: nextScenes }) : blueprint;
+}
+
+function reachableSceneIds(blueprint) {
+  const ids = new Set((blueprint.scenes || []).map((scene) => scene.id));
+  const reached = new Set();
+  const queue = ids.has(blueprint.startSceneId) ? [blueprint.startSceneId] : [];
+  while (queue.length) {
+    const id = queue.shift();
+    if (reached.has(id)) continue;
+    reached.add(id);
+    const scene = blueprint.scenes.find((item) => item.id === id);
+    for (const choice of scene?.choices || []) {
+      if (choice.targetType === "scene" && ids.has(choice.targetId) && !reached.has(choice.targetId)) queue.push(choice.targetId);
+    }
+  }
+  return reached;
+}
+
+// Các lượt continuation chỉ được THÊM, không sửa cảnh cũ, nên mỗi lượt AI có
+// thể thành một cụm graph hợp lệ nhưng mồ côi. Ghép các cụm bằng một lối kết
+// thúc sống của cụm trước; không đổi số lựa chọn và không đụng Death End.
+export function autoStitchUnreachableComponents(blueprint) {
+  let next = blueprint;
+  const endingById = new Map((blueprint.endings || []).map((ending) => [ending.id, ending]));
+  for (let guard = 0; guard < (blueprint.scenes || []).length; guard++) {
+    const reached = reachableSceneIds(next);
+    const unreachable = next.scenes.filter((scene) => !reached.has(scene.id));
+    if (!unreachable.length) break;
+    const unreachableIds = new Set(unreachable.map((scene) => scene.id));
+    const incomingWithin = new Set();
+    for (const scene of unreachable) for (const choice of scene.choices || []) {
+      if (choice.targetType === "scene" && unreachableIds.has(choice.targetId)) incomingWithin.add(choice.targetId);
+    }
+    const target = unreachable.find((scene) => !incomingWithin.has(scene.id)) || unreachable[0];
+    const sources = next.scenes.filter((scene) => reached.has(scene.id)).reverse();
+    let source = null;
+    let choice = null;
+    for (const candidate of sources) {
+      const exit = (candidate.choices || []).find((item) => item.targetType === "ending" && endingById.get(item.targetId)?.tone !== "death");
+      if (exit) { source = candidate; choice = exit; break; }
+    }
+    if (!source || !choice) break;
+    next = connectChoice(next, source.id, choice.id, "scene", target.id);
+  }
+  return next;
 }
 
 // AI dựng sơ đồ CHỈ biết "scene"/"ending" làm đích lựa chọn (xem

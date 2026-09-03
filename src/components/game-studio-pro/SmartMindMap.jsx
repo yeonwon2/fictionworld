@@ -24,6 +24,8 @@ import {
   updateEnding,
   removeEnding,
   autoLinkDanglingScenesToEpisode,
+  autoLinkDanglingChoices,
+  autoStitchUnreachableComponents,
 } from "@/lib/gameStudioPro/blueprintModel";
 import { validateSceneBlueprint } from "@/lib/gameStudioPro/blueprintValidator";
 import { generateEpisodeBlueprint, regenerateScene, getBlueprintScaleStatus, continueEpisodeBlueprint, refreshBlueprintEffects, repairBlueprintEffects } from "@/lib/gameStudioPro/blueprintAI";
@@ -286,6 +288,11 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [blueprint, episode, storyBlueprint.planningConstraints, storyBlueprint.idea, storyBlueprint.settings?.gameLength, gamePlan?.coreGameplayLoop]
   );
+  const topologyRepairPreview = useMemo(
+    () => blueprint ? autoStitchUnreachableComponents(autoLinkDanglingChoices(blueprint)) : null,
+    [blueprint]
+  );
+  const canRepairTopology = !!blueprint && topologyRepairPreview !== blueprint;
 
   // HOTFIX PRO 5: funnel DUY NHẤT ghi blueprint vào 1 episode — MỌI nơi gọi
   // (applyPending/handleRegenerateScene/handleAddScene/handleDeleteScene/"Tạo
@@ -410,6 +417,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
       }
       finalBlueprint = autoLinkDanglingScenesToEpisode(finalBlueprint, resolveNextEpisodeId());
     }
+    finalBlueprint = autoStitchUnreachableComponents(autoLinkDanglingChoices(finalBlueprint));
     const finalValidation = validateSceneBlueprint(finalBlueprint, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
     if (!scale.underGenerated && finalValidation.errors.length === 0) {
       // Happy path của Xưởng: kỹ thuật đã đạt thì tự áp dụng, không bắt tác
@@ -478,8 +486,12 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     setProgress("Đang hoàn thiện...");
     try {
       const { blueprint: repaired, stillHasGaps } = await repairBlueprintEffects(pending.blueprint, gamePlan, generationEpisode, globalState?.registry);
-      const finalValidation = validateSceneBlueprint(repaired, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
-      commitPending((value) => (value ? { ...value, blueprint: repaired, scale: getBlueprintScaleStatus(repaired, generationEpisode), needsRepair: finalValidation.errors.length > 0 || stillHasGaps } : value));
+      const topologyRepaired = autoStitchUnreachableComponents(autoLinkDanglingChoices(repaired));
+      const finalValidation = validateSceneBlueprint(topologyRepaired, { knownEpisodeIds, planningConstraints: generationEpisode.planningConstraints });
+      // Đồng nhất với finalizeGeneration: thiếu effect máy đọc được là cảnh
+      // báo QA/có thể sửa sau, không được khóa vĩnh viễn một graph đã đủ và
+      // không còn lỗi cấu trúc. Hệ quả văn bản của lựa chọn vẫn được giữ.
+      commitPending((value) => (value ? { ...value, blueprint: topologyRepaired, scale: getBlueprintScaleStatus(topologyRepaired, generationEpisode), needsRepair: finalValidation.errors.length > 0, hasEffectGaps: stillHasGaps } : value));
     } catch (e) {
       toast({ variant: "destructive", title: "Chưa hoàn thiện được", description: e.message });
     } finally {
@@ -494,7 +506,7 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
     // Chấm lại hệ quả theo danh mục MỚI NHẤT trước khi kiểm tra — nếu người
     // dùng vừa thêm entity còn thiếu vào "Chỉ số & trạng thái" sau khi AI dựng
     // sơ đồ, bản nháp phải nhận ra ngay (không cần dựng lại, tốn thêm AI).
-    const refreshedBlueprint = refreshBlueprintEffects(pending.blueprint, globalState?.registry);
+    const refreshedBlueprint = autoStitchUnreachableComponents(autoLinkDanglingChoices(refreshBlueprintEffects(pending.blueprint, globalState?.registry)));
     const previewValidation = validateSceneBlueprint(refreshedBlueprint, { knownEpisodeIds, planningConstraints: constraints });
     if (previewValidation.errors.length) {
       // KHÔNG dump lỗi kỹ thuật lên toast — bản nháp vẫn còn nguyên, panel
@@ -630,6 +642,11 @@ export default function SmartMindMap({ storyBlueprint, onChange, initialEpisodeI
             {blueprint && (
               <Button size="sm" variant="outline" onClick={handleAddScene}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Thêm cảnh
+              </Button>
+            )}
+            {canRepairTopology && (
+              <Button size="sm" variant="outline" onClick={() => setEpisodeBlueprint(topologyRepairPreview)}>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Tự nối các cụm rời
               </Button>
             )}
             {blueprint && blueprintScale?.underGenerated && (
